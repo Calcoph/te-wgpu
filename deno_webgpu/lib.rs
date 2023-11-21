@@ -666,7 +666,8 @@ pub async fn op_webgpu_request_device(
       &descriptor,
       std::env::var("DENO_WEBGPU_TRACE").ok().as_ref().map(std::path::Path::new),
       ()
-    )).map_err(|err| DomExceptionOperationError::new(&err.to_string()))?;
+    ))
+    .map_err(|err| DomExceptionOperationError::new(&err.to_string()))?;
 
     let device_features = gfx_select!(device => instance.device_features(device))?;
     let features = deserialize_features(&device_features);

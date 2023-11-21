@@ -1,5 +1,5 @@
 use wgc::command::CopyError;
-use wgc::resource::{CreateBufferError, BufferAccessError};
+use wgc::resource::{BufferAccessError, CreateBufferError};
 
 use crate::{
     util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsages,
@@ -33,7 +33,7 @@ impl<T> Exclusive<T> {
 
 pub enum WriteBufferError {
     CBError(CreateBufferError),
-    CError(CopyError)
+    CError(CopyError),
 }
 
 impl From<CreateBufferError> for WriteBufferError {
@@ -154,13 +154,13 @@ impl StagingBelt {
         chunk.offset = align_to(chunk.offset + size.get(), crate::MAP_ALIGNMENT);
 
         self.active_chunks.push(chunk);
-        Ok(self.active_chunks
+        Ok(self
+            .active_chunks
             .last()
             .unwrap()
             .buffer
             .slice(old_offset..old_offset + size.get())
-            .get_mapped_range_mut()
-        )
+            .get_mapped_range_mut())
     }
 
     /// Prepare currently mapped buffers for use in a submission.

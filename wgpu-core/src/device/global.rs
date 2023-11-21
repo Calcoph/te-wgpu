@@ -28,9 +28,7 @@ use wgt::{BufferAddress, TextureFormat};
 
 use std::{borrow::Cow, iter, mem, ops::Range, ptr};
 
-use super::{
-    BufferMapPendingClosure, ImplicitPipelineIds, InvalidDevice, UserClosures,
-};
+use super::{BufferMapPendingClosure, ImplicitPipelineIds, InvalidDevice, UserClosures};
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn adapter_is_surface_supported<A: HalApi>(
@@ -1017,10 +1015,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &binding_model::BindGroupLayoutDescriptor,
         id_in: Input<G, id::BindGroupLayoutId>,
-    ) -> Result<
-        id::BindGroupLayoutId,
-        binding_model::CreateBindGroupLayoutError,
-    > {
+    ) -> Result<id::BindGroupLayoutId, binding_model::CreateBindGroupLayoutError> {
         profiling::scope!("Device::create_bind_group_layout");
 
         let mut token = Token::root();
@@ -1147,10 +1142,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor,
         id_in: Input<G, id::PipelineLayoutId>,
-    ) -> Result<
-        id::PipelineLayoutId,
-        binding_model::CreatePipelineLayoutError,
-    > {
+    ) -> Result<id::PipelineLayoutId, binding_model::CreatePipelineLayoutError> {
         profiling::scope!("Device::create_pipeline_layout");
 
         let hub = A::hub(self);
@@ -1342,10 +1334,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::ShaderModuleDescriptor,
         source: pipeline::ShaderModuleSource,
         id_in: Input<G, id::ShaderModuleId>,
-    ) -> Result<
-        id::ShaderModuleId,
-        pipeline::CreateShaderModuleError,
-    > {
+    ) -> Result<id::ShaderModuleId, pipeline::CreateShaderModuleError> {
         profiling::scope!("Device::create_shader_module");
 
         let hub = A::hub(self);
@@ -1413,10 +1402,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::ShaderModuleDescriptor,
         source: Cow<[u32]>,
         id_in: Input<G, id::ShaderModuleId>,
-    ) -> Result<
-        id::ShaderModuleId,
-        pipeline::CreateShaderModuleError,
-    > {
+    ) -> Result<id::ShaderModuleId, pipeline::CreateShaderModuleError> {
         profiling::scope!("Device::create_shader_module");
 
         let hub = A::hub(self);
@@ -1767,10 +1753,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::RenderPipelineDescriptor,
         id_in: Input<G, id::RenderPipelineId>,
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
-    ) -> Result<
-        id::RenderPipelineId,
-        pipeline::CreateRenderPipelineError,
-    > {
+    ) -> Result<id::RenderPipelineId, pipeline::CreateRenderPipelineError> {
         profiling::scope!("Device::create_render_pipeline");
 
         let hub = A::hub(self);
@@ -1836,10 +1819,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         pipeline_id: id::RenderPipelineId,
         index: u32,
         id_in: Input<G, id::BindGroupLayoutId>,
-    ) -> Result<
-        id::BindGroupLayoutId,
-        binding_model::GetBindGroupLayoutError,
-    > {
+    ) -> Result<id::BindGroupLayoutId, binding_model::GetBindGroupLayoutError> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
@@ -1936,10 +1916,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::ComputePipelineDescriptor,
         id_in: Input<G, id::ComputePipelineId>,
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
-    ) -> Result<
-        id::ComputePipelineId,
-        pipeline::CreateComputePipelineError,
-    > {
+    ) -> Result<id::ComputePipelineId, pipeline::CreateComputePipelineError> {
         profiling::scope!("Device::create_compute_pipeline");
 
         let hub = A::hub(self);
@@ -2000,10 +1977,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         pipeline_id: id::ComputePipelineId,
         index: u32,
         id_in: Input<G, id::BindGroupLayoutId>,
-    ) -> Result<
-        id::BindGroupLayoutId,
-        binding_model::GetBindGroupLayoutError,
-    > {
+    ) -> Result<id::BindGroupLayoutId, binding_model::GetBindGroupLayoutError> {
         let hub = A::hub(self);
         let mut token = Token::root();
 

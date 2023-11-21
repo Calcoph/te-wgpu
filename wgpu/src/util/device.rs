@@ -1,4 +1,7 @@
-use wgc::{resource::{CreateBufferError, CreateTextureError}, device::queue::QueueWriteError};
+use wgc::{
+    device::queue::QueueWriteError,
+    resource::{CreateBufferError, CreateTextureError},
+};
 
 /// Describes a [Buffer](crate::Buffer) when allocating.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -14,7 +17,7 @@ pub struct BufferInitDescriptor<'a> {
 
 pub enum CreateTextureWithDataError {
     CTError(CreateTextureError),
-    QWError(QueueWriteError)
+    QWError(QueueWriteError),
 }
 
 impl From<CreateTextureError> for CreateTextureWithDataError {
@@ -32,7 +35,10 @@ impl From<QueueWriteError> for CreateTextureWithDataError {
 /// Utility methods not meant to be in the main API.
 pub trait DeviceExt {
     /// Creates a [Buffer](crate::Buffer) with data to initialize it.
-    fn create_buffer_init(&self, desc: &BufferInitDescriptor) -> Result<crate::Buffer, CreateBufferError>;
+    fn create_buffer_init(
+        &self,
+        desc: &BufferInitDescriptor,
+    ) -> Result<crate::Buffer, CreateBufferError>;
 
     /// Upload an entire texture and its mipmaps from a source buffer.
     ///
@@ -55,7 +61,10 @@ pub trait DeviceExt {
 }
 
 impl DeviceExt for crate::Device {
-    fn create_buffer_init(&self, descriptor: &BufferInitDescriptor<'_>) -> Result<crate::Buffer, CreateBufferError> {
+    fn create_buffer_init(
+        &self,
+        descriptor: &BufferInitDescriptor<'_>,
+    ) -> Result<crate::Buffer, CreateBufferError> {
         // Skip mapping if the buffer is zero sized
         if descriptor.contents.is_empty() {
             let wgt_descriptor = crate::BufferDescriptor {

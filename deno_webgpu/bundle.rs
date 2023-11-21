@@ -74,7 +74,8 @@ pub fn op_webgpu_create_render_bundle_encoder(
         multiview: None,
     };
 
-    let render_bundle_encoder = wgpu_core::command::RenderBundleEncoder::new(&descriptor, device, None)?;
+    let render_bundle_encoder =
+        wgpu_core::command::RenderBundleEncoder::new(&descriptor, device, None)?;
 
     let rid = state
         .resource_table

@@ -12,7 +12,6 @@ pub mod util;
 #[macro_use]
 mod macros;
 
-use wgc::{pipeline::{CreateShaderModuleError, CreateRenderPipelineError, CreateComputePipelineError}, device::{DeviceError, queue::QueueWriteError}, binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError}, resource::{CreateBufferError, CreateTextureError, CreateSamplerError, CreateQuerySetError, CreateTextureViewError}, command::CommandEncoderError};
 use std::{
     any::Any,
     borrow::Cow,
@@ -23,6 +22,16 @@ use std::{
     ops::{Bound, Deref, DerefMut, Range, RangeBounds},
     sync::Arc,
     thread,
+};
+use wgc::{
+    binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError},
+    command::CommandEncoderError,
+    device::{queue::QueueWriteError, DeviceError},
+    pipeline::{CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError},
+    resource::{
+        CreateBufferError, CreateQuerySetError, CreateSamplerError, CreateTextureError,
+        CreateTextureViewError,
+    },
 };
 
 use context::{Context, DeviceRequest, DynContext, ObjectId};
@@ -2402,7 +2411,10 @@ impl Device {
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
-    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor) -> Result<ShaderModule, CreateShaderModuleError> {
+    pub fn create_shader_module(
+        &self,
+        desc: ShaderModuleDescriptor,
+    ) -> Result<ShaderModule, CreateShaderModuleError> {
         let (id, data) = DynContext::device_create_shader_module(
             &*self.context,
             &self.id,
@@ -2475,7 +2487,10 @@ impl Device {
     }
 
     /// Creates an empty [`CommandEncoder`].
-    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> Result<CommandEncoder, DeviceError> {
+    pub fn create_command_encoder(
+        &self,
+        desc: &CommandEncoderDescriptor,
+    ) -> Result<CommandEncoder, DeviceError> {
         let (id, data) = DynContext::device_create_command_encoder(
             &*self.context,
             &self.id,
@@ -2511,7 +2526,10 @@ impl Device {
     }
 
     /// Creates a new [`BindGroup`].
-    pub fn create_bind_group(&self, desc: &BindGroupDescriptor) -> Result<BindGroup, CreateBindGroupError> {
+    pub fn create_bind_group(
+        &self,
+        desc: &BindGroupDescriptor,
+    ) -> Result<BindGroup, CreateBindGroupError> {
         let (id, data) = DynContext::device_create_bind_group(
             &*self.context,
             &self.id,
@@ -2527,7 +2545,10 @@ impl Device {
     }
 
     /// Creates a [`BindGroupLayout`].
-    pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> Result<BindGroupLayout, CreateBindGroupLayoutError> {
+    pub fn create_bind_group_layout(
+        &self,
+        desc: &BindGroupLayoutDescriptor,
+    ) -> Result<BindGroupLayout, CreateBindGroupLayoutError> {
         let (id, data) = DynContext::device_create_bind_group_layout(
             &*self.context,
             &self.id,
@@ -2543,7 +2564,10 @@ impl Device {
     }
 
     /// Creates a [`PipelineLayout`].
-    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> Result<PipelineLayout, CreatePipelineLayoutError> {
+    pub fn create_pipeline_layout(
+        &self,
+        desc: &PipelineLayoutDescriptor,
+    ) -> Result<PipelineLayout, CreatePipelineLayoutError> {
         let (id, data) = DynContext::device_create_pipeline_layout(
             &*self.context,
             &self.id,
@@ -2559,7 +2583,10 @@ impl Device {
     }
 
     /// Creates a [`RenderPipeline`].
-    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> Result<RenderPipeline, CreateRenderPipelineError> {
+    pub fn create_render_pipeline(
+        &self,
+        desc: &RenderPipelineDescriptor,
+    ) -> Result<RenderPipeline, CreateRenderPipelineError> {
         let (id, data) = DynContext::device_create_render_pipeline(
             &*self.context,
             &self.id,
@@ -2575,7 +2602,10 @@ impl Device {
     }
 
     /// Creates a [`ComputePipeline`].
-    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> Result<ComputePipeline, CreateComputePipelineError> {
+    pub fn create_compute_pipeline(
+        &self,
+        desc: &ComputePipelineDescriptor,
+    ) -> Result<ComputePipeline, CreateComputePipelineError> {
         let (id, data) = DynContext::device_create_compute_pipeline(
             &*self.context,
             &self.id,
@@ -2730,9 +2760,16 @@ impl Device {
     }
 
     /// Creates a new [`QuerySet`].
-    pub fn create_query_set(&self, desc: &QuerySetDescriptor) -> Result<QuerySet, CreateQuerySetError> {
-        let (id, data) =
-            DynContext::device_create_query_set(&*self.context, &self.id, self.data.as_ref(), desc)?;
+    pub fn create_query_set(
+        &self,
+        desc: &QuerySetDescriptor,
+    ) -> Result<QuerySet, CreateQuerySetError> {
+        let (id, data) = DynContext::device_create_query_set(
+            &*self.context,
+            &self.id,
+            self.data.as_ref(),
+            desc,
+        )?;
         Ok(QuerySet {
             context: Arc::clone(&self.context),
             id,
@@ -3281,7 +3318,10 @@ impl Texture {
     }
 
     /// Creates a view of this texture.
-    pub fn create_view(&self, desc: &TextureViewDescriptor) -> Result<TextureView, CreateTextureViewError> {
+    pub fn create_view(
+        &self,
+        desc: &TextureViewDescriptor,
+    ) -> Result<TextureView, CreateTextureViewError> {
         let (id, data) =
             DynContext::texture_create_view(&*self.context, &self.id, self.data.as_ref(), desc)?;
         Ok(TextureView {
@@ -3540,7 +3580,11 @@ impl CommandEncoder {
     ///
     /// - `CLEAR_TEXTURE` extension not enabled
     /// - Range is out of bounds
-    pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) -> Result<(), core::command::ClearError> {
+    pub fn clear_texture(
+        &mut self,
+        texture: &Texture,
+        subresource_range: &ImageSubresourceRange,
+    ) -> Result<(), core::command::ClearError> {
         DynContext::command_encoder_clear_texture(
             &*self.context,
             self.id.as_ref().unwrap(),
@@ -3605,7 +3649,11 @@ impl CommandEncoder {
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), core::command::QueryError> {
+    pub fn write_timestamp(
+        &mut self,
+        query_set: &QuerySet,
+        query_index: u32,
+    ) -> Result<(), core::command::QueryError> {
         DynContext::command_encoder_write_timestamp(
             &*self.context,
             self.id.as_ref().unwrap(),
@@ -4233,12 +4281,15 @@ impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
             let parent_id = self.parent.id.as_ref().unwrap();
-            self.parent.context.command_encoder_end_render_pass(
-                parent_id,
-                self.parent.data.as_ref(),
-                &mut self.id,
-                self.data.as_mut(),
-            ).unwrap()
+            self.parent
+                .context
+                .command_encoder_end_render_pass(
+                    parent_id,
+                    self.parent.data.as_ref(),
+                    &mut self.id,
+                    self.data.as_mut(),
+                )
+                .unwrap()
         }
     }
 }
@@ -4411,12 +4462,15 @@ impl<'a> Drop for ComputePass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
             let parent_id = self.parent.id.as_ref().unwrap();
-            self.parent.context.command_encoder_end_compute_pass(
-                parent_id,
-                self.parent.data.as_ref(),
-                &mut self.id,
-                self.data.as_mut(),
-            ).unwrap()
+            self.parent
+                .context
+                .command_encoder_end_compute_pass(
+                    parent_id,
+                    self.parent.data.as_ref(),
+                    &mut self.id,
+                    self.data.as_mut(),
+                )
+                .unwrap()
         }
     }
 }
@@ -4699,7 +4753,8 @@ impl<'a> Drop for QueueWriteBufferView<'a> {
             self.buffer.data.as_ref(),
             self.offset,
             &*self.inner,
-        ).unwrap()
+        )
+        .unwrap()
     }
 }
 
@@ -4711,7 +4766,12 @@ impl Queue {
     /// internally to happen at the start of the next `submit()` call.
     ///
     /// This method fails if `data` overruns the size of `buffer` starting at `offset`.
-    pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) -> Result<(), core::device::queue::QueueWriteError> {
+    pub fn write_buffer(
+        &self,
+        buffer: &Buffer,
+        offset: BufferAddress,
+        data: &[u8],
+    ) -> Result<(), core::device::queue::QueueWriteError> {
         DynContext::queue_write_buffer(
             &*self.context,
             &self.id,

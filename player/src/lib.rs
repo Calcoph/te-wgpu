@@ -227,21 +227,24 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                     .unwrap();
             }
             Action::CreateBindGroupLayout(id, desc) => {
-                self.device_create_bind_group_layout::<A>(device, &desc, id).unwrap();
+                self.device_create_bind_group_layout::<A>(device, &desc, id)
+                    .unwrap();
             }
             Action::DestroyBindGroupLayout(id) => {
                 self.bind_group_layout_drop::<A>(id);
             }
             Action::CreatePipelineLayout(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.device_create_pipeline_layout::<A>(device, &desc, id).unwrap();
+                self.device_create_pipeline_layout::<A>(device, &desc, id)
+                    .unwrap();
             }
             Action::DestroyPipelineLayout(id) => {
                 self.pipeline_layout_drop::<A>(id);
             }
             Action::CreateBindGroup(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.device_create_bind_group::<A>(device, &desc, id).unwrap();
+                self.device_create_bind_group::<A>(device, &desc, id)
+                    .unwrap();
             }
             Action::DestroyBindGroup(id) => {
                 self.bind_group_drop::<A>(id);
@@ -278,7 +281,8 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                             root_id: ic.root_id,
                             group_ids: &ic.group_ids,
                         });
-                self.device_create_compute_pipeline::<A>(device, &desc, id, implicit_ids).unwrap();
+                self.device_create_compute_pipeline::<A>(device, &desc, id, implicit_ids)
+                    .unwrap();
             }
             Action::DestroyComputePipeline(id) => {
                 self.compute_pipeline_drop::<A>(id);
@@ -296,7 +300,8 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                             root_id: ic.root_id,
                             group_ids: &ic.group_ids,
                         });
-                self.device_create_render_pipeline::<A>(device, &desc, id, implicit_ids).unwrap();
+                self.device_create_render_pipeline::<A>(device, &desc, id, implicit_ids)
+                    .unwrap();
             }
             Action::DestroyRenderPipeline(id) => {
                 self.render_pipeline_drop::<A>(id);
@@ -308,14 +313,16 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                     bundle,
                     &wgt::RenderBundleDescriptor { label: desc.label },
                     id,
-                ).unwrap();
+                )
+                .unwrap();
             }
             Action::DestroyRenderBundle(id) => {
                 self.render_bundle_drop::<A>(id);
             }
             Action::CreateQuerySet { id, desc } => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.device_create_query_set::<A>(device, &desc, id).unwrap();
+                self.device_create_query_set::<A>(device, &desc, id)
+                    .unwrap();
             }
             Action::DestroyQuerySet(id) => {
                 self.query_set_drop::<A>(id);
@@ -351,11 +358,13 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 self.queue_submit::<A>(device, &[]).unwrap();
             }
             Action::Submit(_index, commands) => {
-                let encoder = self.device_create_command_encoder::<A>(
-                    device,
-                    &wgt::CommandEncoderDescriptor { label: None },
-                    comb_manager.alloc(device.backend()),
-                ).unwrap();
+                let encoder = self
+                    .device_create_command_encoder::<A>(
+                        device,
+                        &wgt::CommandEncoderDescriptor { label: None },
+                        comb_manager.alloc(device.backend()),
+                    )
+                    .unwrap();
                 let cmdbuf = self.encode_commands::<A>(encoder, commands);
                 self.queue_submit::<A>(device, &[cmdbuf]).unwrap();
             }

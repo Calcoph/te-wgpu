@@ -20,9 +20,18 @@ use std::{
     ops::Range,
     slice,
 };
-use wgc::{command::{bundle_ffi::*, compute_ffi::*, render_ffi::*, CommandEncoderError}, resource::{CreateTextureError, CreateBufferError, CreateSamplerError, CreateQuerySetError, BufferAccessResult, CreateTextureViewError}, pipeline::{CreateShaderModuleError, CreateRenderPipelineError, CreateComputePipelineError}, binding_model::{CreateBindGroupLayoutError, CreateBindGroupError, CreatePipelineLayoutError}, device::{DeviceError, queue::QueueWriteError}};
 use wgc::device::DeviceLostClosure;
 use wgc::id::TypedId;
+use wgc::{
+    binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError},
+    command::{bundle_ffi::*, compute_ffi::*, render_ffi::*, CommandEncoderError},
+    device::{queue::QueueWriteError, DeviceError},
+    pipeline::{CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError},
+    resource::{
+        BufferAccessResult, CreateBufferError, CreateQuerySetError, CreateSamplerError,
+        CreateTextureError, CreateTextureViewError,
+    },
+};
 use wgt::{WasmNotSend, WasmNotSync};
 
 const LABEL: &str = "label";
@@ -105,21 +114,21 @@ impl Context {
     ) -> Result<(Device, Queue), crate::RequestDeviceError> {
         let global = &self.0;
         let device_id = unsafe {
-            global.create_device_from_hal(
-                *adapter,
-                hal_device,
-                &desc.map_label(|l| l.map(Borrowed)),
-                trace_dir,
-                (),
-            ).unwrap()
+            global
+                .create_device_from_hal(
+                    *adapter,
+                    hal_device,
+                    &desc.map_label(|l| l.map(Borrowed)),
+                    trace_dir,
+                    (),
+                )
+                .unwrap()
         };
         let device = Device {
             id: device_id,
             features: desc.features,
         };
-        let queue = Queue {
-            id: device_id,
-        };
+        let queue = Queue { id: device_id };
         Ok((device, queue))
     }
 
@@ -131,11 +140,10 @@ impl Context {
     ) -> Result<Texture, CreateTextureError> {
         let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
-        let id =
-            unsafe { global.create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, ()) }?;
-        Ok(Texture {
-            id,
-        })
+        let id = unsafe {
+            global.create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, ())
+        }?;
+        Ok(Texture { id })
     }
 
     pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
@@ -153,11 +161,7 @@ impl Context {
                 (),
             )?
         };
-        Ok((
-            id,
-            Buffer {
-            },
-        ))
+        Ok((id, Buffer {}))
     }
 
     pub unsafe fn device_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
@@ -406,8 +410,7 @@ impl Device {
 }
 
 #[derive(Debug)]
-pub struct Buffer {
-}
+pub struct Buffer {}
 
 #[derive(Debug)]
 pub struct Texture {
@@ -560,16 +563,14 @@ impl crate::Context for Context {
             ()
         )) {
             Ok(device_id) => device_id,
-            Err(e) => return ready(Err(e.into()))
+            Err(e) => return ready(Err(e.into())),
         };
 
         let device = Device {
             id: device_id,
             features: desc.features,
         };
-        let queue = Queue {
-            id: device_id,
-        };
+        let queue = Queue { id: device_id };
         ready(Ok((device_id, device, device_id, queue)))
     }
 
@@ -722,14 +723,7 @@ impl crate::Context for Context {
             device_id => global.surface_get_current_texture(*surface, ())
         ) {
             Ok(wgc::present::SurfaceOutput { status, texture_id }) => {
-                let (id, data) = {
-                    (
-                        texture_id,
-                        texture_id.map(|id| Texture {
-                            id,
-                        }),
-                    )
-                };
+                let (id, data) = { (texture_id, texture_id.map(|id| Texture { id })) };
 
                 (
                     id,
@@ -884,7 +878,8 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &BindGroupLayoutDescriptor,
-    ) -> Result<(Self::BindGroupLayoutId, Self::BindGroupLayoutData), CreateBindGroupLayoutError> {
+    ) -> Result<(Self::BindGroupLayoutId, Self::BindGroupLayoutData), CreateBindGroupLayoutError>
+    {
         let global = &self.0;
         let descriptor = wgc::binding_model::BindGroupLayoutDescriptor {
             label: desc.label.map(Borrowed),
@@ -1110,7 +1105,8 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &ComputePipelineDescriptor,
-    ) -> Result<(Self::ComputePipelineId, Self::ComputePipelineData), CreateComputePipelineError> {
+    ) -> Result<(Self::ComputePipelineId, Self::ComputePipelineData), CreateComputePipelineError>
+    {
         use wgc::pipeline as pipe;
 
         let implicit_pipeline_ids = match desc.layout {
@@ -1152,11 +1148,7 @@ impl crate::Context for Context {
             ()
         ))?;
 
-        Ok((
-            id,
-            Buffer {
-            },
-        ))
+        Ok((id, Buffer {}))
     }
     fn device_create_texture(
         &self,
@@ -1172,12 +1164,7 @@ impl crate::Context for Context {
             ()
         ))?;
 
-        Ok((
-            id,
-            Texture {
-                id,
-            },
-        ))
+        Ok((id, Texture { id }))
     }
     fn device_create_sampler(
         &self,
@@ -1238,12 +1225,7 @@ impl crate::Context for Context {
             ()
         ))?;
 
-        Ok((
-            id,
-            CommandEncoder {
-                open: true,
-            },
-        ))
+        Ok((id, CommandEncoder { open: true }))
     }
     fn device_create_render_bundle_encoder(
         &self,
@@ -1361,7 +1343,11 @@ impl crate::Context for Context {
         }
     }
 
-    fn buffer_unmap(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData) -> BufferAccessResult {
+    fn buffer_unmap(
+        &self,
+        buffer: &Self::BufferId,
+        buffer_data: &Self::BufferData,
+    ) -> BufferAccessResult {
         let global = &self.0;
         wgc::gfx_select!(buffer => global.buffer_unmap(*buffer))
     }
@@ -1740,8 +1726,7 @@ impl crate::Context for Context {
         let descriptor = wgt::CommandBufferDescriptor::default();
         encoder_data.open = false; // prevent the drop
         let global = &self.0;
-        let id =
-            wgc::gfx_select!(encoder => global.command_encoder_finish(encoder, &descriptor))?;
+        let id = wgc::gfx_select!(encoder => global.command_encoder_finish(encoder, &descriptor))?;
 
         Ok((id, ()))
     }
@@ -1856,7 +1841,8 @@ impl crate::Context for Context {
             encoder_data,
             &desc.map_label(|l| l.map(Borrowed)),
             ()
-        )).expect("RenderBundleEncoder::finish");
+        ))
+        .expect("RenderBundleEncoder::finish");
 
         (id, ())
     }
@@ -1908,7 +1894,7 @@ impl crate::Context for Context {
                     size: size.get() as usize,
                 },
             })),
-            Err(err) => Err(err)
+            Err(err) => Err(err),
         }
     }
 
@@ -2007,7 +1993,8 @@ impl crate::Context for Context {
         let global = &self.0;
         wgc::gfx_select!(queue => global.queue_get_timestamp_period(
             *queue
-        )).unwrap()
+        ))
+        .unwrap()
     }
 
     fn queue_on_submitted_work_done(

@@ -23,7 +23,7 @@ pub use indirect::*;
 pub use init::*;
 use wgc::command::{CommandEncoderError, CopyError};
 use wgc::device::DeviceError;
-use wgc::resource::{CreateBufferError, BufferAccessError};
+use wgc::resource::{BufferAccessError, CreateBufferError};
 pub use wgt::math::*;
 
 /// Treat the given byte slice as a SPIR-V module.
@@ -127,7 +127,7 @@ pub enum ReadBufferError {
     DError(DeviceError),
     CEError(CommandEncoderError),
     BAError(BufferAccessError),
-    CError(CopyError)
+    CError(CopyError),
 }
 
 impl DownloadBuffer {
@@ -173,7 +173,7 @@ impl DownloadBuffer {
                 );
                 callback(Ok(Self(download, mapped_range)));
             })?;
-        
+
         Ok(())
     }
 }

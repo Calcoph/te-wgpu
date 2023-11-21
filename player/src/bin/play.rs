@@ -93,7 +93,8 @@ fn main() {
                 &desc,
                 None,
                 id
-            )).unwrap();
+            ))
+            .unwrap();
 
             id
         }

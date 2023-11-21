@@ -1,6 +1,15 @@
 use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin::Pin, sync::Arc};
 
-use wgc::{pipeline::{CreateShaderModuleError, CreateRenderPipelineError, CreateComputePipelineError}, binding_model::{CreateBindGroupLayoutError, CreateBindGroupError, CreatePipelineLayoutError}, resource::{CreateBufferError, CreateTextureError, CreateSamplerError, CreateQuerySetError, BufferAccessResult, CreateTextureViewError}, device::{DeviceError, queue::QueueWriteError}, command::CommandEncoderError};
+use wgc::{
+    binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError},
+    command::CommandEncoderError,
+    device::{queue::QueueWriteError, DeviceError},
+    pipeline::{CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError},
+    resource::{
+        BufferAccessResult, CreateBufferError, CreateQuerySetError, CreateSamplerError,
+        CreateTextureError, CreateTextureViewError,
+    },
+};
 use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DeviceLostReason, DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
@@ -11,11 +20,11 @@ use wgt::{
 use crate::{
     AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DeviceDescriptor, Error, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
+    Data, DeviceDescriptor, Error, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
     PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor, Data,
+    ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor,
 };
 
 /// Meta trait for an id tracked by a context.
@@ -311,7 +320,11 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         buffer_data: &Self::BufferData,
         sub_range: Range<BufferAddress>,
     ) -> js_sys::ArrayBuffer;
-    fn buffer_unmap(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData) -> BufferAccessResult;
+    fn buffer_unmap(
+        &self,
+        buffer: &Self::BufferId,
+        buffer_data: &Self::BufferData,
+    ) -> BufferAccessResult;
     fn texture_create_view(
         &self,
         texture: &Self::TextureId,
@@ -1390,7 +1403,11 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         buffer_data: &crate::Data,
         sub_range: Range<BufferAddress>,
     ) -> js_sys::ArrayBuffer;
-    fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data) -> Result<(), wgc::resource::BufferAccessError>;
+    fn buffer_unmap(
+        &self,
+        buffer: &ObjectId,
+        buffer_data: &crate::Data,
+    ) -> Result<(), wgc::resource::BufferAccessError>;
     fn texture_create_view(
         &self,
         texture: &ObjectId,
@@ -1532,7 +1549,11 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         encoder_data: &crate::Data,
         label: &str,
     ) -> Result<(), wgc::command::CommandEncoderError>;
-    fn command_encoder_pop_debug_group(&self, encoder: &ObjectId, encoder_data: &crate::Data) -> Result<(), CommandEncoderError>;
+    fn command_encoder_pop_debug_group(
+        &self,
+        encoder: &ObjectId,
+        encoder_data: &crate::Data,
+    ) -> Result<(), CommandEncoderError>;
 
     fn command_encoder_write_timestamp(
         &self,
@@ -2258,8 +2279,9 @@ where
     ) -> Result<(ObjectId, Box<crate::Data>), CreateShaderModuleError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
-        let (shader_module, data) =
-            unsafe { Context::device_create_shader_module_spirv(self, &device, device_data, desc)? };
+        let (shader_module, data) = unsafe {
+            Context::device_create_shader_module_spirv(self, &device, device_data, desc)?
+        };
         Ok((shader_module.into(), Box::new(data) as _))
     }
 
@@ -2481,7 +2503,11 @@ where
         Context::buffer_get_mapped_range_as_array_buffer(self, &buffer, buffer_data, sub_range)
     }
 
-    fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data) -> Result<(), wgc::resource::BufferAccessError> {
+    fn buffer_unmap(
+        &self,
+        buffer: &ObjectId,
+        buffer_data: &crate::Data,
+    ) -> Result<(), wgc::resource::BufferAccessError> {
         let buffer = <T::BufferId>::from(*buffer);
         let buffer_data = downcast_ref(buffer_data);
         Context::buffer_unmap(self, &buffer, buffer_data)
@@ -2495,7 +2521,8 @@ where
     ) -> Result<(ObjectId, Box<crate::Data>), CreateTextureViewError> {
         let texture = <T::TextureId>::from(*texture);
         let texture_data = downcast_ref(texture_data);
-        let (texture_view, data) = Context::texture_create_view(self, &texture, texture_data, desc)?;
+        let (texture_view, data) =
+            Context::texture_create_view(self, &texture, texture_data, desc)?;
         Ok((texture_view.into(), Box::new(data) as _))
     }
 
@@ -2852,7 +2879,11 @@ where
         Context::command_encoder_push_debug_group(self, &encoder, encoder_data, label)
     }
 
-    fn command_encoder_pop_debug_group(&self, encoder: &ObjectId, encoder_data: &crate::Data) -> Result<(), CommandEncoderError> {
+    fn command_encoder_pop_debug_group(
+        &self,
+        encoder: &ObjectId,
+        encoder_data: &crate::Data,
+    ) -> Result<(), CommandEncoderError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         Context::command_encoder_pop_debug_group(self, &encoder, encoder_data)

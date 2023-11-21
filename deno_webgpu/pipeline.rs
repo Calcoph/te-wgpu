@@ -172,10 +172,7 @@ pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
             bind_group_layout,
         ));
 
-    Ok(PipelineLayout {
-        rid,
-        label,
-    })
+    Ok(PipelineLayout { rid, label })
 }
 
 #[derive(Deserialize)]
@@ -437,8 +434,5 @@ pub fn op_webgpu_render_pipeline_get_bind_group_layout(
             bind_group_layout,
         ));
 
-    Ok(PipelineLayout {
-        rid,
-        label,
-    })
+    Ok(PipelineLayout { rid, label })
 }
