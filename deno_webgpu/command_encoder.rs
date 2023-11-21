@@ -601,15 +601,15 @@ pub fn op_webgpu_command_encoder_finish(
 
     let descriptor = wgpu_types::CommandBufferDescriptor { label: Some(label) };
 
-    let (val, maybe_err) = gfx_select!(command_encoder => instance.command_encoder_finish(
+    let val = gfx_select!(command_encoder => instance.command_encoder_finish(
       command_encoder,
       &descriptor
-    ));
+    ))?;
 
     let rid = state.resource_table.add(WebGpuCommandBuffer(
         instance.clone(),
         RefCell::new(Some(val)),
     ));
 
-    Ok(WebGpuResult::rid_err(rid, maybe_err))
+    Ok(WebGpuResult::rid(rid))
 }

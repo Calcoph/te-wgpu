@@ -48,9 +48,9 @@ mod macros {
 
     macro_rules! gfx_put {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* ) => $state:expr, $rc:expr) => {{
-      let (val, maybe_err) = gfx_select!($id => $global.$method($($param),*));
+      let val = gfx_select!($id => $global.$method($($param),*))?;
       let rid = $state.resource_table.add($rc($global.clone(), val));
-      Ok(WebGpuResult::rid_err(rid, maybe_err))
+      Ok(WebGpuResult::rid(rid))
     }};
   }
 
@@ -661,15 +661,12 @@ pub async fn op_webgpu_request_device(
         limits: required_limits.unwrap_or_default(),
     };
 
-    let (device, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(
+    let device = gfx_select!(adapter => instance.adapter_request_device(
       adapter,
       &descriptor,
       std::env::var("DENO_WEBGPU_TRACE").ok().as_ref().map(std::path::Path::new),
       ()
-    ));
-    if let Some(err) = maybe_err {
-        return Err(DomExceptionOperationError::new(&err.to_string()).into());
-    }
+    )).map_err(|err| DomExceptionOperationError::new(&err.to_string()))?;
 
     let device_features = gfx_select!(device => instance.device_features(device))?;
     let features = deserialize_features(&device_features);

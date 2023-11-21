@@ -21,6 +21,9 @@ pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;
 pub use indirect::*;
 pub use init::*;
+use wgc::command::{CommandEncoderError, CopyError};
+use wgc::device::DeviceError;
+use wgc::resource::{CreateBufferError, BufferAccessError};
 pub use wgt::math::*;
 
 /// Treat the given byte slice as a SPIR-V module.
@@ -89,6 +92,44 @@ pub struct DownloadBuffer(
     Box<dyn crate::context::BufferMappedRange>,
 );
 
+impl From<CreateBufferError> for ReadBufferError {
+    fn from(value: CreateBufferError) -> Self {
+        ReadBufferError::CBError(value)
+    }
+}
+
+impl From<DeviceError> for ReadBufferError {
+    fn from(value: DeviceError) -> Self {
+        ReadBufferError::DError(value)
+    }
+}
+
+impl From<CommandEncoderError> for ReadBufferError {
+    fn from(value: CommandEncoderError) -> Self {
+        ReadBufferError::CEError(value)
+    }
+}
+
+impl From<BufferAccessError> for ReadBufferError {
+    fn from(value: BufferAccessError) -> Self {
+        ReadBufferError::BAError(value)
+    }
+}
+
+impl From<CopyError> for ReadBufferError {
+    fn from(value: CopyError) -> Self {
+        ReadBufferError::CError(value)
+    }
+}
+
+pub enum ReadBufferError {
+    CBError(CreateBufferError),
+    DError(DeviceError),
+    CEError(CommandEncoderError),
+    BAError(BufferAccessError),
+    CError(CopyError)
+}
+
 impl DownloadBuffer {
     /// Asynchronously read the contents of a buffer.
     pub fn read_buffer(
@@ -96,7 +137,7 @@ impl DownloadBuffer {
         queue: &super::Queue,
         buffer: &super::BufferSlice,
         callback: impl FnOnce(Result<Self, super::BufferAsyncError>) + Send + 'static,
-    ) {
+    ) -> Result<(), ReadBufferError> {
         let size = match buffer.size {
             Some(size) => size.into(),
             None => buffer.buffer.map_context.lock().total_size - buffer.offset,
@@ -107,12 +148,12 @@ impl DownloadBuffer {
             usage: super::BufferUsages::COPY_DST | super::BufferUsages::MAP_READ,
             mapped_at_creation: false,
             label: None,
-        }));
+        })?);
 
         let mut encoder =
-            device.create_command_encoder(&super::CommandEncoderDescriptor { label: None });
-        encoder.copy_buffer_to_buffer(buffer.buffer, buffer.offset, &download, 0, size);
-        let command_buffer: super::CommandBuffer = encoder.finish();
+            device.create_command_encoder(&super::CommandEncoderDescriptor { label: None })?;
+        encoder.copy_buffer_to_buffer(buffer.buffer, buffer.offset, &download, 0, size)?;
+        let command_buffer: super::CommandBuffer = encoder.finish()?;
         queue.submit(Some(command_buffer));
 
         download
@@ -131,7 +172,9 @@ impl DownloadBuffer {
                     0..size,
                 );
                 callback(Ok(Self(download, mapped_range)));
-            });
+            })?;
+        
+        Ok(())
     }
 }
 

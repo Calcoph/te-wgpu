@@ -1,3 +1,5 @@
+use wgc::{resource::{CreateBufferError, CreateTextureError}, device::queue::QueueWriteError};
+
 /// Describes a [Buffer](crate::Buffer) when allocating.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferInitDescriptor<'a> {
@@ -10,10 +12,27 @@ pub struct BufferInitDescriptor<'a> {
     pub usage: crate::BufferUsages,
 }
 
+pub enum CreateTextureWithDataError {
+    CTError(CreateTextureError),
+    QWError(QueueWriteError)
+}
+
+impl From<CreateTextureError> for CreateTextureWithDataError {
+    fn from(value: CreateTextureError) -> Self {
+        CreateTextureWithDataError::CTError(value)
+    }
+}
+
+impl From<QueueWriteError> for CreateTextureWithDataError {
+    fn from(value: QueueWriteError) -> Self {
+        CreateTextureWithDataError::QWError(value)
+    }
+}
+
 /// Utility methods not meant to be in the main API.
 pub trait DeviceExt {
     /// Creates a [Buffer](crate::Buffer) with data to initialize it.
-    fn create_buffer_init(&self, desc: &BufferInitDescriptor) -> crate::Buffer;
+    fn create_buffer_init(&self, desc: &BufferInitDescriptor) -> Result<crate::Buffer, CreateBufferError>;
 
     /// Upload an entire texture and its mipmaps from a source buffer.
     ///
@@ -32,11 +51,11 @@ pub trait DeviceExt {
         queue: &crate::Queue,
         desc: &crate::TextureDescriptor,
         data: &[u8],
-    ) -> crate::Texture;
+    ) -> Result<crate::Texture, CreateTextureWithDataError>;
 }
 
 impl DeviceExt for crate::Device {
-    fn create_buffer_init(&self, descriptor: &BufferInitDescriptor<'_>) -> crate::Buffer {
+    fn create_buffer_init(&self, descriptor: &BufferInitDescriptor<'_>) -> Result<crate::Buffer, CreateBufferError> {
         // Skip mapping if the buffer is zero sized
         if descriptor.contents.is_empty() {
             let wgt_descriptor = crate::BufferDescriptor {
@@ -64,13 +83,13 @@ impl DeviceExt for crate::Device {
                 mapped_at_creation: true,
             };
 
-            let buffer = self.create_buffer(&wgt_descriptor);
+            let buffer = self.create_buffer(&wgt_descriptor)?;
 
             buffer.slice(..).get_mapped_range_mut()[..unpadded_size as usize]
                 .copy_from_slice(descriptor.contents);
-            buffer.unmap();
+            buffer.unmap()?;
 
-            buffer
+            Ok(buffer)
         }
     }
 
@@ -79,11 +98,11 @@ impl DeviceExt for crate::Device {
         queue: &crate::Queue,
         desc: &crate::TextureDescriptor,
         data: &[u8],
-    ) -> crate::Texture {
+    ) -> Result<crate::Texture, CreateTextureWithDataError> {
         // Implicitly add the COPY_DST usage
         let mut desc = desc.to_owned();
         desc.usage |= crate::TextureUsages::COPY_DST;
-        let texture = self.create_texture(&desc);
+        let texture = self.create_texture(&desc)?;
 
         // Will return None only if it's a combined depth-stencil format
         // If so, default to 4, validation will fail later anyway since the depth or stencil
@@ -134,12 +153,12 @@ impl DeviceExt for crate::Device {
                         rows_per_image: Some(height_blocks),
                     },
                     mip_physical,
-                );
+                )?;
 
                 binary_offset = end_offset;
             }
         }
 
-        texture
+        Ok(texture)
     }
 }

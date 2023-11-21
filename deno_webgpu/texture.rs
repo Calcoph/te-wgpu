@@ -81,11 +81,11 @@ pub fn op_webgpu_create_texture(
         view_formats: args.view_formats,
     };
 
-    let (val, maybe_err) = gfx_select!(device => instance.device_create_texture(
+    let val = gfx_select!(device => instance.device_create_texture(
       device,
       &descriptor,
       ()
-    ));
+    ))?;
 
     let rid = state.resource_table.add(WebGpuTexture {
         instance: instance.clone(),
@@ -93,7 +93,7 @@ pub fn op_webgpu_create_texture(
         owned: true,
     });
 
-    Ok(WebGpuResult::rid_err(rid, maybe_err))
+    Ok(WebGpuResult::rid(rid))
 }
 
 #[derive(Deserialize)]

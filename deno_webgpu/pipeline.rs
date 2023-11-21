@@ -10,7 +10,6 @@ use serde::Serialize;
 use std::borrow::Cow;
 use std::rc::Rc;
 
-use super::error::WebGpuError;
 use super::error::WebGpuResult;
 
 const MAX_BIND_GROUPS: usize = 8;
@@ -127,18 +126,18 @@ pub fn op_webgpu_create_compute_pipeline(
         }
     };
 
-    let (compute_pipeline, maybe_err) = gfx_select!(device => instance.device_create_compute_pipeline(
+    let compute_pipeline = gfx_select!(device => instance.device_create_compute_pipeline(
       device,
       &descriptor,
       (),
       implicit_pipelines
-    ));
+    ))?;
 
     let rid = state
         .resource_table
         .add(WebGpuComputePipeline(instance.clone(), compute_pipeline));
 
-    Ok(WebGpuResult::rid_err(rid, maybe_err))
+    Ok(WebGpuResult::rid(rid))
 }
 
 #[derive(Serialize)]
@@ -146,7 +145,6 @@ pub fn op_webgpu_create_compute_pipeline(
 pub struct PipelineLayout {
     rid: ResourceId,
     label: String,
-    err: Option<WebGpuError>,
 }
 
 #[op2]
@@ -162,7 +160,7 @@ pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
         .get::<WebGpuComputePipeline>(compute_pipeline_rid)?;
     let compute_pipeline = compute_pipeline_resource.1;
 
-    let (bind_group_layout, maybe_err) = gfx_select!(compute_pipeline => instance.compute_pipeline_get_bind_group_layout(compute_pipeline, index, ()));
+    let bind_group_layout = gfx_select!(compute_pipeline => instance.compute_pipeline_get_bind_group_layout(compute_pipeline, index, ()))?;
 
     let label =
         gfx_select!(bind_group_layout => instance.bind_group_layout_label(bind_group_layout));
@@ -177,7 +175,6 @@ pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
     Ok(PipelineLayout {
         rid,
         label,
-        err: maybe_err.map(WebGpuError::from),
     })
 }
 
@@ -401,18 +398,18 @@ pub fn op_webgpu_create_render_pipeline(
         }
     };
 
-    let (render_pipeline, maybe_err) = gfx_select!(device => instance.device_create_render_pipeline(
+    let render_pipeline = gfx_select!(device => instance.device_create_render_pipeline(
       device,
       &descriptor,
       (),
       implicit_pipelines
-    ));
+    ))?;
 
     let rid = state
         .resource_table
         .add(WebGpuRenderPipeline(instance.clone(), render_pipeline));
 
-    Ok(WebGpuResult::rid_err(rid, maybe_err))
+    Ok(WebGpuResult::rid(rid))
 }
 
 #[op2]
@@ -428,7 +425,7 @@ pub fn op_webgpu_render_pipeline_get_bind_group_layout(
         .get::<WebGpuRenderPipeline>(render_pipeline_rid)?;
     let render_pipeline = render_pipeline_resource.1;
 
-    let (bind_group_layout, maybe_err) = gfx_select!(render_pipeline => instance.render_pipeline_get_bind_group_layout(render_pipeline, index, ()));
+    let bind_group_layout = gfx_select!(render_pipeline => instance.render_pipeline_get_bind_group_layout(render_pipeline, index, ()))?;
 
     let label =
         gfx_select!(bind_group_layout => instance.bind_group_layout_label(bind_group_layout));
@@ -443,6 +440,5 @@ pub fn op_webgpu_render_pipeline_get_bind_group_layout(
     Ok(PipelineLayout {
         rid,
         label,
-        err: maybe_err.map(WebGpuError::from),
     })
 }

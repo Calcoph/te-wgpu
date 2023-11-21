@@ -12,6 +12,7 @@ pub mod util;
 #[macro_use]
 mod macros;
 
+use wgc::{pipeline::{CreateShaderModuleError, CreateRenderPipelineError, CreateComputePipelineError}, device::{DeviceError, queue::QueueWriteError}, binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError}, resource::{CreateBufferError, CreateTextureError, CreateSamplerError, CreateQuerySetError, CreateTextureViewError}, command::CommandEncoderError};
 use std::{
     any::Any,
     borrow::Cow,
@@ -68,16 +69,6 @@ pub use ::wgc as core;
 // specific, but these need to depend on web-sys.
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
-
-/// Filter for error scopes.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
-pub enum ErrorFilter {
-    /// Catch only out-of-memory errors.
-    OutOfMemory,
-    /// Catch only validation errors.
-    Validation,
-}
-static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 
 type C = dyn DynContext;
 #[cfg(any(
@@ -2411,19 +2402,20 @@ impl Device {
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
-    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor) -> ShaderModule {
+    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor) -> Result<ShaderModule, CreateShaderModuleError> {
         let (id, data) = DynContext::device_create_shader_module(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             desc,
             wgt::ShaderBoundChecks::new(),
-        );
-        ShaderModule {
+        )?;
+
+        Ok(ShaderModule {
             context: Arc::clone(&self.context),
             id,
             data,
-        }
+        })
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code without runtime checks.
@@ -2439,19 +2431,19 @@ impl Device {
     pub unsafe fn create_shader_module_unchecked(
         &self,
         desc: ShaderModuleDescriptor,
-    ) -> ShaderModule {
+    ) -> Result<ShaderModule, CreateShaderModuleError> {
         let (id, data) = DynContext::device_create_shader_module(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             desc,
             unsafe { wgt::ShaderBoundChecks::unchecked() },
-        );
-        ShaderModule {
+        )?;
+        Ok(ShaderModule {
             context: Arc::clone(&self.context),
             id,
             data,
-        }
+        })
     }
 
     /// Creates a shader module from SPIR-V binary directly.
@@ -2465,7 +2457,7 @@ impl Device {
     pub unsafe fn create_shader_module_spirv(
         &self,
         desc: &ShaderModuleDescriptorSpirV,
-    ) -> ShaderModule {
+    ) -> Result<ShaderModule, CreateShaderModuleError> {
         let (id, data) = unsafe {
             DynContext::device_create_shader_module_spirv(
                 &*self.context,
@@ -2473,27 +2465,29 @@ impl Device {
                 self.data.as_ref(),
                 desc,
             )
-        };
-        ShaderModule {
+        }?;
+
+        Ok(ShaderModule {
             context: Arc::clone(&self.context),
             id,
             data,
-        }
+        })
     }
 
     /// Creates an empty [`CommandEncoder`].
-    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> CommandEncoder {
+    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> Result<CommandEncoder, DeviceError> {
         let (id, data) = DynContext::device_create_command_encoder(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             desc,
-        );
-        CommandEncoder {
+        )?;
+
+        Ok(CommandEncoder {
             context: Arc::clone(&self.context),
             id: Some(id),
             data,
-        }
+        })
     }
 
     /// Creates an empty [`RenderBundleEncoder`].
@@ -2517,107 +2511,113 @@ impl Device {
     }
 
     /// Creates a new [`BindGroup`].
-    pub fn create_bind_group(&self, desc: &BindGroupDescriptor) -> BindGroup {
+    pub fn create_bind_group(&self, desc: &BindGroupDescriptor) -> Result<BindGroup, CreateBindGroupError> {
         let (id, data) = DynContext::device_create_bind_group(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             desc,
-        );
-        BindGroup {
+        )?;
+
+        Ok(BindGroup {
             context: Arc::clone(&self.context),
             id,
             data,
-        }
+        })
     }
 
     /// Creates a [`BindGroupLayout`].
-    pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
+    pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> Result<BindGroupLayout, CreateBindGroupLayoutError> {
         let (id, data) = DynContext::device_create_bind_group_layout(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             desc,
-        );
-        BindGroupLayout {
+        )?;
+
+        Ok(BindGroupLayout {
             context: Arc::clone(&self.context),
             id,
             data,
-        }
+        })
     }
 
     /// Creates a [`PipelineLayout`].
-    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> PipelineLayout {
+    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> Result<PipelineLayout, CreatePipelineLayoutError> {
         let (id, data) = DynContext::device_create_pipeline_layout(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             desc,
-        );
-        PipelineLayout {
+        )?;
+
+        Ok(PipelineLayout {
             context: Arc::clone(&self.context),
             id,
             data,
-        }
+        })
     }
 
     /// Creates a [`RenderPipeline`].
-    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
+    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> Result<RenderPipeline, CreateRenderPipelineError> {
         let (id, data) = DynContext::device_create_render_pipeline(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             desc,
-        );
-        RenderPipeline {
+        )?;
+
+        Ok(RenderPipeline {
             context: Arc::clone(&self.context),
             id,
             data,
-        }
+        })
     }
 
     /// Creates a [`ComputePipeline`].
-    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> ComputePipeline {
+    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> Result<ComputePipeline, CreateComputePipelineError> {
         let (id, data) = DynContext::device_create_compute_pipeline(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             desc,
-        );
-        ComputePipeline {
+        )?;
+
+        Ok(ComputePipeline {
             context: Arc::clone(&self.context),
             id,
             data,
-        }
+        })
     }
 
     /// Creates a [`Buffer`].
-    pub fn create_buffer(&self, desc: &BufferDescriptor) -> Buffer {
+    pub fn create_buffer(&self, desc: &BufferDescriptor) -> Result<Buffer, CreateBufferError> {
         let mut map_context = MapContext::new(desc.size);
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
         }
 
         let (id, data) =
-            DynContext::device_create_buffer(&*self.context, &self.id, self.data.as_ref(), desc);
+            DynContext::device_create_buffer(&*self.context, &self.id, self.data.as_ref(), desc)?;
 
-        Buffer {
+        Ok(Buffer {
             context: Arc::clone(&self.context),
             id,
             data,
             map_context: Mutex::new(map_context),
             size: desc.size,
             usage: desc.usage,
-        }
+        })
     }
 
     /// Creates a new [`Texture`].
     ///
     /// `desc` specifies the general format of the texture.
-    pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
+    pub fn create_texture(&self, desc: &TextureDescriptor) -> Result<Texture, CreateTextureError> {
         let (id, data) =
-            DynContext::device_create_texture(&*self.context, &self.id, self.data.as_ref(), desc);
-        Texture {
+            DynContext::device_create_texture(&*self.context, &self.id, self.data.as_ref(), desc)?;
+
+        Ok(Texture {
             context: Arc::clone(&self.context),
             id,
             data,
@@ -2627,7 +2627,7 @@ impl Device {
                 view_formats: &[],
                 ..desc.clone()
             },
-        }
+        })
     }
 
     /// Creates a [`Texture`] from a wgpu-hal Texture.
@@ -2646,7 +2646,7 @@ impl Device {
         &self,
         hal_texture: A::Texture,
         desc: &TextureDescriptor,
-    ) -> Texture {
+    ) -> Result<Texture, core::resource::CreateTextureError> {
         let texture = unsafe {
             self.context
                 .as_any()
@@ -2657,8 +2657,9 @@ impl Device {
                     self.data.as_ref().downcast_ref().unwrap(),
                     desc,
                 )
-        };
-        Texture {
+        }?;
+
+        Ok(Texture {
             context: Arc::clone(&self.context),
             id: ObjectId::from(texture.id()),
             data: Box::new(texture),
@@ -2668,7 +2669,7 @@ impl Device {
                 view_formats: &[],
                 ..desc.clone()
             },
-        }
+        })
     }
 
     /// Creates a [`Buffer`] from a wgpu-hal Buffer.
@@ -2687,7 +2688,7 @@ impl Device {
         &self,
         hal_buffer: A::Buffer,
         desc: &BufferDescriptor,
-    ) -> Buffer {
+    ) -> Result<Buffer, CreateBufferError> {
         let mut map_context = MapContext::new(desc.size);
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
@@ -2703,58 +2704,40 @@ impl Device {
                     self.data.as_ref().downcast_ref().unwrap(),
                     desc,
                 )
-        };
+        }?;
 
-        Buffer {
+        Ok(Buffer {
             context: Arc::clone(&self.context),
             id: ObjectId::from(id),
             data: Box::new(buffer),
             map_context: Mutex::new(map_context),
             size: desc.size,
             usage: desc.usage,
-        }
+        })
     }
 
     /// Creates a new [`Sampler`].
     ///
     /// `desc` specifies the behavior of the sampler.
-    pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Sampler {
+    pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Result<Sampler, CreateSamplerError> {
         let (id, data) =
-            DynContext::device_create_sampler(&*self.context, &self.id, self.data.as_ref(), desc);
-        Sampler {
+            DynContext::device_create_sampler(&*self.context, &self.id, self.data.as_ref(), desc)?;
+        Ok(Sampler {
             context: Arc::clone(&self.context),
             id,
             data,
-        }
+        })
     }
 
     /// Creates a new [`QuerySet`].
-    pub fn create_query_set(&self, desc: &QuerySetDescriptor) -> QuerySet {
+    pub fn create_query_set(&self, desc: &QuerySetDescriptor) -> Result<QuerySet, CreateQuerySetError> {
         let (id, data) =
-            DynContext::device_create_query_set(&*self.context, &self.id, self.data.as_ref(), desc);
-        QuerySet {
+            DynContext::device_create_query_set(&*self.context, &self.id, self.data.as_ref(), desc)?;
+        Ok(QuerySet {
             context: Arc::clone(&self.context),
             id,
             data,
-        }
-    }
-
-    /// Set a callback for errors that are not handled in error scopes.
-    pub fn on_uncaptured_error(&self, handler: Box<dyn UncapturedErrorHandler>) {
-        self.context
-            .device_on_uncaptured_error(&self.id, self.data.as_ref(), handler);
-    }
-
-    /// Push an error scope.
-    pub fn push_error_scope(&self, filter: ErrorFilter) {
-        self.context
-            .device_push_error_scope(&self.id, self.data.as_ref(), filter);
-    }
-
-    /// Pop an error scope.
-    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + WasmNotSend {
-        self.context
-            .device_pop_error_scope(&self.id, self.data.as_ref())
+        })
     }
 
     /// Starts frame capture.
@@ -3149,9 +3132,9 @@ impl Buffer {
     }
 
     /// Flushes any pending write operations and unmaps the buffer from host memory.
-    pub fn unmap(&self) {
+    pub fn unmap(&self) -> Result<(), core::resource::BufferAccessError> {
         self.map_context.lock().reset();
-        DynContext::buffer_unmap(&*self.context, &self.id, self.data.as_ref());
+        DynContext::buffer_unmap(&*self.context, &self.id, self.data.as_ref())
     }
 
     /// Destroy the associated native resources as soon as possible.
@@ -3188,7 +3171,7 @@ impl<'a> BufferSlice<'a> {
         &self,
         mode: MapMode,
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
-    ) {
+    ) -> Result<(), core::resource::BufferAccessError> {
         let mut mc = self.buffer.map_context.lock();
         assert_eq!(
             mc.initial_range,
@@ -3298,14 +3281,14 @@ impl Texture {
     }
 
     /// Creates a view of this texture.
-    pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
+    pub fn create_view(&self, desc: &TextureViewDescriptor) -> Result<TextureView, CreateTextureViewError> {
         let (id, data) =
-            DynContext::texture_create_view(&*self.context, &self.id, self.data.as_ref(), desc);
-        TextureView {
+            DynContext::texture_create_view(&*self.context, &self.id, self.data.as_ref(), desc)?;
+        Ok(TextureView {
             context: Arc::clone(&self.context),
             id,
             data,
-        }
+        })
     }
 
     /// Destroy the associated native resources as soon as possible.
@@ -3405,17 +3388,18 @@ impl Drop for TextureView {
 
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
-    pub fn finish(mut self) -> CommandBuffer {
+    pub fn finish(mut self) -> Result<CommandBuffer, CommandEncoderError> {
         let (id, data) = DynContext::command_encoder_finish(
             &*self.context,
             self.id.take().unwrap(),
             self.data.as_mut(),
-        );
-        CommandBuffer {
+        )?;
+
+        Ok(CommandBuffer {
             context: Arc::clone(&self.context),
             id: Some(id),
             data: Some(data),
-        }
+        })
     }
 
     /// Begins recording of a render pass.
@@ -3471,7 +3455,7 @@ impl CommandEncoder {
         destination: &Buffer,
         destination_offset: BufferAddress,
         copy_size: BufferAddress,
-    ) {
+    ) -> Result<(), core::command::CopyError> {
         DynContext::command_encoder_copy_buffer_to_buffer(
             &*self.context,
             self.id.as_ref().unwrap(),
@@ -3483,7 +3467,7 @@ impl CommandEncoder {
             destination.data.as_ref(),
             destination_offset,
             copy_size,
-        );
+        )
     }
 
     /// Copy data from a buffer to a texture.
@@ -3492,7 +3476,7 @@ impl CommandEncoder {
         source: ImageCopyBuffer,
         destination: ImageCopyTexture,
         copy_size: Extent3d,
-    ) {
+    ) -> Result<(), core::command::CopyError> {
         DynContext::command_encoder_copy_buffer_to_texture(
             &*self.context,
             self.id.as_ref().unwrap(),
@@ -3500,7 +3484,7 @@ impl CommandEncoder {
             source,
             destination,
             copy_size,
-        );
+        )
     }
 
     /// Copy data from a texture to a buffer.
@@ -3509,7 +3493,7 @@ impl CommandEncoder {
         source: ImageCopyTexture,
         destination: ImageCopyBuffer,
         copy_size: Extent3d,
-    ) {
+    ) -> Result<(), core::command::CopyError> {
         DynContext::command_encoder_copy_texture_to_buffer(
             &*self.context,
             self.id.as_ref().unwrap(),
@@ -3517,7 +3501,7 @@ impl CommandEncoder {
             source,
             destination,
             copy_size,
-        );
+        )
     }
 
     /// Copy data from one texture to another.
@@ -3532,7 +3516,7 @@ impl CommandEncoder {
         source: ImageCopyTexture,
         destination: ImageCopyTexture,
         copy_size: Extent3d,
-    ) {
+    ) -> Result<(), core::command::CopyError> {
         DynContext::command_encoder_copy_texture_to_texture(
             &*self.context,
             self.id.as_ref().unwrap(),
@@ -3540,7 +3524,7 @@ impl CommandEncoder {
             source,
             destination,
             copy_size,
-        );
+        )
     }
 
     /// Clears texture to zero.
@@ -3556,14 +3540,14 @@ impl CommandEncoder {
     ///
     /// - `CLEAR_TEXTURE` extension not enabled
     /// - Range is out of bounds
-    pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
+    pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) -> Result<(), core::command::ClearError> {
         DynContext::command_encoder_clear_texture(
             &*self.context,
             self.id.as_ref().unwrap(),
             self.data.as_ref(),
             texture,
             subresource_range,
-        );
+        )
     }
 
     /// Clears buffer to zero.
@@ -3577,7 +3561,7 @@ impl CommandEncoder {
         buffer: &Buffer,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    ) {
+    ) -> Result<(), core::command::ClearError> {
         DynContext::command_encoder_clear_buffer(
             &*self.context,
             self.id.as_ref().unwrap(),
@@ -3585,30 +3569,30 @@ impl CommandEncoder {
             buffer,
             offset,
             size,
-        );
+        )
     }
 
     /// Inserts debug marker.
-    pub fn insert_debug_marker(&mut self, label: &str) {
+    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), CommandEncoderError> {
         let id = self.id.as_ref().unwrap();
         DynContext::command_encoder_insert_debug_marker(
             &*self.context,
             id,
             self.data.as_ref(),
             label,
-        );
+        )
     }
 
     /// Start record commands and group it into debug marker group.
-    pub fn push_debug_group(&mut self, label: &str) {
+    pub fn push_debug_group(&mut self, label: &str) -> Result<(), CommandEncoderError> {
         let id = self.id.as_ref().unwrap();
-        DynContext::command_encoder_push_debug_group(&*self.context, id, self.data.as_ref(), label);
+        DynContext::command_encoder_push_debug_group(&*self.context, id, self.data.as_ref(), label)
     }
 
     /// Stops command recording and creates debug group.
-    pub fn pop_debug_group(&mut self) {
+    pub fn pop_debug_group(&mut self) -> Result<(), CommandEncoderError> {
         let id = self.id.as_ref().unwrap();
-        DynContext::command_encoder_pop_debug_group(&*self.context, id, self.data.as_ref());
+        DynContext::command_encoder_pop_debug_group(&*self.context, id, self.data.as_ref())
     }
 }
 
@@ -3621,7 +3605,7 @@ impl CommandEncoder {
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
+    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), core::command::QueryError> {
         DynContext::command_encoder_write_timestamp(
             &*self.context,
             self.id.as_ref().unwrap(),
@@ -3644,7 +3628,7 @@ impl CommandEncoder {
         query_range: Range<u32>,
         destination: &Buffer,
         destination_offset: BufferAddress,
-    ) {
+    ) -> Result<(), core::command::QueryError> {
         DynContext::command_encoder_resolve_query_set(
             &*self.context,
             self.id.as_ref().unwrap(),
@@ -4254,7 +4238,7 @@ impl<'a> Drop for RenderPass<'a> {
                 self.parent.data.as_ref(),
                 &mut self.id,
                 self.data.as_mut(),
-            );
+            ).unwrap()
         }
     }
 }
@@ -4432,7 +4416,7 @@ impl<'a> Drop for ComputePass<'a> {
                 self.parent.data.as_ref(),
                 &mut self.id,
                 self.data.as_mut(),
-            );
+            ).unwrap()
         }
     }
 }
@@ -4715,7 +4699,7 @@ impl<'a> Drop for QueueWriteBufferView<'a> {
             self.buffer.data.as_ref(),
             self.offset,
             &*self.inner,
-        );
+        ).unwrap()
     }
 }
 
@@ -4727,7 +4711,7 @@ impl Queue {
     /// internally to happen at the start of the next `submit()` call.
     ///
     /// This method fails if `data` overruns the size of `buffer` starting at `offset`.
-    pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
+    pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) -> Result<(), core::device::queue::QueueWriteError> {
         DynContext::queue_write_buffer(
             &*self.context,
             &self.id,
@@ -4755,7 +4739,7 @@ impl Queue {
         buffer: &'a Buffer,
         offset: BufferAddress,
         size: BufferSize,
-    ) -> Option<QueueWriteBufferView<'a>> {
+    ) -> Result<QueueWriteBufferView<'a>, QueueWriteError> {
         profiling::scope!("Queue::write_buffer_with");
         DynContext::queue_validate_write_buffer(
             &*self.context,
@@ -4772,7 +4756,8 @@ impl Queue {
             self.data.as_ref(),
             size,
         )?;
-        Some(QueueWriteBufferView {
+
+        Ok(QueueWriteBufferView {
             queue: self,
             buffer,
             offset,
@@ -4803,7 +4788,7 @@ impl Queue {
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
-    ) {
+    ) -> Result<(), QueueWriteError> {
         DynContext::queue_write_texture(
             &*self.context,
             &self.id,
@@ -5314,10 +5299,6 @@ impl Surface {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
-
-/// Type for the callback of uncaptured error handler
-pub trait UncapturedErrorHandler: Fn(Error) + Send + 'static {}
-impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + 'static {}
 
 /// Error type
 #[derive(Debug)]

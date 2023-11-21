@@ -64,11 +64,6 @@ impl<I: id::TypedId + Copy, T> FutureId<'_, I, T> {
         self.data.write().insert(self.id, value);
         id::Valid(self.id)
     }
-
-    pub fn assign_error<'a, A: Access<T>>(self, label: &str, _: &'a mut Token<A>) -> I {
-        self.data.write().insert_error(self.id, label);
-        self.id
-    }
 }
 
 impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {

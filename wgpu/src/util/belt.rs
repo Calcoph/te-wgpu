@@ -1,3 +1,6 @@
+use wgc::command::CopyError;
+use wgc::resource::{CreateBufferError, BufferAccessError};
+
 use crate::{
     util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsages,
     BufferViewMut, CommandEncoder, Device, MapMode,
@@ -25,6 +28,23 @@ impl<T> Exclusive<T> {
 
     fn get_mut(&mut self) -> &mut T {
         &mut self.0
+    }
+}
+
+pub enum WriteBufferError {
+    CBError(CreateBufferError),
+    CError(CopyError)
+}
+
+impl From<CreateBufferError> for WriteBufferError {
+    fn from(value: CreateBufferError) -> Self {
+        WriteBufferError::CBError(value)
+    }
+}
+
+impl From<CopyError> for WriteBufferError {
+    fn from(value: CopyError) -> Self {
+        WriteBufferError::CError(value)
     }
 }
 
@@ -98,7 +118,7 @@ impl StagingBelt {
         offset: BufferAddress,
         size: BufferSize,
         device: &Device,
-    ) -> BufferViewMut {
+    ) -> Result<BufferViewMut, WriteBufferError> {
         let mut chunk = if let Some(index) = self
             .active_chunks
             .iter()
@@ -122,24 +142,25 @@ impl StagingBelt {
                         size,
                         usage: BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC,
                         mapped_at_creation: true,
-                    })),
+                    })?),
                     size,
                     offset: 0,
                 }
             }
         };
 
-        encoder.copy_buffer_to_buffer(&chunk.buffer, chunk.offset, target, offset, size.get());
+        encoder.copy_buffer_to_buffer(&chunk.buffer, chunk.offset, target, offset, size.get())?;
         let old_offset = chunk.offset;
         chunk.offset = align_to(chunk.offset + size.get(), crate::MAP_ALIGNMENT);
 
         self.active_chunks.push(chunk);
-        self.active_chunks
+        Ok(self.active_chunks
             .last()
             .unwrap()
             .buffer
             .slice(old_offset..old_offset + size.get())
             .get_mapped_range_mut()
+        )
     }
 
     /// Prepare currently mapped buffers for use in a submission.
@@ -150,11 +171,13 @@ impl StagingBelt {
     /// At this point, all the partially used staging buffers are closed (cannot be used for
     /// further writes) until after [`StagingBelt::recall()`] is called *and* the GPU is done
     /// copying the data from them.
-    pub fn finish(&mut self) {
+    pub fn finish(&mut self) -> Result<(), BufferAccessError> {
         for chunk in self.active_chunks.drain(..) {
-            chunk.buffer.unmap();
+            chunk.buffer.unmap()?;
             self.closed_chunks.push(chunk);
         }
+
+        Ok(())
     }
 
     /// Recall all of the closed buffers back to be reused.
@@ -162,7 +185,7 @@ impl StagingBelt {
     /// This must only be called after the command encoder(s) provided to
     /// [`StagingBelt::write_buffer()`] are submitted. Additional calls are harmless.
     /// Not calling this as soon as possible may result in increased buffer memory usage.
-    pub fn recall(&mut self) {
+    pub fn recall(&mut self) -> Result<(), BufferAccessError> {
         self.receive_chunks();
 
         for chunk in self.closed_chunks.drain(..) {
@@ -173,8 +196,10 @@ impl StagingBelt {
                 .slice(..)
                 .map_async(MapMode::Write, move |_| {
                     let _ = sender.send(chunk);
-                });
+                })?;
         }
+
+        Ok(())
     }
 
     /// Move all chunks that the GPU is done with (and are now mapped again)

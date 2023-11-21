@@ -356,14 +356,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor<Label>,
-    ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
+    ) -> Result<id::CommandBufferId, CommandEncoderError> {
         profiling::scope!("CommandEncoder::finish");
 
         let hub = A::hub(self);
         let mut token = Token::root();
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
 
-        let error = match cmd_buf_guard.get_mut(encoder_id) {
+        match cmd_buf_guard.get_mut(encoder_id) {
             Ok(cmd_buf) => match cmd_buf.status {
                 CommandEncoderStatus::Recording => {
                     cmd_buf.encoder.close();
@@ -371,18 +371,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     //Note: if we want to stop tracking the swapchain texture view,
                     // this is the place to do it.
                     log::trace!("Command buffer {:?}", encoder_id);
-                    None
                 }
-                CommandEncoderStatus::Finished => Some(CommandEncoderError::NotRecording),
+                CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording)?,
                 CommandEncoderStatus::Error => {
                     cmd_buf.encoder.discard();
-                    Some(CommandEncoderError::Invalid)
+                    Err(CommandEncoderError::Invalid)?
                 }
             },
-            Err(_) => Some(CommandEncoderError::Invalid),
+            Err(_) => Err(CommandEncoderError::Invalid)?,
         };
 
-        (encoder_id, error)
+        Ok(encoder_id)
     }
 
     pub fn command_encoder_push_debug_group<A: HalApi>(

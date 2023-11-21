@@ -29,7 +29,7 @@ use wgt::{BufferAddress, TextureFormat};
 use std::{borrow::Cow, iter, mem, ops::Range, ptr};
 
 use super::{
-    BufferMapPendingClosure, ImplicitPipelineIds, InvalidDevice, UserClosures, IMPLICIT_FAILURE,
+    BufferMapPendingClosure, ImplicitPipelineIds, InvalidDevice, UserClosures,
 };
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -149,7 +149,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
-    ) -> (id::BufferId, Option<resource::CreateBufferError>) {
+    ) -> Result<id::BufferId, resource::CreateBufferError> {
         profiling::scope!("Device::create_buffer");
 
         let hub = A::hub(self);
@@ -275,71 +275,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .buffers
                 .insert_single(id, ref_count, buffer_use);
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
-    }
-
-    /// Assign `id_in` an error with the given `label`.
-    ///
-    /// Ensure that future attempts to use `id_in` as a buffer ID will propagate
-    /// the error, following the WebGPU ["contagious invalidity"] style.
-    ///
-    /// Firefox uses this function to comply strictly with the WebGPU spec,
-    /// which requires [`GPUBufferDescriptor`] validation to be generated on the
-    /// Device timeline and leave the newly created [`GPUBuffer`] invalid.
-    ///
-    /// Ideally, we would simply let [`device_create_buffer`] take care of all
-    /// of this, but some errors must be detected before we can even construct a
-    /// [`wgpu_types::BufferDescriptor`] to give it. For example, the WebGPU API
-    /// allows a `GPUBufferDescriptor`'s [`usage`] property to be any WebIDL
-    /// `unsigned long` value, but we can't construct a
-    /// [`wgpu_types::BufferUsages`] value from values with unassigned bits
-    /// set. This means we must validate `usage` before we can call
-    /// `device_create_buffer`.
-    ///
-    /// When that validation fails, we must arrange for the buffer id to be
-    /// considered invalid. This method provides the means to do so.
-    ///
-    /// ["contagious invalidity"]: https://www.w3.org/TR/webgpu/#invalidity
-    /// [`GPUBufferDescriptor`]: https://www.w3.org/TR/webgpu/#dictdef-gpubufferdescriptor
-    /// [`GPUBuffer`]: https://www.w3.org/TR/webgpu/#gpubuffer
-    /// [`wgpu_types::BufferDescriptor`]: wgt::BufferDescriptor
-    /// [`device_create_buffer`]: Global::device_create_buffer
-    /// [`usage`]: https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-usage
-    /// [`wgpu_types::BufferUsages`]: wgt::BufferUsages
-    pub fn create_buffer_error<A: HalApi>(&self, id_in: Input<G, id::BufferId>, label: Label) {
-        let hub = A::hub(self);
-        let mut token = Token::root();
-        let fid = hub.buffers.prepare(id_in);
-
-        fid.assign_error(label.borrow_or_default(), &mut token);
-    }
-
-    pub fn create_render_bundle_error<A: HalApi>(
-        &self,
-        id_in: Input<G, id::RenderBundleId>,
-        label: Label,
-    ) {
-        let hub = A::hub(self);
-        let mut token = Token::root();
-        let fid = hub.render_bundles.prepare(id_in);
-
-        let (_, mut token) = hub.devices.read(&mut token);
-        fid.assign_error(label.borrow_or_default(), &mut token);
-    }
-
-    /// Assign `id_in` an error with the given `label`.
-    ///
-    /// See `create_buffer_error` for more context and explaination.
-    pub fn create_texture_error<A: HalApi>(&self, id_in: Input<G, id::TextureId>, label: Label) {
-        let hub = A::hub(self);
-        let mut token = Token::root();
-        let fid = hub.textures.prepare(id_in);
-
-        fid.assign_error(label.borrow_or_default(), &mut token);
+        Err(error)
     }
 
     #[cfg(feature = "replay")]
@@ -595,7 +534,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
-    ) -> (id::TextureId, Option<resource::CreateTextureError>) {
+    ) -> Result<id::TextureId, resource::CreateTextureError> {
         profiling::scope!("Device::create_texture");
 
         let hub = A::hub(self);
@@ -635,11 +574,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::TextureUses::UNINITIALIZED,
             );
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     /// # Safety
@@ -653,7 +591,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
-    ) -> (id::TextureId, Option<resource::CreateTextureError>) {
+    ) -> Result<id::TextureId, resource::CreateTextureError> {
         profiling::scope!("Device::create_texture_from_hal");
 
         let hub = A::hub(self);
@@ -715,11 +653,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::TextureUses::UNINITIALIZED,
             );
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     /// # Safety
@@ -733,7 +670,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
-    ) -> (id::BufferId, Option<resource::CreateBufferError>) {
+    ) -> Result<id::BufferId, resource::CreateBufferError> {
         profiling::scope!("Device::create_buffer");
 
         let hub = A::hub(self);
@@ -775,11 +712,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .buffers
                 .insert_single(id, ref_count, hal::BufferUses::empty());
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn texture_label<A: HalApi>(&self, id: id::TextureId) -> String {
@@ -900,7 +836,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         texture_id: id::TextureId,
         desc: &resource::TextureViewDescriptor,
         id_in: Input<G, id::TextureViewId>,
-    ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
+    ) -> Result<id::TextureViewId, resource::CreateTextureViewError> {
         profiling::scope!("Texture::create_view");
 
         let hub = A::hub(self);
@@ -935,13 +871,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Texture::create_view {:?} -> {:?}", texture_id, id.0);
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
         log::error!("Texture::create_view {:?} error {:?}", texture_id, error);
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn texture_view_label<A: HalApi>(&self, id: id::TextureViewId) -> String {
@@ -1002,7 +937,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &resource::SamplerDescriptor,
         id_in: Input<G, id::SamplerId>,
-    ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
+    ) -> Result<id::SamplerId, resource::CreateSamplerError> {
         profiling::scope!("Device::create_sampler");
 
         let hub = A::hub(self);
@@ -1037,11 +972,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Device::create_sampler -> {:?}", id.0);
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn sampler_label<A: HalApi>(&self, id: id::SamplerId) -> String {
@@ -1083,10 +1017,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &binding_model::BindGroupLayoutDescriptor,
         id_in: Input<G, id::BindGroupLayoutId>,
-    ) -> (
+    ) -> Result<
         id::BindGroupLayoutId,
-        Option<binding_model::CreateBindGroupLayoutError>,
-    ) {
+        binding_model::CreateBindGroupLayoutError,
+    > {
         profiling::scope!("Device::create_bind_group_layout");
 
         let mut token = Token::root();
@@ -1140,7 +1074,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     //    proper bind group layout id.
                     if G::ids_are_generated_in_wgpu() {
                         log::trace!("Device::create_bind_group_layout (duplicate of {id:?})");
-                        return (id, None);
+                        return Ok(id);
                     }
 
                     compatible_layout = Some(id::Valid(id));
@@ -1172,11 +1106,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 log::trace!("Device::create_bind_group_layout -> {:?}", id.0);
             }
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn bind_group_layout_label<A: HalApi>(&self, id: id::BindGroupLayoutId) -> String {
@@ -1214,10 +1147,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor,
         id_in: Input<G, id::PipelineLayoutId>,
-    ) -> (
+    ) -> Result<
         id::PipelineLayoutId,
-        Option<binding_model::CreatePipelineLayoutError>,
-    ) {
+        binding_model::CreatePipelineLayoutError,
+    > {
         profiling::scope!("Device::create_pipeline_layout");
 
         let hub = A::hub(self);
@@ -1253,11 +1186,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Device::create_pipeline_layout -> {:?}", id.0);
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn pipeline_layout_label<A: HalApi>(&self, id: id::PipelineLayoutId) -> String {
@@ -1301,7 +1233,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &binding_model::BindGroupDescriptor,
         id_in: Input<G, id::BindGroupId>,
-    ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
+    ) -> Result<id::BindGroupId, binding_model::CreateBindGroupError> {
         profiling::scope!("Device::create_bind_group");
 
         let hub = A::hub(self);
@@ -1364,11 +1296,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .lock()
                 .bind_groups
                 .insert_single(id, ref_count);
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn bind_group_label<A: HalApi>(&self, id: id::BindGroupId) -> String {
@@ -1411,10 +1342,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::ShaderModuleDescriptor,
         source: pipeline::ShaderModuleSource,
         id_in: Input<G, id::ShaderModuleId>,
-    ) -> (
+    ) -> Result<
         id::ShaderModuleId,
-        Option<pipeline::CreateShaderModuleError>,
-    ) {
+        pipeline::CreateShaderModuleError,
+    > {
         profiling::scope!("Device::create_shader_module");
 
         let hub = A::hub(self);
@@ -1464,11 +1395,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Device::create_shader_module -> {:?}", id.0);
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     // Unsafe-ness of internal calls has little to do with unsafe-ness of this.
@@ -1483,10 +1413,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::ShaderModuleDescriptor,
         source: Cow<[u32]>,
         id_in: Input<G, id::ShaderModuleId>,
-    ) -> (
+    ) -> Result<
         id::ShaderModuleId,
-        Option<pipeline::CreateShaderModuleError>,
-    ) {
+        pipeline::CreateShaderModuleError,
+    > {
         profiling::scope!("Device::create_shader_module");
 
         let hub = A::hub(self);
@@ -1522,11 +1452,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Err(e) => break e,
                 };
             let id = fid.assign(shader, &mut token);
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn shader_module_label<A: HalApi>(&self, id: id::ShaderModuleId) -> String {
@@ -1560,7 +1489,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Input<G, id::CommandEncoderId>,
-    ) -> (id::CommandEncoderId, Option<DeviceError>) {
+    ) -> Result<id::CommandEncoderId, DeviceError> {
         profiling::scope!("Device::create_command_encoder");
 
         let hub = A::hub(self);
@@ -1606,11 +1535,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Device::create_command_encoder -> {:?}", id.0);
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn command_buffer_label<A: HalApi>(&self, id: id::CommandBufferId) -> String {
@@ -1663,7 +1591,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         bundle_encoder: command::RenderBundleEncoder,
         desc: &command::RenderBundleDescriptor,
         id_in: Input<G, id::RenderBundleId>,
-    ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
+    ) -> Result<id::RenderBundleId, command::RenderBundleError> {
         profiling::scope!("RenderBundleEncoder::finish");
 
         let hub = A::hub(self);
@@ -1707,11 +1635,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("RenderBundleEncoder::finish -> {:?}", id.0);
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn render_bundle_label<A: HalApi>(&self, id: id::RenderBundleId) -> String {
@@ -1752,7 +1679,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &resource::QuerySetDescriptor,
         id_in: Input<G, id::QuerySetId>,
-    ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
+    ) -> Result<id::QuerySetId, resource::CreateQuerySetError> {
         profiling::scope!("Device::create_query_set");
 
         let hub = A::hub(self);
@@ -1791,14 +1718,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .query_sets
                 .insert_single(id, ref_count);
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error("", &mut token);
+        log::trace!("Device::create_query_set -> {:?}", fid.id());
 
-        log::trace!("Device::create_query_set -> {:?}", id);
-
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn query_set_drop<A: HalApi>(&self, query_set_id: id::QuerySetId) {
@@ -1842,10 +1767,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::RenderPipelineDescriptor,
         id_in: Input<G, id::RenderPipelineId>,
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
-    ) -> (
+    ) -> Result<
         id::RenderPipelineId,
-        Option<pipeline::CreateRenderPipelineError>,
-    ) {
+        pipeline::CreateRenderPipelineError,
+    > {
         profiling::scope!("Device::create_render_pipeline");
 
         let hub = A::hub(self);
@@ -1898,29 +1823,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .render_pipelines
                 .insert_single(id, ref_count);
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-
-        // We also need to assign errors to the implicit pipeline layout and the
-        // implicit bind group layout. We have to remove any existing entries first.
-        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
-        let (mut bgl_guard, _token) = hub.bind_group_layouts.write(&mut token);
-        if let Some(ref ids) = implicit_error_context {
-            if pipeline_layout_guard.contains(ids.root_id) {
-                pipeline_layout_guard.remove(ids.root_id);
-            }
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
-            for &bgl_id in ids.group_ids.iter() {
-                if bgl_guard.contains(bgl_id) {
-                    bgl_guard.remove(bgl_id);
-                }
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
-            }
-        }
-
-        (id, Some(error))
+        Err(error)
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
@@ -1930,10 +1836,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         pipeline_id: id::RenderPipelineId,
         index: u32,
         id_in: Input<G, id::BindGroupLayoutId>,
-    ) -> (
+    ) -> Result<
         id::BindGroupLayoutId,
-        Option<binding_model::GetBindGroupLayoutError>,
-    ) {
+        binding_model::GetBindGroupLayoutError,
+    > {
         let hub = A::hub(self);
         let mut token = Token::root();
 
@@ -1964,7 +1870,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 layout.multi_ref_count.inc();
 
                 if G::ids_are_generated_in_wgpu() {
-                    return (id.0, None);
+                    return Ok(id.0);
                 }
 
                 device_id = layout.device_id.clone();
@@ -1981,14 +1887,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let fid = hub.bind_group_layouts.prepare(id_in);
             let id = fid.assign(new_layout, &mut token);
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = hub
-            .bind_group_layouts
-            .prepare(id_in)
-            .assign_error("<derived>", &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn render_pipeline_label<A: HalApi>(&self, id: id::RenderPipelineId) -> String {
@@ -2034,10 +1936,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::ComputePipelineDescriptor,
         id_in: Input<G, id::ComputePipelineId>,
         implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
-    ) -> (
+    ) -> Result<
         id::ComputePipelineId,
-        Option<pipeline::CreateComputePipelineError>,
-    ) {
+        pipeline::CreateComputePipelineError,
+    > {
         profiling::scope!("Device::create_compute_pipeline");
 
         let hub = A::hub(self);
@@ -2085,29 +1987,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .lock()
                 .compute_pipelines
                 .insert_single(id, ref_count);
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-
-        // We also need to assign errors to the implicit pipeline layout and the
-        // implicit bind group layout. We have to remove any existing entries first.
-        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
-        let (mut bgl_guard, _token) = hub.bind_group_layouts.write(&mut token);
-        if let Some(ref ids) = implicit_error_context {
-            if pipeline_layout_guard.contains(ids.root_id) {
-                pipeline_layout_guard.remove(ids.root_id);
-            }
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
-            for &bgl_id in ids.group_ids.iter() {
-                if bgl_guard.contains(bgl_id) {
-                    bgl_guard.remove(bgl_id);
-                }
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
-            }
-        }
-
-        (id, Some(error))
+        Err(error)
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
@@ -2117,10 +2000,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         pipeline_id: id::ComputePipelineId,
         index: u32,
         id_in: Input<G, id::BindGroupLayoutId>,
-    ) -> (
+    ) -> Result<
         id::BindGroupLayoutId,
-        Option<binding_model::GetBindGroupLayoutError>,
-    ) {
+        binding_model::GetBindGroupLayoutError,
+    > {
         let hub = A::hub(self);
         let mut token = Token::root();
 
@@ -2151,7 +2034,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 layout.multi_ref_count.inc();
 
                 if G::ids_are_generated_in_wgpu() {
-                    return (id.0, None);
+                    return Ok(id.0);
                 }
 
                 device_id = layout.device_id.clone();
@@ -2168,14 +2051,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let fid = hub.bind_group_layouts.prepare(id_in);
             let id = fid.assign(new_layout, &mut token);
 
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = hub
-            .bind_group_layouts
-            .prepare(id_in)
-            .assign_error("<derived>", &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn compute_pipeline_label<A: HalApi>(&self, id: id::ComputePipelineId) -> String {

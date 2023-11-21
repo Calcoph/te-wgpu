@@ -1129,7 +1129,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
-    ) -> (DeviceId, Option<RequestDeviceError>) {
+    ) -> Result<DeviceId, RequestDeviceError> {
         profiling::scope!("Adapter::request_device");
         log::trace!("Adapter::request_device");
 
@@ -1149,11 +1149,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Err(e) => break e,
                 };
             let id = fid.assign(device, &mut token);
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 
     /// # Safety
@@ -1167,7 +1166,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
-    ) -> (DeviceId, Option<RequestDeviceError>) {
+    ) -> Result<DeviceId, RequestDeviceError> {
         profiling::scope!("Adapter::create_device_from_hal");
 
         let hub = A::hub(self);
@@ -1191,11 +1190,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
             let id = fid.assign(device, &mut token);
-            return (id.0, None);
+            return Ok(id.0);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        Err(error)
     }
 }
 

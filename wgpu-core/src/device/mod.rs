@@ -33,7 +33,6 @@ pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 
 const CLEANUP_WAIT_MS: u32 = 5000;
 
-const IMPLICIT_FAILURE: &str = "failed implicit";
 const EP_FAILURE: &str = "EP is invalid";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;

@@ -196,11 +196,6 @@ impl<T, I: id::TypedId> Storage<T, I> {
         self.insert_impl(index as usize, Element::Occupied(value, epoch))
     }
 
-    pub(crate) fn insert_error(&mut self, id: I, label: &str) {
-        let (index, epoch, _) = id.unzip();
-        self.insert_impl(index as usize, Element::Error(epoch, label.to_string()))
-    }
-
     pub(crate) fn replace_with_error(&mut self, id: I) -> Result<T, InvalidId> {
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(

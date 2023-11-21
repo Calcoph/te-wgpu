@@ -40,7 +40,7 @@ use std::{borrow::Cow, iter, num::NonZeroU32};
 
 use super::{
     life, queue, DeviceDescriptor, DeviceError, ImplicitPipelineContext, UserClosures, EP_FAILURE,
-    IMPLICIT_FAILURE, ZERO_BUFFER_SIZE,
+    ZERO_BUFFER_SIZE,
 };
 
 /// Structure describing a logical device. Some members are internally mutable,
@@ -2521,15 +2521,6 @@ impl<A: HalApi> Device<A> {
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
         let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
 
-        // This has to be done first, or otherwise the IDs may be pointing to entries
-        // that are not even in the storage.
-        if let Some(ref ids) = implicit_context {
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
-            for &bgl_id in ids.group_ids.iter() {
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
-            }
-        }
-
         self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
 
         let mut derived_group_layouts =
@@ -2651,15 +2642,6 @@ impl<A: HalApi> Device<A> {
         //TODO: only lock mutable if the layout is derived
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
         let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
-
-        // This has to be done first, or otherwise the IDs may be pointing to entries
-        // that are not even in the storage.
-        if let Some(ref ids) = implicit_context {
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
-            for &bgl_id in ids.group_ids.iter() {
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
-            }
-        }
 
         let mut derived_group_layouts =
             ArrayVec::<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>::new();

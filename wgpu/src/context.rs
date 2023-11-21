@@ -1,5 +1,6 @@
 use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin::Pin, sync::Arc};
 
+use wgc::{pipeline::{CreateShaderModuleError, CreateRenderPipelineError, CreateComputePipelineError}, binding_model::{CreateBindGroupLayoutError, CreateBindGroupError, CreatePipelineLayoutError}, resource::{CreateBufferError, CreateTextureError, CreateSamplerError, CreateQuerySetError, BufferAccessResult, CreateTextureViewError}, device::{DeviceError, queue::QueueWriteError}, command::CommandEncoderError};
 use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DeviceLostReason, DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
@@ -10,12 +11,11 @@ use wgt::{
 use crate::{
     AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
+    DeviceDescriptor, Error, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
     PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor,
-    UncapturedErrorHandler,
+    ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor, Data,
 };
 
 /// Meta trait for an id tracked by a context.
@@ -93,7 +93,6 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
             >,
         > + WasmNotSend
         + 'static;
-    type PopErrorScopeFuture: Future<Output = Option<Error>> + WasmNotSend + 'static;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
     unsafe fn instance_create_surface(
@@ -195,73 +194,73 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         device_data: &Self::DeviceData,
         desc: ShaderModuleDescriptor,
         shader_bound_checks: wgt::ShaderBoundChecks,
-    ) -> (Self::ShaderModuleId, Self::ShaderModuleData);
+    ) -> Result<(Self::ShaderModuleId, Self::ShaderModuleData), CreateShaderModuleError>;
     unsafe fn device_create_shader_module_spirv(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &ShaderModuleDescriptorSpirV,
-    ) -> (Self::ShaderModuleId, Self::ShaderModuleData);
+    ) -> Result<(Self::ShaderModuleId, Self::ShaderModuleData), CreateShaderModuleError>;
     fn device_create_bind_group_layout(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &BindGroupLayoutDescriptor,
-    ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData);
+    ) -> Result<(Self::BindGroupLayoutId, Self::BindGroupLayoutData), CreateBindGroupLayoutError>;
     fn device_create_bind_group(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &BindGroupDescriptor,
-    ) -> (Self::BindGroupId, Self::BindGroupData);
+    ) -> Result<(Self::BindGroupId, Self::BindGroupData), CreateBindGroupError>;
     fn device_create_pipeline_layout(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &PipelineLayoutDescriptor,
-    ) -> (Self::PipelineLayoutId, Self::PipelineLayoutData);
+    ) -> Result<(Self::PipelineLayoutId, Self::PipelineLayoutData), CreatePipelineLayoutError>;
     fn device_create_render_pipeline(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &RenderPipelineDescriptor,
-    ) -> (Self::RenderPipelineId, Self::RenderPipelineData);
+    ) -> Result<(Self::RenderPipelineId, Self::RenderPipelineData), CreateRenderPipelineError>;
     fn device_create_compute_pipeline(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &ComputePipelineDescriptor,
-    ) -> (Self::ComputePipelineId, Self::ComputePipelineData);
+    ) -> Result<(Self::ComputePipelineId, Self::ComputePipelineData), CreateComputePipelineError>;
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &BufferDescriptor,
-    ) -> (Self::BufferId, Self::BufferData);
+    ) -> Result<(Self::BufferId, Self::BufferData), CreateBufferError>;
     fn device_create_texture(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &TextureDescriptor,
-    ) -> (Self::TextureId, Self::TextureData);
+    ) -> Result<(Self::TextureId, Self::TextureData), CreateTextureError>;
     fn device_create_sampler(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &SamplerDescriptor,
-    ) -> (Self::SamplerId, Self::SamplerData);
+    ) -> Result<(Self::SamplerId, Self::SamplerData), CreateSamplerError>;
     fn device_create_query_set(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &QuerySetDescriptor,
-    ) -> (Self::QuerySetId, Self::QuerySetData);
+    ) -> Result<(Self::QuerySetId, Self::QuerySetData), CreateQuerySetError>;
     fn device_create_command_encoder(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &CommandEncoderDescriptor,
-    ) -> (Self::CommandEncoderId, Self::CommandEncoderData);
+    ) -> Result<(Self::CommandEncoderId, Self::CommandEncoderData), DeviceError>;
     fn device_create_render_bundle_encoder(
         &self,
         device: &Self::DeviceId,
@@ -288,24 +287,6 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         device_data: &Self::DeviceData,
         maintain: Maintain,
     ) -> bool;
-    fn device_on_uncaptured_error(
-        &self,
-        device: &Self::DeviceId,
-        device_data: &Self::DeviceData,
-        handler: Box<dyn UncapturedErrorHandler>,
-    );
-    fn device_push_error_scope(
-        &self,
-        device: &Self::DeviceId,
-        device_data: &Self::DeviceData,
-        filter: ErrorFilter,
-    );
-    fn device_pop_error_scope(
-        &self,
-        device: &Self::DeviceId,
-        device_data: &Self::DeviceData,
-    ) -> Self::PopErrorScopeFuture;
-
     fn buffer_map_async(
         &self,
         buffer: &Self::BufferId,
@@ -313,7 +294,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    );
+    ) -> BufferAccessResult;
     fn buffer_get_mapped_range(
         &self,
         buffer: &Self::BufferId,
@@ -330,13 +311,13 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         buffer_data: &Self::BufferData,
         sub_range: Range<BufferAddress>,
     ) -> js_sys::ArrayBuffer;
-    fn buffer_unmap(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData);
+    fn buffer_unmap(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData) -> BufferAccessResult;
     fn texture_create_view(
         &self,
         texture: &Self::TextureId,
         texture_data: &Self::TextureData,
         desc: &TextureViewDescriptor,
-    ) -> (Self::TextureViewId, Self::TextureViewData);
+    ) -> Result<(Self::TextureViewId, Self::TextureViewData), CreateTextureViewError>;
 
     fn surface_drop(&self, surface: &Self::SurfaceId, surface_data: &Self::SurfaceData);
     fn adapter_drop(&self, adapter: &Self::AdapterId, adapter_data: &Self::AdapterData);
@@ -422,7 +403,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         destination_data: &Self::BufferData,
         destination_offset: BufferAddress,
         copy_size: BufferAddress,
-    );
+    ) -> Result<(), wgc::command::CopyError>;
     fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
@@ -430,7 +411,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         source: ImageCopyBuffer,
         destination: ImageCopyTexture,
         copy_size: Extent3d,
-    );
+    ) -> Result<(), wgc::command::CopyError>;
     fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
@@ -438,7 +419,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         source: ImageCopyTexture,
         destination: ImageCopyBuffer,
         copy_size: Extent3d,
-    );
+    ) -> Result<(), wgc::command::CopyError>;
     fn command_encoder_copy_texture_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
@@ -446,7 +427,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         source: ImageCopyTexture,
         destination: ImageCopyTexture,
         copy_size: Extent3d,
-    );
+    ) -> Result<(), wgc::command::CopyError>;
 
     fn command_encoder_begin_compute_pass(
         &self,
@@ -460,7 +441,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         encoder_data: &Self::CommandEncoderData,
         pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
@@ -473,12 +454,12 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         encoder_data: &Self::CommandEncoderData,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn command_encoder_finish(
         &self,
         encoder: Self::CommandEncoderId,
         encoder_data: &mut Self::CommandEncoderData,
-    ) -> (Self::CommandBufferId, Self::CommandBufferData);
+    ) -> Result<(Self::CommandBufferId, Self::CommandBufferData), CommandEncoderError>;
 
     fn command_encoder_clear_texture(
         &self,
@@ -486,7 +467,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         encoder_data: &Self::CommandEncoderData,
         texture: &Texture, // TODO: Decompose?
         subresource_range: &ImageSubresourceRange,
-    );
+    ) -> Result<(), wgc::command::ClearError>;
     fn command_encoder_clear_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
@@ -494,25 +475,25 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         buffer: &Buffer,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    );
+    ) -> Result<(), wgc::command::ClearError>;
 
     fn command_encoder_insert_debug_marker(
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         label: &str,
-    );
+    ) -> Result<(), CommandEncoderError>;
     fn command_encoder_push_debug_group(
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         label: &str,
-    );
+    ) -> Result<(), wgc::command::CommandEncoderError>;
     fn command_encoder_pop_debug_group(
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-    );
+    ) -> Result<(), wgc::command::CommandEncoderError>;
 
     fn command_encoder_write_timestamp(
         &self,
@@ -521,7 +502,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         query_set: &Self::QuerySetId,
         query_set_data: &Self::QuerySetData,
         query_index: u32,
-    );
+    ) -> Result<(), wgc::command::QueryError>;
     #[allow(clippy::too_many_arguments)]
     fn command_encoder_resolve_query_set(
         &self,
@@ -534,7 +515,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         destination: &Self::BufferId,
         destination_data: &Self::BufferData,
         destination_offset: BufferAddress,
-    );
+    ) -> Result<(), wgc::command::QueryError>;
 
     fn render_bundle_encoder_finish(
         &self,
@@ -550,7 +531,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         buffer_data: &Self::BufferData,
         offset: BufferAddress,
         data: &[u8],
-    );
+    ) -> Result<(), wgc::device::queue::QueueWriteError>;
     fn queue_validate_write_buffer(
         &self,
         queue: &Self::QueueId,
@@ -559,13 +540,13 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
-    ) -> Option<()>;
+    ) -> Result<(), QueueWriteError>;
     fn queue_create_staging_buffer(
         &self,
         queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         size: BufferSize,
-    ) -> Option<Box<dyn QueueWriteBuffer>>;
+    ) -> Result<Box<dyn crate::context::QueueWriteBuffer>, QueueWriteError>;
     fn queue_write_staging_buffer(
         &self,
         queue: &Self::QueueId,
@@ -574,7 +555,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         buffer_data: &Self::BufferData,
         offset: BufferAddress,
         staging_buffer: &dyn QueueWriteBuffer,
-    );
+    ) -> Result<(), QueueWriteError>;
     fn queue_write_texture(
         &self,
         queue: &Self::QueueId,
@@ -583,7 +564,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
-    );
+    ) -> Result<(), QueueWriteError>;
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     fn queue_copy_external_image_to_texture(
         &self,
@@ -1184,23 +1165,6 @@ pub type InstanceRequestAdapterFuture =
         not(target_feature = "atomics")
     )
 ))]
-pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>> + Send>;
-#[cfg(not(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-)))]
-pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>>>;
-
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
 pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
 #[cfg(not(any(
     not(target_arch = "wasm32"),
@@ -1318,73 +1282,73 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         device_data: &crate::Data,
         desc: ShaderModuleDescriptor,
         shader_bound_checks: wgt::ShaderBoundChecks,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateShaderModuleError>;
     unsafe fn device_create_shader_module_spirv(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &ShaderModuleDescriptorSpirV,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateShaderModuleError>;
     fn device_create_bind_group_layout(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &BindGroupLayoutDescriptor,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateBindGroupLayoutError>;
     fn device_create_bind_group(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &BindGroupDescriptor,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateBindGroupError>;
     fn device_create_pipeline_layout(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &PipelineLayoutDescriptor,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreatePipelineLayoutError>;
     fn device_create_render_pipeline(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &RenderPipelineDescriptor,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateRenderPipelineError>;
     fn device_create_compute_pipeline(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &ComputePipelineDescriptor,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateComputePipelineError>;
     fn device_create_buffer(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &BufferDescriptor,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateBufferError>;
     fn device_create_texture(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &TextureDescriptor,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateTextureError>;
     fn device_create_sampler(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &SamplerDescriptor,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateSamplerError>;
     fn device_create_query_set(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &QuerySetDescriptor,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateQuerySetError>;
     fn device_create_command_encoder(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &CommandEncoderDescriptor,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), DeviceError>;
     fn device_create_render_bundle_encoder(
         &self,
         device: &ObjectId,
@@ -1402,23 +1366,6 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
     fn device_mark_lost(&self, device: &ObjectId, device_data: &crate::Data, message: &str);
     fn device_poll(&self, device: &ObjectId, device_data: &crate::Data, maintain: Maintain)
         -> bool;
-    fn device_on_uncaptured_error(
-        &self,
-        device: &ObjectId,
-        device_data: &crate::Data,
-        handler: Box<dyn UncapturedErrorHandler>,
-    );
-    fn device_push_error_scope(
-        &self,
-        device: &ObjectId,
-        device_data: &crate::Data,
-        filter: ErrorFilter,
-    );
-    fn device_pop_error_scope(
-        &self,
-        device: &ObjectId,
-        device_data: &crate::Data,
-    ) -> Pin<DevicePopErrorFuture>;
     fn buffer_map_async(
         &self,
         buffer: &ObjectId,
@@ -1426,7 +1373,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    );
+    ) -> Result<(), wgc::resource::BufferAccessError>;
     fn buffer_get_mapped_range(
         &self,
         buffer: &ObjectId,
@@ -1443,13 +1390,13 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         buffer_data: &crate::Data,
         sub_range: Range<BufferAddress>,
     ) -> js_sys::ArrayBuffer;
-    fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data);
+    fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data) -> Result<(), wgc::resource::BufferAccessError>;
     fn texture_create_view(
         &self,
         texture: &ObjectId,
         texture_data: &crate::Data,
         desc: &TextureViewDescriptor,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateTextureViewError>;
 
     fn surface_drop(&self, surface: &ObjectId, surface_data: &crate::Data);
     fn adapter_drop(&self, adapter: &ObjectId, adapter_data: &crate::Data);
@@ -1499,7 +1446,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         destination_data: &crate::Data,
         destination_offset: BufferAddress,
         copy_size: BufferAddress,
-    );
+    ) -> Result<(), wgc::command::CopyError>;
     fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder: &ObjectId,
@@ -1507,7 +1454,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         source: ImageCopyBuffer,
         destination: ImageCopyTexture,
         copy_size: Extent3d,
-    );
+    ) -> Result<(), wgc::command::CopyError>;
     fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder: &ObjectId,
@@ -1515,7 +1462,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         source: ImageCopyTexture,
         destination: ImageCopyBuffer,
         copy_size: Extent3d,
-    );
+    ) -> Result<(), wgc::command::CopyError>;
     fn command_encoder_copy_texture_to_texture(
         &self,
         encoder: &ObjectId,
@@ -1523,7 +1470,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         source: ImageCopyTexture,
         destination: ImageCopyTexture,
         copy_size: Extent3d,
-    );
+    ) -> Result<(), wgc::command::CopyError>;
 
     fn command_encoder_begin_compute_pass(
         &self,
@@ -1537,7 +1484,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         encoder_data: &crate::Data,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn command_encoder_begin_render_pass(
         &self,
         encoder: &ObjectId,
@@ -1550,12 +1497,12 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         encoder_data: &crate::Data,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn command_encoder_finish(
         &self,
         encoder: ObjectId,
         encoder_data: &mut crate::Data,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CommandEncoderError>;
 
     fn command_encoder_clear_texture(
         &self,
@@ -1563,7 +1510,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         encoder_data: &crate::Data,
         texture: &Texture,
         subresource_range: &ImageSubresourceRange,
-    );
+    ) -> Result<(), wgc::command::ClearError>;
     fn command_encoder_clear_buffer(
         &self,
         encoder: &ObjectId,
@@ -1571,21 +1518,21 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         buffer: &Buffer,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    );
+    ) -> Result<(), wgc::command::ClearError>;
 
     fn command_encoder_insert_debug_marker(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         label: &str,
-    );
+    ) -> Result<(), CommandEncoderError>;
     fn command_encoder_push_debug_group(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         label: &str,
-    );
-    fn command_encoder_pop_debug_group(&self, encoder: &ObjectId, encoder_data: &crate::Data);
+    ) -> Result<(), wgc::command::CommandEncoderError>;
+    fn command_encoder_pop_debug_group(&self, encoder: &ObjectId, encoder_data: &crate::Data) -> Result<(), CommandEncoderError>;
 
     fn command_encoder_write_timestamp(
         &self,
@@ -1594,7 +1541,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         query_set: &ObjectId,
         query_set_data: &crate::Data,
         query_index: u32,
-    );
+    ) -> Result<(), wgc::command::QueryError>;
     #[allow(clippy::too_many_arguments)]
     fn command_encoder_resolve_query_set(
         &self,
@@ -1607,7 +1554,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         destination: &ObjectId,
         destination_data: &crate::Data,
         destination_offset: BufferAddress,
-    );
+    ) -> Result<(), wgc::command::QueryError>;
 
     fn render_bundle_encoder_finish(
         &self,
@@ -1623,7 +1570,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         buffer_data: &crate::Data,
         offset: BufferAddress,
         data: &[u8],
-    );
+    ) -> Result<(), wgc::device::queue::QueueWriteError>;
     fn queue_validate_write_buffer(
         &self,
         queue: &ObjectId,
@@ -1632,13 +1579,13 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         buffer_data: &crate::Data,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
-    ) -> Option<()>;
+    ) -> Result<(), QueueWriteError>;
     fn queue_create_staging_buffer(
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
         size: BufferSize,
-    ) -> Option<Box<dyn QueueWriteBuffer>>;
+    ) -> Result<Box<dyn QueueWriteBuffer>, QueueWriteError>;
     fn queue_write_staging_buffer(
         &self,
         queue: &ObjectId,
@@ -1647,7 +1594,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         buffer_data: &crate::Data,
         offset: BufferAddress,
         staging_buffer: &dyn QueueWriteBuffer,
-    );
+    ) -> Result<(), QueueWriteError>;
     fn queue_write_texture(
         &self,
         queue: &ObjectId,
@@ -1656,7 +1603,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
-    );
+    ) -> Result<(), QueueWriteError>;
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     fn queue_copy_external_image_to_texture(
         &self,
@@ -2290,7 +2237,7 @@ where
         device_data: &crate::Data,
         desc: ShaderModuleDescriptor,
         shader_bound_checks: wgt::ShaderBoundChecks,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateShaderModuleError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         let (shader_module, data) = Context::device_create_shader_module(
@@ -2299,8 +2246,8 @@ where
             device_data,
             desc,
             shader_bound_checks,
-        );
-        (shader_module.into(), Box::new(data) as _)
+        )?;
+        Ok((shader_module.into(), Box::new(data) as _))
     }
 
     unsafe fn device_create_shader_module_spirv(
@@ -2308,12 +2255,12 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &ShaderModuleDescriptorSpirV,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateShaderModuleError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         let (shader_module, data) =
-            unsafe { Context::device_create_shader_module_spirv(self, &device, device_data, desc) };
-        (shader_module.into(), Box::new(data) as _)
+            unsafe { Context::device_create_shader_module_spirv(self, &device, device_data, desc)? };
+        Ok((shader_module.into(), Box::new(data) as _))
     }
 
     fn device_create_bind_group_layout(
@@ -2321,12 +2268,12 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &BindGroupLayoutDescriptor,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateBindGroupLayoutError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         let (bind_group_layout, data) =
-            Context::device_create_bind_group_layout(self, &device, device_data, desc);
-        (bind_group_layout.into(), Box::new(data) as _)
+            Context::device_create_bind_group_layout(self, &device, device_data, desc)?;
+        Ok((bind_group_layout.into(), Box::new(data) as _))
     }
 
     fn device_create_bind_group(
@@ -2334,12 +2281,12 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &BindGroupDescriptor,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateBindGroupError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         let (bind_group, data) =
-            Context::device_create_bind_group(self, &device, device_data, desc);
-        (bind_group.into(), Box::new(data) as _)
+            Context::device_create_bind_group(self, &device, device_data, desc)?;
+        Ok((bind_group.into(), Box::new(data) as _))
     }
 
     fn device_create_pipeline_layout(
@@ -2347,12 +2294,12 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &PipelineLayoutDescriptor,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<Data>), CreatePipelineLayoutError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         let (pipeline_layout, data) =
-            Context::device_create_pipeline_layout(self, &device, device_data, desc);
-        (pipeline_layout.into(), Box::new(data) as _)
+            Context::device_create_pipeline_layout(self, &device, device_data, desc)?;
+        Ok((pipeline_layout.into(), Box::new(data) as _))
     }
 
     fn device_create_render_pipeline(
@@ -2360,12 +2307,12 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &RenderPipelineDescriptor,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateRenderPipelineError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         let (render_pipeline, data) =
-            Context::device_create_render_pipeline(self, &device, device_data, desc);
-        (render_pipeline.into(), Box::new(data) as _)
+            Context::device_create_render_pipeline(self, &device, device_data, desc)?;
+        Ok((render_pipeline.into(), Box::new(data) as _))
     }
 
     fn device_create_compute_pipeline(
@@ -2373,12 +2320,12 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &ComputePipelineDescriptor,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateComputePipelineError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         let (compute_pipeline, data) =
-            Context::device_create_compute_pipeline(self, &device, device_data, desc);
-        (compute_pipeline.into(), Box::new(data) as _)
+            Context::device_create_compute_pipeline(self, &device, device_data, desc)?;
+        Ok((compute_pipeline.into(), Box::new(data) as _))
     }
 
     fn device_create_buffer(
@@ -2386,11 +2333,11 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &BufferDescriptor,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateBufferError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
-        let (buffer, data) = Context::device_create_buffer(self, &device, device_data, desc);
-        (buffer.into(), Box::new(data) as _)
+        let (buffer, data) = Context::device_create_buffer(self, &device, device_data, desc)?;
+        Ok((buffer.into(), Box::new(data) as _))
     }
 
     fn device_create_texture(
@@ -2398,11 +2345,11 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &TextureDescriptor,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateTextureError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
-        let (texture, data) = Context::device_create_texture(self, &device, device_data, desc);
-        (texture.into(), Box::new(data) as _)
+        let (texture, data) = Context::device_create_texture(self, &device, device_data, desc)?;
+        Ok((texture.into(), Box::new(data) as _))
     }
 
     fn device_create_sampler(
@@ -2410,11 +2357,11 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &SamplerDescriptor,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateSamplerError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
-        let (sampler, data) = Context::device_create_sampler(self, &device, device_data, desc);
-        (sampler.into(), Box::new(data) as _)
+        let (sampler, data) = Context::device_create_sampler(self, &device, device_data, desc)?;
+        Ok((sampler.into(), Box::new(data) as _))
     }
 
     fn device_create_query_set(
@@ -2422,11 +2369,11 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &QuerySetDescriptor,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateQuerySetError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
-        let (query_set, data) = Context::device_create_query_set(self, &device, device_data, desc);
-        (query_set.into(), Box::new(data) as _)
+        let (query_set, data) = Context::device_create_query_set(self, &device, device_data, desc)?;
+        Ok((query_set.into(), Box::new(data) as _))
     }
 
     fn device_create_command_encoder(
@@ -2434,12 +2381,12 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &CommandEncoderDescriptor,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), DeviceError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         let (command_encoder, data) =
-            Context::device_create_command_encoder(self, &device, device_data, desc);
-        (command_encoder.into(), Box::new(data) as _)
+            Context::device_create_command_encoder(self, &device, device_data, desc)?;
+        Ok((command_encoder.into(), Box::new(data) as _))
     }
 
     fn device_create_render_bundle_encoder(
@@ -2495,38 +2442,6 @@ where
         Context::device_poll(self, &device, device_data, maintain)
     }
 
-    fn device_on_uncaptured_error(
-        &self,
-        device: &ObjectId,
-        device_data: &crate::Data,
-        handler: Box<dyn UncapturedErrorHandler>,
-    ) {
-        let device = <T::DeviceId>::from(*device);
-        let device_data = downcast_ref(device_data);
-        Context::device_on_uncaptured_error(self, &device, device_data, handler)
-    }
-
-    fn device_push_error_scope(
-        &self,
-        device: &ObjectId,
-        device_data: &crate::Data,
-        filter: ErrorFilter,
-    ) {
-        let device = <T::DeviceId>::from(*device);
-        let device_data = downcast_ref(device_data);
-        Context::device_push_error_scope(self, &device, device_data, filter)
-    }
-
-    fn device_pop_error_scope(
-        &self,
-        device: &ObjectId,
-        device_data: &crate::Data,
-    ) -> Pin<DevicePopErrorFuture> {
-        let device = <T::DeviceId>::from(*device);
-        let device_data = downcast_ref(device_data);
-        Box::pin(Context::device_pop_error_scope(self, &device, device_data))
-    }
-
     fn buffer_map_async(
         &self,
         buffer: &ObjectId,
@@ -2534,7 +2449,7 @@ where
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    ) {
+    ) -> Result<(), wgc::resource::BufferAccessError> {
         let buffer = <T::BufferId>::from(*buffer);
         let buffer_data = downcast_ref(buffer_data);
         Context::buffer_map_async(self, &buffer, buffer_data, mode, range, callback)
@@ -2566,7 +2481,7 @@ where
         Context::buffer_get_mapped_range_as_array_buffer(self, &buffer, buffer_data, sub_range)
     }
 
-    fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data) {
+    fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data) -> Result<(), wgc::resource::BufferAccessError> {
         let buffer = <T::BufferId>::from(*buffer);
         let buffer_data = downcast_ref(buffer_data);
         Context::buffer_unmap(self, &buffer, buffer_data)
@@ -2577,11 +2492,11 @@ where
         texture: &ObjectId,
         texture_data: &crate::Data,
         desc: &TextureViewDescriptor,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreateTextureViewError> {
         let texture = <T::TextureId>::from(*texture);
         let texture_data = downcast_ref(texture_data);
-        let (texture_view, data) = Context::texture_create_view(self, &texture, texture_data, desc);
-        (texture_view.into(), Box::new(data) as _)
+        let (texture_view, data) = Context::texture_create_view(self, &texture, texture_data, desc)?;
+        Ok((texture_view.into(), Box::new(data) as _))
     }
 
     fn surface_drop(&self, surface: &ObjectId, surface_data: &crate::Data) {
@@ -2733,7 +2648,7 @@ where
         destination_data: &crate::Data,
         destination_offset: BufferAddress,
         copy_size: BufferAddress,
-    ) {
+    ) -> Result<(), wgc::command::CopyError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         let source = <T::BufferId>::from(*source);
@@ -2761,7 +2676,7 @@ where
         source: ImageCopyBuffer,
         destination: ImageCopyTexture,
         copy_size: Extent3d,
-    ) {
+    ) -> Result<(), wgc::command::CopyError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         Context::command_encoder_copy_buffer_to_texture(
@@ -2781,7 +2696,7 @@ where
         source: ImageCopyTexture,
         destination: ImageCopyBuffer,
         copy_size: Extent3d,
-    ) {
+    ) -> Result<(), wgc::command::CopyError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         Context::command_encoder_copy_texture_to_buffer(
@@ -2801,7 +2716,7 @@ where
         source: ImageCopyTexture,
         destination: ImageCopyTexture,
         copy_size: Extent3d,
-    ) {
+    ) -> Result<(), wgc::command::CopyError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         Context::command_encoder_copy_texture_to_texture(
@@ -2833,7 +2748,7 @@ where
         encoder_data: &crate::Data,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-    ) {
+    ) -> Result<(), wgc::command::ComputePassError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         let mut pass = <T::ComputePassId>::from(*pass);
@@ -2866,7 +2781,7 @@ where
         encoder_data: &crate::Data,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         let mut pass = <T::RenderPassId>::from(*pass);
@@ -2878,10 +2793,10 @@ where
         &self,
         encoder: ObjectId,
         encoder_data: &mut crate::Data,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CommandEncoderError> {
         let (command_buffer, data) =
-            Context::command_encoder_finish(self, encoder.into(), downcast_mut(encoder_data));
-        (command_buffer.into(), Box::new(data) as _)
+            Context::command_encoder_finish(self, encoder.into(), downcast_mut(encoder_data))?;
+        Ok((command_buffer.into(), Box::new(data) as _))
     }
 
     fn command_encoder_clear_texture(
@@ -2890,7 +2805,7 @@ where
         encoder_data: &crate::Data,
         texture: &Texture,
         subresource_range: &ImageSubresourceRange,
-    ) {
+    ) -> Result<(), wgc::command::ClearError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         Context::command_encoder_clear_texture(
@@ -2909,7 +2824,7 @@ where
         buffer: &Buffer,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    ) {
+    ) -> Result<(), wgc::command::ClearError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         Context::command_encoder_clear_buffer(self, &encoder, encoder_data, buffer, offset, size)
@@ -2920,7 +2835,7 @@ where
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         label: &str,
-    ) {
+    ) -> Result<(), CommandEncoderError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         Context::command_encoder_insert_debug_marker(self, &encoder, encoder_data, label)
@@ -2931,13 +2846,13 @@ where
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         label: &str,
-    ) {
+    ) -> Result<(), wgc::command::CommandEncoderError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         Context::command_encoder_push_debug_group(self, &encoder, encoder_data, label)
     }
 
-    fn command_encoder_pop_debug_group(&self, encoder: &ObjectId, encoder_data: &crate::Data) {
+    fn command_encoder_pop_debug_group(&self, encoder: &ObjectId, encoder_data: &crate::Data) -> Result<(), CommandEncoderError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         Context::command_encoder_pop_debug_group(self, &encoder, encoder_data)
@@ -2950,7 +2865,7 @@ where
         query_set: &ObjectId,
         query_set_data: &crate::Data,
         query_index: u32,
-    ) {
+    ) -> Result<(), wgc::command::QueryError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         let query_set = <T::QuerySetId>::from(*query_set);
@@ -2976,7 +2891,7 @@ where
         destination: &ObjectId,
         destination_data: &crate::Data,
         destination_offset: BufferAddress,
-    ) {
+    ) -> Result<(), wgc::command::QueryError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         let query_set = <T::QuerySetId>::from(*query_set);
@@ -3017,7 +2932,7 @@ where
         buffer_data: &crate::Data,
         offset: BufferAddress,
         data: &[u8],
-    ) {
+    ) -> Result<(), wgc::device::queue::QueueWriteError> {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         let buffer = <T::BufferId>::from(*buffer);
@@ -3033,7 +2948,7 @@ where
         buffer_data: &crate::Data,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
-    ) -> Option<()> {
+    ) -> Result<(), QueueWriteError> {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         let buffer = <T::BufferId>::from(*buffer);
@@ -3054,7 +2969,7 @@ where
         queue: &ObjectId,
         queue_data: &crate::Data,
         size: BufferSize,
-    ) -> Option<Box<dyn QueueWriteBuffer>> {
+    ) -> Result<Box<dyn QueueWriteBuffer>, QueueWriteError> {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         Context::queue_create_staging_buffer(self, &queue, queue_data, size)
@@ -3068,7 +2983,7 @@ where
         buffer_data: &crate::Data,
         offset: BufferAddress,
         staging_buffer: &dyn QueueWriteBuffer,
-    ) {
+    ) -> Result<(), QueueWriteError> {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         let buffer = <T::BufferId>::from(*buffer);
@@ -3092,7 +3007,7 @@ where
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
-    ) {
+    ) -> Result<(), QueueWriteError> {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         Context::queue_write_texture(self, &queue, queue_data, texture, data, data_layout, size)
