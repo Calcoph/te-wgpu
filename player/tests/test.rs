@@ -85,7 +85,7 @@ impl Test<'_> {
     ) {
         let backend = adapter.backend();
         let device = wgc::id::TypedId::zip(test_num, 0, backend);
-        let (_, error) = wgc::gfx_select!(adapter => global.adapter_request_device(
+        wgc::gfx_select!(adapter => global.adapter_request_device(
             adapter,
             &wgt::DeviceDescriptor {
                 label: None,
@@ -94,10 +94,7 @@ impl Test<'_> {
             },
             None,
             device
-        ));
-        if let Some(e) = error {
-            panic!("{:?}", e);
-        }
+        )).unwrap();
 
         let mut command_buffer_id_manager = wgc::identity::IdentityManager::default();
         println!("\t\t\tRunning...");

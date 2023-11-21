@@ -306,20 +306,20 @@ fn copy_via_compute(
                 count: None,
             },
         ],
-    });
+    }).unwrap();
 
     let view = texture.create_view(&TextureViewDescriptor {
         aspect,
         dimension: Some(TextureViewDimension::D2Array),
         ..Default::default()
-    });
+    }).unwrap();
 
     let output_buffer = device.create_buffer(&BufferDescriptor {
         label: Some("output buffer"),
         size: buffer.size(),
         usage: BufferUsages::COPY_SRC | BufferUsages::STORAGE,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let bg = device.create_bind_group(&BindGroupDescriptor {
         label: None,
@@ -338,13 +338,13 @@ fn copy_via_compute(
                 }),
             },
         ],
-    });
+    }).unwrap();
 
     let pll = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[&bgl],
         push_constant_ranges: &[],
-    });
+    }).unwrap();
 
     let source = String::from(include_str!("copy_texture_to_buffer.wgsl"));
 
@@ -360,14 +360,14 @@ fn copy_via_compute(
     let sm = device.create_shader_module(ShaderModuleDescriptor {
         label: Some("shader copy_texture_to_buffer.wgsl"),
         source: ShaderSource::Wgsl(Cow::Borrowed(&processed_source)),
-    });
+    }).unwrap();
 
     let pipeline_copy = device.create_compute_pipeline(&ComputePipelineDescriptor {
         label: Some("pipeline read"),
         layout: Some(&pll),
         module: &sm,
         entry_point: "copy_texture_to_buffer",
-    });
+    }).unwrap();
 
     {
         let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
@@ -377,7 +377,7 @@ fn copy_via_compute(
         pass.dispatch_workgroups(1, 1, 1);
     }
 
-    encoder.copy_buffer_to_buffer(&output_buffer, 0, buffer, 0, buffer.size());
+    encoder.copy_buffer_to_buffer(&output_buffer, 0, buffer, 0, buffer.size()).unwrap();
 }
 
 fn copy_texture_to_buffer_with_aspect(
@@ -415,7 +415,7 @@ fn copy_texture_to_buffer_with_aspect(
         texture
             .size()
             .mip_level_size(mip_level, texture.dimension()),
-    );
+    ).unwrap();
 }
 
 fn copy_texture_to_buffer(
@@ -527,12 +527,12 @@ impl ReadbackBuffers {
                 label: Some("Texture Readback"),
                 usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
                 contents: &vec![255; buffer_size as usize],
-            });
+            }).unwrap();
             let buffer_stencil = device.create_buffer_init(&util::BufferInitDescriptor {
                 label: Some("Texture Stencil-Aspect Readback"),
                 usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
                 contents: &vec![255; buffer_stencil_size as usize],
-            });
+            }).unwrap();
             ReadbackBuffers {
                 texture_format: texture.format(),
                 texture_width: texture.width(),
@@ -553,7 +553,7 @@ impl ReadbackBuffers {
                 label: Some("Texture Readback"),
                 usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
                 contents: &vec![255; buffer_size as usize],
-            });
+            }).unwrap();
             ReadbackBuffers {
                 texture_format: texture.format(),
                 texture_width: texture.width(),
@@ -577,7 +577,7 @@ impl ReadbackBuffers {
         aspect: Option<TextureAspect>,
     ) -> Vec<u8> {
         let buffer_slice = buffer.slice(..);
-        buffer_slice.map_async(MapMode::Read, |_| ());
+        buffer_slice.map_async(MapMode::Read, |_| ()).unwrap();
         device.poll(Maintain::Wait);
         let (block_width, block_height) = self.texture_format.block_dimensions();
         let expected_bytes_per_row = (self.texture_width / block_width)
@@ -613,7 +613,7 @@ impl ReadbackBuffers {
                 .retrieve_buffer(device, buffer, aspect)
                 .iter()
                 .all(|b| *b == 0);
-            buffer.unmap();
+            buffer.unmap().unwrap();
             is_zero
         };
 
@@ -635,6 +635,6 @@ impl ReadbackBuffers {
         );
         let result_buffer = &result_buffer[..expected_data.len()];
         assert_eq!(result_buffer, expected_data);
-        self.buffer.unmap();
+        self.buffer.unmap().unwrap();
     }
 }
