@@ -1707,6 +1707,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(id.0);
         };
 
+        #[cfg(feature = "trace")]
         log::trace!("Device::create_query_set -> {:?}", fid.id());
 
         Err(error)
