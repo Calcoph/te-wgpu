@@ -19,7 +19,7 @@ static PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration = GpuTestConfigu
                 .create_shader_module(wgpu::ShaderModuleDescriptor {
                     label: None,
                     source: wgpu::ShaderSource::Wgsl("not valid wgsl".into()),
-                });
+                }).unwrap();
 
             let pipeline = ctx
                 .device
@@ -28,7 +28,7 @@ static PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration = GpuTestConfigu
                     layout: None,
                     module: &module,
                     entry_point: "doesn't exist",
-                });
+                }).unwrap();
 
             pipeline.get_bind_group_layout(0);
         });

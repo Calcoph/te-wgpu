@@ -34,9 +34,9 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
                 | wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
-        });
+        }).unwrap();
 
-        let texture_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let texture_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("bind group layout"),
@@ -51,25 +51,25 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
 
                 count: NonZeroU32::new(4),
             }],
-        });
+        }).unwrap();
 
         let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        }).unwrap();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             module: &cs_module,
             entry_point: "main",
-        });
+        }).unwrap();
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             entries: &[wgpu::BindGroupEntry {
@@ -78,10 +78,10 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
             }],
             layout: &bind_group_layout,
             label: Some("bind group"),
-        });
+        }).unwrap();
 
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
@@ -95,7 +95,7 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
         let readback_buffers = ReadbackBuffers::new(&ctx.device, &storage_texture);
         readback_buffers.copy_from(&ctx.device, &mut encoder, &storage_texture);
 
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
 
         readback_buffers
             .assert_buffer_contents(device, bytemuck::bytes_of(&[4.0f32, 3.0, 2.0, 1.0]));

@@ -11,7 +11,7 @@ fn pulling_common(
 ) {
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("draw.vert.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("draw.vert.wgsl")).unwrap();
 
     let bgl = ctx
         .device
@@ -27,7 +27,7 @@ fn pulling_common(
                 visibility: wgpu::ShaderStages::VERTEX,
                 count: None,
             }],
-        });
+        }).unwrap();
 
     let buffer_size = 4 * expected.len() as u64;
     let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -35,14 +35,14 @@ fn pulling_common(
         size: buffer_size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: buffer_size,
         usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
@@ -51,7 +51,7 @@ fn pulling_common(
             binding: 0,
             resource: gpu_buffer.as_entire_binding(),
         }],
-    });
+    }).unwrap();
 
     let ppl = ctx
         .device
@@ -59,7 +59,7 @@ fn pulling_common(
             label: None,
             bind_group_layouts: &[&bgl],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
     let pipeline = ctx
         .device
@@ -84,7 +84,7 @@ fn pulling_common(
                 })],
             }),
             multiview: None,
-        });
+        }).unwrap();
 
     let dummy = ctx
         .device
@@ -105,12 +105,12 @@ fn pulling_common(
                 view_formats: &[],
             },
             &[0, 0, 0, 1],
-        )
-        .create_view(&wgpu::TextureViewDescriptor::default());
+        ).unwrap()
+        .create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: None,
@@ -132,7 +132,7 @@ fn pulling_common(
 
     encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
 
-    ctx.queue.submit(Some(encoder.finish()));
+    ctx.queue.submit(Some(encoder.finish().unwrap()));
     let slice = cpu_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
     ctx.device.poll(wgpu::Maintain::Wait);

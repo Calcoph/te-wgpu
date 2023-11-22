@@ -38,7 +38,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             format: wgpu::TextureFormat::Bgra8Unorm,
             usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
-        });
+        }).unwrap();
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,
@@ -49,14 +49,14 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             base_array_layer: 0,
             mip_level_count: Some(1),
             array_layer_count: Some(1),
-        });
+        }).unwrap();
 
         let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 256 * 256 * 4,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -70,7 +70,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
                 },
                 count: None,
             }],
-        });
+        }).unwrap();
 
         let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -79,28 +79,28 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
                 binding: 0,
                 resource: wgpu::BindingResource::TextureView(&view),
             }],
-        });
+        }).unwrap();
 
         let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(SHADER_SRC)),
-        });
+        }).unwrap();
 
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&pl),
             entry_point: "main",
             module: &module,
-        });
+        }).unwrap();
 
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -135,7 +135,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             },
         );
 
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
 
         let buffer_slice = readback_buffer.slice(..);
         buffer_slice.map_async(wgpu::MapMode::Read, Result::unwrap);

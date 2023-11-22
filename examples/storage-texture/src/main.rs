@@ -44,7 +44,7 @@ async fn run(_path: Option<String>) {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    }).unwrap();
 
     let storage_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
@@ -59,14 +59,14 @@ async fn run(_path: Option<String>) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
-    });
-    let storage_texture_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
+    }).unwrap();
+    let storage_texture_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: std::mem::size_of_val(&texture_data[..]) as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
@@ -80,7 +80,7 @@ async fn run(_path: Option<String>) {
             },
             count: None,
         }],
-    });
+    }).unwrap();
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &bind_group_layout,
@@ -88,25 +88,25 @@ async fn run(_path: Option<String>) {
             binding: 0,
             resource: wgpu::BindingResource::TextureView(&storage_texture_view),
         }],
-    });
+    }).unwrap();
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[&bind_group_layout],
         push_constant_ranges: &[],
-    });
+    }).unwrap();
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
         module: &shader,
         entry_point: "main",
-    });
+    }).unwrap();
 
     log::info!("Wgpu context set up.");
     //----------------------------------------
 
     let mut command_encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
     {
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
@@ -137,12 +137,12 @@ async fn run(_path: Option<String>) {
             height: TEXTURE_DIMS.1 as u32,
             depth_or_array_layers: 1,
         },
-    );
-    queue.submit(Some(command_encoder.finish()));
+    ).unwrap();
+    queue.submit(Some(command_encoder.finish().unwrap()));
 
     let buffer_slice = output_staging_buffer.slice(..);
     let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
-    buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
+    buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap()).unwrap();
     device.poll(wgpu::Maintain::Wait);
     receiver.receive().await.unwrap().unwrap();
     log::info!("Output buffer mapped");
@@ -151,7 +151,7 @@ async fn run(_path: Option<String>) {
         texture_data.copy_from_slice(&view[..]);
     }
     log::info!("GPU data copied to local.");
-    output_staging_buffer.unmap();
+    output_staging_buffer.unmap().unwrap();
 
     #[cfg(not(target_arch = "wasm32"))]
     output_image_native(texture_data.to_vec(), TEXTURE_DIMS, _path.unwrap());

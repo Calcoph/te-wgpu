@@ -2,7 +2,7 @@
 
 use wgt::BufferAddress;
 
-use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration};
 
 fn try_copy(
     ctx: &wgpu_test::TestingContext,
@@ -10,7 +10,7 @@ fn try_copy(
     size: BufferAddress,
     should_fail: bool,
 ) {
-    let buffer = ctx.device.create_buffer(&BUFFER_DESCRIPTOR);
+    let buffer = ctx.device.create_buffer(&BUFFER_DESCRIPTOR).unwrap();
     let data = vec![255; size as usize];
     fail_if(&ctx.device, should_fail, || {
         ctx.queue.write_buffer(&buffer, offset, &data)

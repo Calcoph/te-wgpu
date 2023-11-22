@@ -23,7 +23,7 @@ impl DummyWorkData {
             size: 16,
             usage: BufferUsages::UNIFORM,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let bind_group_layout = ctx
             .device
@@ -39,7 +39,7 @@ impl DummyWorkData {
                     },
                     count: None,
                 }],
-            });
+            }).unwrap();
 
         let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
             label: None,
@@ -48,11 +48,11 @@ impl DummyWorkData {
                 binding: 0,
                 resource: BindingResource::Buffer(buffer.as_entire_buffer_binding()),
             }],
-        });
+        }).unwrap();
 
         let mut cmd_buf = ctx
             .device
-            .create_command_encoder(&CommandEncoderDescriptor::default());
+            .create_command_encoder(&CommandEncoderDescriptor::default()).unwrap();
 
         let mut cpass = cmd_buf.begin_compute_pass(&ComputePassDescriptor::default());
         cpass.set_bind_group(0, &bind_group, &[]);
@@ -62,7 +62,7 @@ impl DummyWorkData {
             _buffer: buffer,
             _bgl: bind_group_layout,
             _bg: bind_group,
-            cmd_buf: cmd_buf.finish(),
+            cmd_buf: cmd_buf.finish().unwrap(),
         }
     }
 }

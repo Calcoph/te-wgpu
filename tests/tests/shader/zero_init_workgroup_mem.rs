@@ -40,21 +40,21 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                     },
                     count: None,
                 }],
-            });
+            }).unwrap();
 
         let output_buffer = ctx.device.create_buffer(&BufferDescriptor {
             label: Some("output buffer"),
             size: BUFFER_SIZE,
             usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let mapping_buffer = ctx.device.create_buffer(&BufferDescriptor {
             label: Some("mapping buffer"),
             size: BUFFER_SIZE,
             usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let bg = ctx.device.create_bind_group(&BindGroupDescriptor {
             label: None,
@@ -67,7 +67,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                     size: Some(NonZeroU64::new(BUFFER_BINDING_SIZE as u64).unwrap()),
                 }),
             }],
-        });
+        }).unwrap();
 
         let pll = ctx
             .device
@@ -75,11 +75,11 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 label: None,
                 bind_group_layouts: &[&bgl],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
         let sm = ctx
             .device
-            .create_shader_module(include_wgsl!("zero_init_workgroup_mem.wgsl"));
+            .create_shader_module(include_wgsl!("zero_init_workgroup_mem.wgsl")).unwrap();
 
         let pipeline_read = ctx
             .device
@@ -88,7 +88,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 layout: Some(&pll),
                 module: &sm,
                 entry_point: "read",
-            });
+            }).unwrap();
 
         let pipeline_write = ctx
             .device
@@ -97,7 +97,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 layout: None,
                 module: &sm,
                 entry_point: "write",
-            });
+            }).unwrap();
 
         // -- Initializing data --
 
@@ -112,7 +112,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&CommandEncoderDescriptor::default());
+            .create_command_encoder(&CommandEncoderDescriptor::default()).unwrap();
 
         let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
 
@@ -132,7 +132,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
 
         encoder.copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, BUFFER_SIZE);
 
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
 
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
         ctx.device.poll(Maintain::Wait);

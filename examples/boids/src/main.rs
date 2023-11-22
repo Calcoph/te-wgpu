@@ -46,11 +46,11 @@ impl wgpu_example::framework::Example for Example {
         let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("compute.wgsl"))),
-        });
+        }).unwrap();
         let draw_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-        });
+        }).unwrap();
 
         // buffer for simulation parameters uniform
 
@@ -68,7 +68,7 @@ impl wgpu_example::framework::Example for Example {
             label: Some("Simulation Parameter Buffer"),
             contents: bytemuck::cast_slice(&sim_param_data),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        }).unwrap();
 
         // create compute bind layout group and compute pipeline layout
 
@@ -109,13 +109,13 @@ impl wgpu_example::framework::Example for Example {
                     },
                 ],
                 label: None,
-            });
+            }).unwrap();
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute"),
                 bind_group_layouts: &[&compute_bind_group_layout],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
         // create render pipeline with empty bind group layout
 
@@ -124,7 +124,7 @@ impl wgpu_example::framework::Example for Example {
                 label: Some("render"),
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -154,7 +154,7 @@ impl wgpu_example::framework::Example for Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
         // create compute pipeline
 
@@ -163,7 +163,7 @@ impl wgpu_example::framework::Example for Example {
             layout: Some(&compute_pipeline_layout),
             module: &compute_shader,
             entry_point: "main",
-        });
+        }).unwrap();
 
         // buffer for the three 2d triangle vertices of each instance
 
@@ -172,7 +172,7 @@ impl wgpu_example::framework::Example for Example {
             label: Some("Vertex Buffer"),
             contents: bytemuck::bytes_of(&vertex_buffer_data),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
+        }).unwrap();
 
         // buffer for all particles data of type [(posx,posy,velx,vely),...]
 
@@ -199,7 +199,7 @@ impl wgpu_example::framework::Example for Example {
                     usage: wgpu::BufferUsages::VERTEX
                         | wgpu::BufferUsages::STORAGE
                         | wgpu::BufferUsages::COPY_DST,
-                }),
+                }).unwrap(),
             );
         }
 
@@ -224,7 +224,7 @@ impl wgpu_example::framework::Example for Example {
                     },
                 ],
                 label: None,
-            }));
+            }).unwrap());
         }
 
         // calculates number of work groups from PARTICLES_PER_GROUP constant
@@ -283,9 +283,9 @@ impl wgpu_example::framework::Example for Example {
 
         // get command encoder
         let mut command_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
-        command_encoder.push_debug_group("compute boid movement");
+        command_encoder.push_debug_group("compute boid movement").unwrap();
         {
             // compute pass
             let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -296,9 +296,9 @@ impl wgpu_example::framework::Example for Example {
             cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]);
             cpass.dispatch_workgroups(self.work_group_count, 1, 1);
         }
-        command_encoder.pop_debug_group();
+        command_encoder.pop_debug_group().unwrap();
 
-        command_encoder.push_debug_group("render boids");
+        command_encoder.push_debug_group("render boids").unwrap();
         {
             // render pass
             let mut rpass = command_encoder.begin_render_pass(&render_pass_descriptor);
@@ -309,13 +309,13 @@ impl wgpu_example::framework::Example for Example {
             rpass.set_vertex_buffer(1, self.vertices_buffer.slice(..));
             rpass.draw(0..3, 0..NUM_PARTICLES);
         }
-        command_encoder.pop_debug_group();
+        command_encoder.pop_debug_group().unwrap();
 
         // update frame count
         self.frame_num += 1;
 
         // done
-        queue.submit(Some(command_encoder.finish()));
+        queue.submit(Some(command_encoder.finish().unwrap()));
     }
 }
 

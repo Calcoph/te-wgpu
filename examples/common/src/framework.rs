@@ -439,7 +439,7 @@ async fn start<E: Example>(title: &str) {
                         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
                             format: Some(surface.config().view_formats[0]),
                             ..wgpu::TextureViewDescriptor::default()
-                        });
+                        }).unwrap();
 
                         example
                             .as_mut()
@@ -533,16 +533,16 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
                     format,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
                     view_formats: &[],
-                });
+                }).unwrap();
 
-                let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
+                let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
                 let dst_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("image map buffer"),
                     size: params.width as u64 * params.height as u64 * 4,
                     usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                     mapped_at_creation: false,
-                });
+                }).unwrap();
 
                 let mut example = E::init(
                     &wgpu::SurfaceConfiguration {
@@ -563,7 +563,8 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
 
                 let mut cmd_buf = ctx
                     .device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+                    .unwrap();
 
                 cmd_buf.copy_texture_to_buffer(
                     wgpu::ImageCopyTexture {
@@ -585,12 +586,12 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
                         height: params.height,
                         depth_or_array_layers: 1,
                     },
-                );
+                ).unwrap();
 
-                ctx.queue.submit(Some(cmd_buf.finish()));
+                ctx.queue.submit(Some(cmd_buf.finish().unwrap()));
 
                 let dst_buffer_slice = dst_buffer.slice(..);
-                dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
+                dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
                 ctx.device.poll(wgpu::Maintain::Wait);
                 let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 

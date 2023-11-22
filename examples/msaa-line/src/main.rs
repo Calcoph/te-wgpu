@@ -78,7 +78,7 @@ impl Example {
                 ..Default::default()
             },
             multiview: None,
-        });
+        }).unwrap();
         let mut encoder =
             device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                 label: None,
@@ -117,8 +117,8 @@ impl Example {
         };
 
         device
-            .create_texture(multisampled_frame_descriptor)
-            .create_view(&wgpu::TextureViewDescriptor::default())
+            .create_texture(multisampled_frame_descriptor).unwrap()
+            .create_view(&wgpu::TextureViewDescriptor::default()).unwrap()
     }
 }
 
@@ -158,13 +158,13 @@ impl wgpu_example::framework::Example for Example {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        }).unwrap();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
         let multisampled_framebuffer =
             Example::create_multisampled_framebuffer(device, config, sample_count);
@@ -189,7 +189,7 @@ impl wgpu_example::framework::Example for Example {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
-        });
+        }).unwrap();
         let vertex_count = vertex_data.len() as u32;
 
         let bundle = Example::create_bundle(
@@ -276,7 +276,7 @@ impl wgpu_example::framework::Example for Example {
         }
 
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
         {
             let rpass_color_attachment = if self.sample_count == 1 {
                 wgpu::RenderPassColorAttachment {
@@ -311,7 +311,7 @@ impl wgpu_example::framework::Example for Example {
                 .execute_bundles(iter::once(&self.bundle));
         }
 
-        queue.submit(iter::once(encoder.finish()));
+        queue.submit(iter::once(encoder.finish().unwrap()));
     }
 }
 

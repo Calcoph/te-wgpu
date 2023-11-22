@@ -1,4 +1,4 @@
-use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -14,7 +14,7 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
                 device2.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
                     entries: &[],
-                });
+                }).unwrap();
 
             let _bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
@@ -112,8 +112,8 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
-        });
-        let target_view = texture_for_view.create_view(&wgpu::TextureViewDescriptor::default());
+        }).unwrap();
+        let target_view = texture_for_view.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
         let texture_for_read = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -124,7 +124,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
-        });
+        }).unwrap();
 
         let texture_for_write = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -135,7 +135,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::Rg8Uint,
             usage: wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
-        });
+        }).unwrap();
 
         // Create some buffers.
         let buffer_source = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -143,25 +143,25 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
-        });
+        }).unwrap();
         let buffer_dest = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
         let buffer_for_map = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
-        });
+        }).unwrap();
         let buffer_for_unmap = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: true,
-        });
+        }).unwrap();
 
         // Create a bind group layout.
         let bind_group_layout =
@@ -169,7 +169,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
                     entries: &[],
-                });
+                }).unwrap();
 
         // Create a shader module.
         let shader_module = ctx
@@ -177,36 +177,36 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
-            });
+            }).unwrap();
 
         // Create some command encoders.
         let mut encoder_for_clear = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
         let mut encoder_for_compute_pass = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
         let mut encoder_for_render_pass = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
         let mut encoder_for_buffer_buffer_copy = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
         let mut encoder_for_buffer_texture_copy = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
         let mut encoder_for_texture_buffer_copy = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
         let mut encoder_for_texture_texture_copy = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
         // Destroy the device. This will cause all other requests to return some variation of
         // a device invalid error.
@@ -277,7 +277,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     base_array_layer: 0,
                     array_layer_count: None,
                 },
-            );
+            ).unwrap();
         });
 
         // Creating a compute pass should fail.

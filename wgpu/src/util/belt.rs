@@ -5,7 +5,7 @@ use crate::{
     util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsages,
     BufferViewMut, CommandEncoder, Device, MapMode,
 };
-use std::fmt;
+use std::fmt::{self, Display};
 use std::sync::{mpsc, Arc};
 
 struct Chunk {
@@ -31,6 +31,7 @@ impl<T> Exclusive<T> {
     }
 }
 
+#[derive(Debug)]
 pub enum WriteBufferError {
     CBError(CreateBufferError),
     CError(CopyError),
@@ -47,6 +48,17 @@ impl From<CopyError> for WriteBufferError {
         WriteBufferError::CError(value)
     }
 }
+
+impl Display for WriteBufferError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WriteBufferError::CBError(e) => write!(f, "WriteBufferError {e}"),
+            WriteBufferError::CError(e) => write!(f, "WriteBufferError {e}"),
+        }
+    }
+}
+
+impl std::error::Error for WriteBufferError {}
 
 /// Efficiently performs many buffer writes by sharing and reusing temporary buffers.
 ///

@@ -237,10 +237,10 @@ fn single_texture_clear_test(
         format,
         usage: wgpu::TextureUsages::COPY_SRC | extra_usages,
         view_formats: &[],
-    });
+    }).unwrap();
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
     encoder.clear_texture(
         &texture,
         &wgpu::ImageSubresourceRange {
@@ -256,7 +256,7 @@ fn single_texture_clear_test(
 
     readback_buffers.copy_from(&ctx.device, &mut encoder, &texture);
 
-    ctx.queue.submit([encoder.finish()]);
+    ctx.queue.submit([encoder.finish().unwrap()]);
 
     assert!(
         readback_buffers.are_zero(&ctx.device),

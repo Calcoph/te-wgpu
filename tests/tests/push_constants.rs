@@ -44,7 +44,7 @@ fn partial_update_test(ctx: TestingContext) {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: wgpu::ShaderSource::Wgsl(SHADER.into()),
-        });
+        }).unwrap();
 
     let bgl = ctx
         .device
@@ -60,21 +60,21 @@ fn partial_update_test(ctx: TestingContext) {
                 },
                 count: None,
             }],
-        });
+        }).unwrap();
 
     let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("gpu_buffer"),
         size: 32,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("cpu_buffer"),
         size: 32,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("bind_group"),
@@ -83,7 +83,7 @@ fn partial_update_test(ctx: TestingContext) {
             binding: 0,
             resource: gpu_buffer.as_entire_binding(),
         }],
-    });
+    }).unwrap();
 
     let pipeline_layout = ctx
         .device
@@ -94,7 +94,7 @@ fn partial_update_test(ctx: TestingContext) {
                 stages: wgpu::ShaderStages::COMPUTE,
                 range: 0..32,
             }],
-        });
+        }).unwrap();
 
     let pipeline = ctx
         .device
@@ -103,13 +103,13 @@ fn partial_update_test(ctx: TestingContext) {
             layout: Some(&pipeline_layout),
             module: &sm,
             entry_point: "main",
-        });
+        }).unwrap();
 
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("encoder"),
-        });
+        }).unwrap();
 
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -137,7 +137,7 @@ fn partial_update_test(ctx: TestingContext) {
     }
 
     encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, 32);
-    ctx.queue.submit([encoder.finish()]);
+    ctx.queue.submit([encoder.finish().unwrap()]);
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
     ctx.device.poll(wgpu::Maintain::Wait);
 

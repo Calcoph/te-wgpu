@@ -9,7 +9,7 @@ fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) 
             size: buffer_size,
             usage,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         b0.slice(0..0)
             .map_async(wgpu::MapMode::Read, Result::unwrap);
@@ -68,7 +68,7 @@ fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) 
         size: buffer_size,
         usage: rw,
         mapped_at_creation: true,
-    });
+    }).unwrap();
 
     {
         let view = b1.slice(0..0).get_mapped_range_mut();
@@ -102,13 +102,13 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|
         size: 256,
         usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
-    });
+    }).unwrap();
     let read_buf = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 256,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     write_buf
         .slice(32..)
@@ -130,11 +130,11 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
     encoder.copy_buffer_to_buffer(&write_buf, 0, &read_buf, 0, 256);
 
-    ctx.queue.submit(Some(encoder.finish()));
+    ctx.queue.submit(Some(encoder.finish().unwrap()));
 
     read_buf
         .slice(..)

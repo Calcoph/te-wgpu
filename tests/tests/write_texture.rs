@@ -23,7 +23,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration = GpuTestConfiguration::new
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
-        });
+        }).unwrap();
         let data = vec![1u8; size as usize * 2];
         // Write the first two rows
         ctx.queue.write_texture(
@@ -57,7 +57,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration = GpuTestConfiguration::new
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
         encoder.copy_texture_to_buffer(
             wgpu::ImageCopyTexture {
@@ -81,7 +81,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration = GpuTestConfiguration::new
             },
         );
 
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
 
         let slice = read_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ());
@@ -116,7 +116,7 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
-        });
+        }).unwrap();
         let data = vec![1u8; (size * size) as usize * 2];
         // Write the first two slices
         ctx.queue.write_texture(
@@ -146,11 +146,11 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
             size: (size * size * depth) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
         encoder.copy_texture_to_buffer(
             wgpu::ImageCopyTexture {
@@ -174,7 +174,7 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
             },
         );
 
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
 
         let slice = read_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ());

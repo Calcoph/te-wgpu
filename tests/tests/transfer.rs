@@ -4,7 +4,7 @@ use wgpu_test::{fail, gpu_test, GpuTestConfiguration};
 static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
     let t1 = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: None,
@@ -19,7 +19,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_s
         mip_level_count: 1,
         sample_count: 1,
         view_formats: &[],
-    });
+    }).unwrap();
     let t2 = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: None,
         dimension: wgpu::TextureDimension::D2,
@@ -33,7 +33,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_s
         mip_level_count: 1,
         sample_count: 1,
         view_formats: &[],
-    });
+    }).unwrap();
 
     fail(&ctx.device, || {
         // Validation should catch the silly selected z layer range without panicking.
@@ -60,6 +60,6 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_s
                 depth_or_array_layers: 613286111,
             },
         );
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
     });
 });

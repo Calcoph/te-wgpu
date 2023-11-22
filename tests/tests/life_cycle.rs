@@ -7,7 +7,7 @@ static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new().run_sy
         size: 256,
         usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     buffer.destroy();
 
@@ -38,26 +38,26 @@ static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new().run_sy
 
     // Scopes to mix up the drop/poll ordering.
     {
-        let buffer = ctx.device.create_buffer(&descriptor);
+        let buffer = ctx.device.create_buffer(&descriptor).unwrap();
         buffer.destroy();
-        let buffer = ctx.device.create_buffer(&descriptor);
+        let buffer = ctx.device.create_buffer(&descriptor).unwrap();
         buffer.destroy();
     }
-    let buffer = ctx.device.create_buffer(&descriptor);
+    let buffer = ctx.device.create_buffer(&descriptor).unwrap();
     buffer.destroy();
     ctx.device.poll(wgpu::MaintainBase::Wait);
-    let buffer = ctx.device.create_buffer(&descriptor);
+    let buffer = ctx.device.create_buffer(&descriptor).unwrap();
     buffer.destroy();
     {
-        let buffer = ctx.device.create_buffer(&descriptor);
+        let buffer = ctx.device.create_buffer(&descriptor).unwrap();
         buffer.destroy();
-        let buffer = ctx.device.create_buffer(&descriptor);
+        let buffer = ctx.device.create_buffer(&descriptor).unwrap();
         buffer.destroy();
-        let buffer = ctx.device.create_buffer(&descriptor);
+        let buffer = ctx.device.create_buffer(&descriptor).unwrap();
         ctx.device.poll(wgpu::MaintainBase::Wait);
         buffer.destroy();
     }
-    let buffer = ctx.device.create_buffer(&descriptor);
+    let buffer = ctx.device.create_buffer(&descriptor).unwrap();
     buffer.destroy();
     ctx.device.poll(wgpu::MaintainBase::Wait);
 });
@@ -77,7 +77,7 @@ static TEXTURE_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new().run_s
         format: wgpu::TextureFormat::Rgba8Snorm,
         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
-    });
+    }).unwrap();
 
     texture.destroy();
 

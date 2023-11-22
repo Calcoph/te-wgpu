@@ -21,7 +21,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
             size: 4,
             usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         // Encode some work using it. The specifics of this work don't matter, just
         // that the buffer is used.
@@ -29,12 +29,12 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("encoder"),
-            });
+            }).unwrap();
 
         encoder.clear_buffer(&buffer, 0, None);
 
         // Submit the work.
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
         // Ensure the work is finished.
         ctx.device.poll(MaintainBase::Wait);
 
@@ -63,7 +63,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
             let mut guard = ordering_clone_map_async.lock();
             guard.value_read_map_async = Some(guard.counter);
             guard.counter += 1;
-        });
+        }).unwrap();
 
         // If the bug is present, this callback will be invoked immediately inside this function,
         // despite the fact there is an outstanding map_async callback.

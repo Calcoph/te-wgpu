@@ -21,7 +21,7 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
     .run_sync(|ctx| {
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
         let target_tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -36,8 +36,8 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::R8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
-        });
-        let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
+        }).unwrap();
+        let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
         let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("renderpass"),

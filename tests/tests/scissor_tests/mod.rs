@@ -25,12 +25,12 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
-    });
-    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    }).unwrap();
+    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("solid_white.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("solid_white.wgsl")).unwrap();
 
     let pipeline = ctx
         .device
@@ -55,13 +55,13 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
                 })],
             }),
             multiview: None,
-        });
+        }).unwrap();
 
     let readback_buffer = image::ReadbackBuffers::new(&ctx.device, &texture);
     {
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Renderpass"),
@@ -92,7 +92,7 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
             render_pass.draw(0..3, 0..1);
         }
         readback_buffer.copy_from(&ctx.device, &mut encoder, &texture);
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
     }
     readback_buffer.assert_buffer_contents(&ctx.device, &expected_data);
 }

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use wgc::{
     device::queue::QueueWriteError,
     resource::{CreateBufferError, CreateTextureError},
@@ -15,6 +17,7 @@ pub struct BufferInitDescriptor<'a> {
     pub usage: crate::BufferUsages,
 }
 
+#[derive(Debug)]
 pub enum CreateTextureWithDataError {
     CTError(CreateTextureError),
     QWError(QueueWriteError),
@@ -31,6 +34,17 @@ impl From<QueueWriteError> for CreateTextureWithDataError {
         CreateTextureWithDataError::QWError(value)
     }
 }
+
+impl Display for CreateTextureWithDataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CreateTextureWithDataError::CTError(e) => write!(f, "CreateTextureWithDataError {e}"),
+            CreateTextureWithDataError::QWError(e) => write!(f, "CreateTextureWithDataError {e}"),
+        }
+    }
+}
+
+impl std::error::Error for CreateTextureWithDataError {}
 
 /// Utility methods not meant to be in the main API.
 pub trait DeviceExt {

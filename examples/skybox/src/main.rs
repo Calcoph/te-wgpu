@@ -83,9 +83,9 @@ impl Example {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
             view_formats: &[],
-        });
+        }).unwrap();
 
-        depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
+        depth_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap()
     }
 }
 
@@ -126,7 +126,7 @@ impl wgpu_example::framework::Example for Example {
                         label: Some("Vertex"),
                         contents: bytemuck::cast_slice(&vertices),
                         usage: wgpu::BufferUsages::VERTEX,
-                    });
+                    }).unwrap();
                     entities.push(Entity {
                         vertex_count: vertices.len() as u32,
                         vertex_buf,
@@ -165,13 +165,13 @@ impl wgpu_example::framework::Example for Example {
                     count: None,
                 },
             ],
-        });
+        }).unwrap();
 
         // Create the render pipeline
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        }).unwrap();
 
         let camera = Camera {
             screen_size: (config.width, config.height),
@@ -184,13 +184,13 @@ impl wgpu_example::framework::Example for Example {
             label: Some("Buffer"),
             contents: bytemuck::cast_slice(&raw_uniforms),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        }).unwrap();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
         // Create the render pipelines
         let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -219,7 +219,7 @@ impl wgpu_example::framework::Example for Example {
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
         let entity_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Entity"),
             layout: Some(&pipeline_layout),
@@ -250,7 +250,7 @@ impl wgpu_example::framework::Example for Example {
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: None,
@@ -261,7 +261,7 @@ impl wgpu_example::framework::Example for Example {
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Linear,
             ..Default::default()
-        });
+        }).unwrap();
 
         let device_features = device.features();
 
@@ -328,13 +328,13 @@ impl wgpu_example::framework::Example for Example {
                 view_formats: &[],
             },
             &image.data,
-        );
+        ).unwrap();
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,
             dimension: Some(wgpu::TextureViewDimension::Cube),
             ..wgpu::TextureViewDescriptor::default()
-        });
+        }).unwrap();
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
             entries: &[
@@ -352,7 +352,7 @@ impl wgpu_example::framework::Example for Example {
                 },
             ],
             label: None,
-        });
+        }).unwrap();
 
         let depth_view = Self::create_depth_texture(config, device);
 
@@ -393,7 +393,7 @@ impl wgpu_example::framework::Example for Example {
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
         // update rotation
         let raw_uniforms = self.camera.to_uniform_data();
@@ -404,10 +404,10 @@ impl wgpu_example::framework::Example for Example {
                 0,
                 wgpu::BufferSize::new((raw_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
                 device,
-            )
+            ).unwrap()
             .copy_from_slice(bytemuck::cast_slice(&raw_uniforms));
 
-        self.staging_belt.finish();
+        self.staging_belt.finish().unwrap();
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -449,9 +449,9 @@ impl wgpu_example::framework::Example for Example {
             rpass.draw(0..3, 0..1);
         }
 
-        queue.submit(std::iter::once(encoder.finish()));
+        queue.submit(std::iter::once(encoder.finish().unwrap()));
 
-        self.staging_belt.recall();
+        self.staging_belt.recall().unwrap();
     }
 }
 

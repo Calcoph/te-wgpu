@@ -5,7 +5,7 @@ use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration};
 #[gpu_test]
 static BAD_COPY_ORIGIN_TEST: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
     let try_origin = |origin, size, should_panic| {
-        let texture = ctx.device.create_texture(&TEXTURE_DESCRIPTOR);
+        let texture = ctx.device.create_texture(&TEXTURE_DESCRIPTOR).unwrap();
         let data = vec![255; BUFFER_SIZE as usize];
 
         fail_if(&ctx.device, should_panic, || {

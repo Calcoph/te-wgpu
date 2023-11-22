@@ -19,8 +19,8 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
             format: wgpu::TextureFormat::Depth32Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
-        });
-        let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        }).unwrap();
+        let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
         // Setup pipeline using a simple shader with hardcoded vertices
         let shader = ctx
@@ -28,7 +28,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("Shader module"),
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            });
+            }).unwrap();
         let pipeline = ctx
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -50,18 +50,18 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
                 }),
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
-            });
+            }).unwrap();
 
         // Create occlusion query set
         let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
             label: Some("Query set"),
             ty: wgpu::QueryType::Occlusion,
             count: 3,
-        });
+        }).unwrap();
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render pass"),
@@ -101,7 +101,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
             size: std::mem::size_of::<u64>() as u64 * 3,
             usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
-        });
+        }).unwrap();
         encoder.resolve_query_set(&query_set, 0..3, &query_buffer, 0);
 
         let mapping_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -109,14 +109,14 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
             size: query_buffer.size(),
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
         encoder.copy_buffer_to_buffer(&query_buffer, 0, &mapping_buffer, 0, query_buffer.size());
 
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
 
         mapping_buffer
             .slice(..)
-            .map_async(wgpu::MapMode::Read, |_| ());
+            .map_async(wgpu::MapMode::Read, |_| ()).unwrap();
         ctx.device.poll(wgpu::Maintain::Wait);
         let query_buffer_view = mapping_buffer.slice(..).get_mapped_range();
         let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);

@@ -89,7 +89,7 @@ fn pulling_common(
 ) {
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("primitive_index.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("primitive_index.wgsl")).unwrap();
 
     let two_triangles_xy: [f32; 12] = [
         -1.0, -1.0, 0.0, -1.0, -0.5, 0.0, // left triangle, negative x, negative y
@@ -101,7 +101,7 @@ fn pulling_common(
             label: None,
             contents: bytemuck::cast_slice(&two_triangles_xy),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
+        }).unwrap();
 
     let indices = [3u32, 4, 5, 0, 1, 2]; // index buffer flips triangle order
     let index_buffer = ctx
@@ -110,7 +110,7 @@ fn pulling_common(
             label: None,
             contents: bytemuck::cast_slice(&indices),
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-        });
+        }).unwrap();
 
     let pipeline = ctx
         .device
@@ -143,7 +143,7 @@ fn pulling_common(
                 })],
             }),
             multiview: None,
-        });
+        }).unwrap();
 
     let width = 2;
     let height = 2;
@@ -161,14 +161,14 @@ fn pulling_common(
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
-    });
-    let color_view = color_texture.create_view(&wgpu::TextureViewDescriptor::default());
+    }).unwrap();
+    let color_view = color_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     let readback_buffer = wgpu_test::image::ReadbackBuffers::new(&ctx.device, &color_texture);
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -191,6 +191,6 @@ fn pulling_common(
         draw_command(&mut rpass);
     }
     readback_buffer.copy_from(&ctx.device, &mut encoder, &color_texture);
-    ctx.queue.submit(Some(encoder.finish()));
+    ctx.queue.submit(Some(encoder.finish().unwrap()));
     readback_buffer.assert_buffer_contents(&ctx.device, expected);
 }

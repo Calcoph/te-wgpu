@@ -170,13 +170,13 @@ impl Example {
             terrain_normal_uniforms,
             0,
             bytemuck::cast_slice(&[terrain_normal]),
-        );
+        ).unwrap();
         queue.write_buffer(
             terrain_flipped_uniforms,
             0,
             bytemuck::cast_slice(&[terrain_flipped]),
-        );
-        queue.write_buffer(water_uniforms, 0, bytemuck::cast_slice(&[water]));
+        ).unwrap();
+        queue.write_buffer(water_uniforms, 0, bytemuck::cast_slice(&[water])).unwrap();
 
         let texture_extent = wgpu::Extent3d {
             width: config.width,
@@ -195,7 +195,7 @@ impl Example {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
-        });
+        }).unwrap();
 
         let draw_depth_buffer = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Depth Buffer"),
@@ -208,7 +208,7 @@ impl Example {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
-        });
+        }).unwrap();
 
         let color_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Color Sampler"),
@@ -219,14 +219,14 @@ impl Example {
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
-        });
+        }).unwrap();
 
         let depth_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Depth Sampler"),
             ..Default::default()
-        });
+        }).unwrap();
 
-        let depth_view = draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_view = draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
         let water_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: water_bind_group_layout,
@@ -238,7 +238,7 @@ impl Example {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::TextureView(
-                        &reflection_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                        &reflection_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap(),
                     ),
                 },
                 wgpu::BindGroupEntry {
@@ -255,10 +255,10 @@ impl Example {
                 },
             ],
             label: Some("Water Bind Group"),
-        });
+        }).unwrap();
 
         (
-            reflection_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+            reflection_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap(),
             depth_view,
             water_bind_group,
         )
@@ -338,13 +338,13 @@ impl wgpu_example::framework::Example for Example {
             label: Some("Water vertices"),
             contents: bytemuck::cast_slice(&water_vertices),
             usage: wgpu::BufferUsages::VERTEX,
-        });
+        }).unwrap();
 
         let terrain_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Terrain vertices"),
             contents: bytemuck::cast_slice(&terrain_vertices),
             usage: wgpu::BufferUsages::VERTEX,
-        });
+        }).unwrap();
 
         // Create the bind group layout. This is what our uniforms will look like.
         let water_bind_group_layout =
@@ -401,7 +401,7 @@ impl wgpu_example::framework::Example for Example {
                         count: None,
                     },
                 ],
-            });
+            }).unwrap();
 
         let terrain_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -421,7 +421,7 @@ impl wgpu_example::framework::Example for Example {
                         count: None,
                     },
                 ],
-            });
+            }).unwrap();
 
         // Create our pipeline layouts.
         let water_pipeline_layout =
@@ -429,35 +429,35 @@ impl wgpu_example::framework::Example for Example {
                 label: Some("water"),
                 bind_group_layouts: &[&water_bind_group_layout],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
         let terrain_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("terrain"),
                 bind_group_layouts: &[&terrain_bind_group_layout],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Water Uniforms"),
             size: mem::size_of::<WaterUniforms>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let terrain_normal_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Normal Terrain Uniforms"),
             size: mem::size_of::<TerrainUniforms>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let terrain_flipped_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Flipped Terrain Uniforms"),
             size: mem::size_of::<TerrainUniforms>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         // Create bind group.
         // This puts values behind what was laid out in the bind group layout.
@@ -479,7 +479,7 @@ impl wgpu_example::framework::Example for Example {
                 resource: terrain_normal_uniform_buf.as_entire_binding(),
             }],
             label: Some("Terrain Normal Bind Group"),
-        });
+        }).unwrap();
 
         // Binds to the uniform buffer where the
         // camera has been placed underwater.
@@ -490,17 +490,17 @@ impl wgpu_example::framework::Example for Example {
                 resource: terrain_flipped_uniform_buf.as_entire_binding(),
             }],
             label: Some("Terrain Flipped Bind Group"),
-        });
+        }).unwrap();
 
         // Upload/compile them to GPU code.
         let terrain_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("terrain"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("terrain.wgsl"))),
-        });
+        }).unwrap();
         let water_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("water"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("water.wgsl"))),
-        });
+        }).unwrap();
 
         // Create the render pipelines. These describe how the data will flow through the GPU, and what
         // constraints and modifiers it will have.
@@ -572,7 +572,7 @@ impl wgpu_example::framework::Example for Example {
             // No multisampling is used.
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
         // Same idea as the water pipeline.
         let terrain_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -606,7 +606,7 @@ impl wgpu_example::framework::Example for Example {
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
         // A render bundle to draw the terrain.
         let terrain_bundle = {
@@ -707,7 +707,7 @@ impl wgpu_example::framework::Example for Example {
             &self.water_uniform_buf,
             mem::size_of::<[f32; 16]>() as wgpu::BufferAddress * 2,
             bytemuck::cast_slice(&[water_sin, water_cos]),
-        );
+        ).unwrap();
 
         // Only render valid frames. See resize method.
         if let Some(active) = self.active {
@@ -722,7 +722,7 @@ impl wgpu_example::framework::Example for Example {
         // a command buffer the GPU can understand.
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Main Command Encoder"),
-        });
+        }).unwrap();
 
         // First pass: render the reflection.
         {
@@ -809,7 +809,7 @@ impl wgpu_example::framework::Example for Example {
             rpass.draw(0..self.water_vertex_count as u32, 0..1);
         }
 
-        queue.submit(iter::once(encoder.finish()));
+        queue.submit(iter::once(encoder.finish().unwrap()));
     }
 }
 

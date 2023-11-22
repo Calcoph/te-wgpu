@@ -21,7 +21,7 @@ static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfigurat
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: None,
                 entries: entries_1,
-            });
+            }).unwrap();
 
         let _bgl_2 = ctx
             .device
@@ -35,19 +35,19 @@ static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfigurat
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: None,
                 entries: entries_1,
-            });
+            }).unwrap();
 
         let bg_1a = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &bgl_1a,
             entries: &[],
-        });
+        }).unwrap();
 
         let bg_1b = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &bgl_1b,
             entries: &[],
-        });
+        }).unwrap();
 
         let pipeline_layout = ctx
             .device
@@ -55,14 +55,14 @@ static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfigurat
                 label: None,
                 bind_group_layouts: &[&bgl_1b],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
         let module = ctx
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
-            });
+            }).unwrap();
 
         let targets = &[Some(wgpu::ColorTargetState {
             format: wgpu::TextureFormat::Rgba8Unorm,
@@ -89,7 +89,7 @@ static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfigurat
             multisample: wgpu::MultisampleState::default(),
         };
 
-        let pipeline = ctx.device.create_render_pipeline(&desc);
+        let pipeline = ctx.device.create_render_pipeline(&desc).unwrap();
 
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -104,11 +104,11 @@ static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfigurat
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
-        });
+        }).unwrap();
 
-        let texture_view = texture.create_view(&Default::default());
+        let texture_view = texture.create_view(&Default::default()).unwrap();
 
-        let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
 
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -134,7 +134,7 @@ static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfigurat
             pass.draw(0..6, 0..1);
         }
 
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
     });
 
 const SHADER_SRC: &str = "

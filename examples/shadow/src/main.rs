@@ -195,9 +195,9 @@ impl Example {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
             view_formats: &[],
-        });
+        }).unwrap();
 
-        depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
+        depth_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap()
     }
 }
 
@@ -227,7 +227,7 @@ impl wgpu_example::framework::Example for Example {
                 contents: bytemuck::cast_slice(&cube_vertex_data),
                 usage: wgpu::BufferUsages::VERTEX,
             },
-        ));
+        ).unwrap());
 
         let cube_index_buf = Arc::new(device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
@@ -235,20 +235,20 @@ impl wgpu_example::framework::Example for Example {
                 contents: bytemuck::cast_slice(&cube_index_data),
                 usage: wgpu::BufferUsages::INDEX,
             },
-        ));
+        ).unwrap());
 
         let (plane_vertex_data, plane_index_data) = create_plane(7);
         let plane_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Plane Vertex Buffer"),
             contents: bytemuck::cast_slice(&plane_vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
-        });
+        }).unwrap();
 
         let plane_index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Plane Index Buffer"),
             contents: bytemuck::cast_slice(&plane_index_data),
             usage: wgpu::BufferUsages::INDEX,
-        });
+        }).unwrap();
 
         struct CubeDesc {
             offset: glam::Vec3,
@@ -297,7 +297,7 @@ impl wgpu_example::framework::Example for Example {
             size: num_entities * uniform_alignment,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let index_format = wgpu::IndexFormat::Uint16;
 
@@ -348,7 +348,7 @@ impl wgpu_example::framework::Example for Example {
                     count: None,
                 }],
                 label: None,
-            });
+            }).unwrap();
         let entity_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &local_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
@@ -360,7 +360,7 @@ impl wgpu_example::framework::Example for Example {
                 }),
             }],
             label: None,
-        });
+        }).unwrap();
 
         // Create other resources
         let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -373,7 +373,7 @@ impl wgpu_example::framework::Example for Example {
             mipmap_filter: wgpu::FilterMode::Nearest,
             compare: Some(wgpu::CompareFunction::LessEqual),
             ..Default::default()
-        });
+        }).unwrap();
 
         let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: Self::SHADOW_SIZE,
@@ -384,8 +384,8 @@ impl wgpu_example::framework::Example for Example {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: None,
             view_formats: &[],
-        });
-        let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        }).unwrap();
+        let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
         let mut shadow_target_views = (0..2)
             .map(|i| {
@@ -398,7 +398,7 @@ impl wgpu_example::framework::Example for Example {
                     mip_level_count: None,
                     base_array_layer: i as u32,
                     array_layer_count: Some(1),
-                }))
+                }).unwrap())
             })
             .collect::<Vec<_>>();
         let lights = vec![
@@ -439,7 +439,7 @@ impl wgpu_example::framework::Example for Example {
             } | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let vertex_attr = wgpu::vertex_attr_array![0 => Sint8x4, 1 => Sint8x4];
         let vb_desc = wgpu::VertexBufferLayout {
@@ -451,7 +451,7 @@ impl wgpu_example::framework::Example for Example {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        }).unwrap();
 
         let shadow_pass = {
             let uniform_size = mem::size_of::<GlobalUniforms>() as wgpu::BufferAddress;
@@ -469,19 +469,19 @@ impl wgpu_example::framework::Example for Example {
                         },
                         count: None,
                     }],
-                });
+                }).unwrap();
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("shadow"),
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: uniform_size,
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
-            });
+            }).unwrap();
 
             // Create bind group
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -491,7 +491,7 @@ impl wgpu_example::framework::Example for Example {
                     resource: uniform_buf.as_entire_binding(),
                 }],
                 label: None,
-            });
+            }).unwrap();
 
             // Create the render pipeline
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -525,7 +525,7 @@ impl wgpu_example::framework::Example for Example {
                 }),
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
-            });
+            }).unwrap();
 
             Pass {
                 pipeline,
@@ -583,12 +583,12 @@ impl wgpu_example::framework::Example for Example {
                         },
                     ],
                     label: None,
-                });
+                }).unwrap();
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("main"),
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
             let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
             let forward_uniforms = GlobalUniforms {
@@ -599,7 +599,7 @@ impl wgpu_example::framework::Example for Example {
                 label: Some("Uniform Buffer"),
                 contents: bytemuck::bytes_of(&forward_uniforms),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
+            }).unwrap();
 
             // Create bind group
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -623,7 +623,7 @@ impl wgpu_example::framework::Example for Example {
                     },
                 ],
                 label: None,
-            });
+            }).unwrap();
 
             // Create the render pipeline
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -657,7 +657,7 @@ impl wgpu_example::framework::Example for Example {
                 }),
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
-            });
+            }).unwrap();
 
             Pass {
                 pipeline,
@@ -698,7 +698,7 @@ impl wgpu_example::framework::Example for Example {
             &self.forward_pass.uniform_buf,
             0,
             bytemuck::cast_slice(mx_ref),
-        );
+        ).unwrap();
 
         self.forward_depth = Self::create_depth_texture(config, device);
     }
@@ -724,7 +724,7 @@ impl wgpu_example::framework::Example for Example {
                 &self.entity_uniform_buf,
                 entity.uniform_offset as wgpu::BufferAddress,
                 bytemuck::bytes_of(&data),
-            );
+            ).unwrap();
         }
 
         if self.lights_are_dirty {
@@ -734,19 +734,19 @@ impl wgpu_example::framework::Example for Example {
                     &self.light_storage_buf,
                     (i * mem::size_of::<LightRaw>()) as wgpu::BufferAddress,
                     bytemuck::bytes_of(&light.to_raw()),
-                );
+                ).unwrap();
             }
         }
 
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
-        encoder.push_debug_group("shadow passes");
+        encoder.push_debug_group("shadow passes").unwrap();
         for (i, light) in self.lights.iter().enumerate() {
             encoder.push_debug_group(&format!(
                 "shadow pass {} (light at position {:?})",
                 i, light.pos
-            ));
+            )).unwrap();
 
             // The light uniform buffer already has the projection,
             // let's just copy it over to the shadow uniform buffer.
@@ -756,9 +756,9 @@ impl wgpu_example::framework::Example for Example {
                 &self.shadow_pass.uniform_buf,
                 0,
                 64,
-            );
+            ).unwrap();
 
-            encoder.insert_debug_marker("render entities");
+            encoder.insert_debug_marker("render entities").unwrap();
             {
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: None,
@@ -785,12 +785,12 @@ impl wgpu_example::framework::Example for Example {
                 }
             }
 
-            encoder.pop_debug_group();
+            encoder.pop_debug_group().unwrap();
         }
-        encoder.pop_debug_group();
+        encoder.pop_debug_group().unwrap();
 
         // forward pass
-        encoder.push_debug_group("forward rendering pass");
+        encoder.push_debug_group("forward rendering pass").unwrap();
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
@@ -828,9 +828,9 @@ impl wgpu_example::framework::Example for Example {
                 pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
             }
         }
-        encoder.pop_debug_group();
+        encoder.pop_debug_group().unwrap();
 
-        queue.submit(iter::once(encoder.finish()));
+        queue.submit(iter::once(encoder.finish().unwrap()));
     }
 }
 

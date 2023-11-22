@@ -42,13 +42,13 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    }).unwrap();
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
         push_constant_ranges: &[],
-    });
+    }).unwrap();
 
     let swapchain_capabilities = surface.get_capabilities(&adapter);
     let swapchain_format = swapchain_capabilities.formats[0];
@@ -70,7 +70,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
-    });
+    }).unwrap();
 
     let mut config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -111,11 +111,12 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             .expect("Failed to acquire next swap chain texture");
                         let view = frame
                             .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
+                            .create_view(&wgpu::TextureViewDescriptor::default())
+                            .unwrap();
                         let mut encoder =
                             device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                                 label: None,
-                            });
+                            }).unwrap();
                         {
                             let mut rpass =
                                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -136,7 +137,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             rpass.draw(0..3, 0..1);
                         }
 
-                        queue.submit(Some(encoder.finish()));
+                        queue.submit(Some(encoder.finish().unwrap()));
                         frame.present();
                     }
                     WindowEvent::CloseRequested => target.exit(),

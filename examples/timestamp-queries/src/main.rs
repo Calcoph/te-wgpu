@@ -120,19 +120,19 @@ impl Queries {
                 label: Some("Timestamp query set"),
                 count: num_queries as _,
                 ty: wgpu::QueryType::Timestamp,
-            }),
+            }).unwrap(),
             resolve_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("query resolve buffer"),
                 size: std::mem::size_of::<u64>() as u64 * num_queries,
                 usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::QUERY_RESOLVE,
                 mapped_at_creation: false,
-            }),
+            }).unwrap(),
             destination_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("query dest buffer"),
                 size: std::mem::size_of::<u64>() as u64 * num_queries,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
-            }),
+            }).unwrap(),
             num_queries,
             next_unused_query: 0,
         }
@@ -145,20 +145,20 @@ impl Queries {
             0..self.next_unused_query,
             &self.resolve_buffer,
             0,
-        );
+        ).unwrap();
         encoder.copy_buffer_to_buffer(
             &self.resolve_buffer,
             0,
             &self.destination_buffer,
             0,
             self.resolve_buffer.size(),
-        );
+        ).unwrap();
     }
 
     fn wait_for_results(&self, device: &wgpu::Device) -> Vec<u64> {
         self.destination_buffer
             .slice(..)
-            .map_async(wgpu::MapMode::Read, |_| ());
+            .map_async(wgpu::MapMode::Read, |_| ()).unwrap();
         device.poll(wgpu::Maintain::Wait);
 
         let timestamps = {
@@ -169,7 +169,7 @@ impl Queries {
             bytemuck::cast_slice(&timestamp_view).to_vec()
         };
 
-        self.destination_buffer.unmap();
+        self.destination_buffer.unmap().unwrap();
 
         timestamps
     }
@@ -233,15 +233,15 @@ fn submit_render_and_compute_pass_with_queries(
     queue: &wgpu::Queue,
 ) -> Queries {
     let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
     let mut queries = Queries::new(device, QueryResults::NUM_QUERIES);
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    }).unwrap();
 
-    encoder.write_timestamp(&queries.set, queries.next_unused_query);
+    encoder.write_timestamp(&queries.set, queries.next_unused_query).unwrap();
     queries.next_unused_query += 1;
 
     // Render two triangles and profile it.
@@ -262,11 +262,11 @@ fn submit_render_and_compute_pass_with_queries(
         &mut queries.next_unused_query,
     );
 
-    encoder.write_timestamp(&queries.set, queries.next_unused_query);
+    encoder.write_timestamp(&queries.set, queries.next_unused_query).unwrap();
     queries.next_unused_query += 1;
 
     queries.resolve(&mut encoder);
-    queue.submit(Some(encoder.finish()));
+    queue.submit(Some(encoder.finish().unwrap()));
 
     queries
 }
@@ -282,13 +282,13 @@ fn compute_pass(
         label: Some("Storage Buffer"),
         contents: bytemuck::cast_slice(&[42]),
         usage: wgpu::BufferUsages::STORAGE,
-    });
+    }).unwrap();
     let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
         layout: None,
         module,
         entry_point: "main_cs",
-    });
+    }).unwrap();
     let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
@@ -297,7 +297,7 @@ fn compute_pass(
             binding: 0,
             resource: storage_buffer.as_entire_binding(),
         }],
-    });
+    }).unwrap();
 
     let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
@@ -334,7 +334,7 @@ fn render_pass(
         label: None,
         bind_group_layouts: &[],
         push_constant_ranges: &[],
-    });
+    }).unwrap();
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
@@ -353,7 +353,7 @@ fn render_pass(
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
-    });
+    }).unwrap();
 
     let render_target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("rendertarget"),
@@ -368,8 +368,8 @@ fn render_pass(
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[format],
-    });
-    let render_target_view = render_target.create_view(&wgpu::TextureViewDescriptor::default());
+    }).unwrap();
+    let render_target_view = render_target.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: None,

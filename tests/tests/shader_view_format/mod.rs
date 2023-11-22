@@ -30,7 +30,8 @@ static REINTERPRET_SRGB: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let shader = ctx
             .device
-            .create_shader_module(wgpu::include_wgsl!("view_format.wgsl"));
+            .create_shader_module(wgpu::include_wgsl!("view_format.wgsl"))
+            .unwrap();
 
         // Reinterpret Rgba8Unorm as Rgba8UnormSrgb
         reinterpret(
@@ -77,11 +78,11 @@ fn reinterpret(
             view_formats: &[reinterpret_to],
         },
         bytemuck::cast_slice(src_data),
-    );
+    ).unwrap();
     let tv = tex.create_view(&wgpu::TextureViewDescriptor {
         format: Some(reinterpret_to),
         ..Default::default()
-    });
+    }).unwrap();
     let pipeline = ctx
         .device
         .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -104,7 +105,7 @@ fn reinterpret(
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
     let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &pipeline.get_bind_group_layout(0),
         entries: &[wgpu::BindGroupEntry {
@@ -112,7 +113,7 @@ fn reinterpret(
             resource: wgpu::BindingResource::TextureView(&tv),
         }],
         label: None,
-    });
+    }).unwrap();
 
     let target_tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: None,
@@ -123,12 +124,12 @@ fn reinterpret(
         format: src_format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
-    });
-    let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
+    }).unwrap();
+    let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: None,
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -144,18 +145,18 @@ fn reinterpret(
     rpass.set_bind_group(0, &bind_group, &[]);
     rpass.draw(0..3, 0..1);
     drop(rpass);
-    ctx.queue.submit(Some(encoder.finish()));
+    ctx.queue.submit(Some(encoder.finish().unwrap()));
 
     let read_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64 * 2,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
     encoder.copy_texture_to_buffer(
         wgpu::ImageCopyTexture {
             texture: &target_tex,
@@ -173,7 +174,7 @@ fn reinterpret(
         },
         size,
     );
-    ctx.queue.submit(Some(encoder.finish()));
+    ctx.queue.submit(Some(encoder.finish().unwrap()));
 
     let slice = read_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());

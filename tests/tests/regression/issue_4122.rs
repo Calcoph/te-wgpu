@@ -8,14 +8,14 @@ fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
         size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("cpu_buffer"),
         size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     // Initialize the whole buffer with values.
     let buffer_contents = vec![0xFF_u8; size as usize];
@@ -25,7 +25,7 @@ fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("encoder"),
-        });
+        }).unwrap();
 
     encoder.clear_buffer(
         &gpu_buffer,
@@ -34,8 +34,8 @@ fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
     );
     encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, size);
 
-    ctx.queue.submit(Some(encoder.finish()));
-    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
+    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
     ctx.device.poll(wgpu::Maintain::Wait);
 
     let buffer_slice = cpu_buffer.slice(..);

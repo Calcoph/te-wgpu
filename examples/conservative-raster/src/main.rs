@@ -35,14 +35,16 @@ impl Example {
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
             })
-            .create_view(&Default::default());
+            .unwrap()
+            .create_view(&Default::default())
+            .unwrap();
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Nearest Neighbor Sampler"),
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
-        });
+        }).unwrap();
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("upscale bind group"),
@@ -57,7 +59,7 @@ impl Example {
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
-        });
+        }).unwrap();
 
         (texture_view, bind_group)
     }
@@ -81,14 +83,14 @@ impl wgpu_example::framework::Example for Example {
                 label: None,
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
         let shader_triangle_and_lines = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
                 "triangle_and_lines.wgsl"
             ))),
-        });
+        }).unwrap();
 
         let pipeline_triangle_conservative =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -111,7 +113,7 @@ impl wgpu_example::framework::Example for Example {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
-            });
+            }).unwrap();
 
         let pipeline_triangle_regular =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -131,7 +133,7 @@ impl wgpu_example::framework::Example for Example {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
-            });
+            }).unwrap();
 
         let pipeline_lines = if device
             .features()
@@ -159,7 +161,7 @@ impl wgpu_example::framework::Example for Example {
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
                     multiview: None,
-                }),
+                }).unwrap(),
             )
         } else {
             None
@@ -187,17 +189,17 @@ impl wgpu_example::framework::Example for Example {
                             count: None,
                         },
                     ],
-                });
+                }).unwrap();
 
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
             let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
-            });
+            }).unwrap();
             (
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("Upscale"),
@@ -216,7 +218,7 @@ impl wgpu_example::framework::Example for Example {
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
                     multiview: None,
-                }),
+                }).unwrap(),
                 bind_group_layout,
             )
         };
@@ -253,7 +255,7 @@ impl wgpu_example::framework::Example for Example {
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("primary"),
-        });
+        }).unwrap();
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -302,7 +304,7 @@ impl wgpu_example::framework::Example for Example {
             }
         }
 
-        queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish().unwrap()));
     }
 }
 

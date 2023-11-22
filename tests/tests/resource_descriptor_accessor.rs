@@ -7,7 +7,7 @@ static BUFFER_SIZE_AND_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
         size: 1234,
         usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     assert_eq!(buffer.size(), 1234);
     assert_eq!(

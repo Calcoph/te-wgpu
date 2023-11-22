@@ -18,7 +18,7 @@ static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration =
             format: wgpu::TextureFormat::Rgba32Float,
             usage: wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
-        });
+        }).unwrap();
 
         let data = vec![255; 128];
 

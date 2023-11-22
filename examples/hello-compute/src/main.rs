@@ -68,7 +68,7 @@ async fn execute_gpu_inner(
     let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    }).unwrap();
 
     // Gets the size in bytes of the buffer.
     let size = std::mem::size_of_val(numbers) as wgpu::BufferAddress;
@@ -82,7 +82,7 @@ async fn execute_gpu_inner(
         size,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     // Instantiates buffer with data (`numbers`).
     // Usage allowing the buffer to be:
@@ -95,7 +95,7 @@ async fn execute_gpu_inner(
         usage: wgpu::BufferUsages::STORAGE
             | wgpu::BufferUsages::COPY_DST
             | wgpu::BufferUsages::COPY_SRC,
-    });
+    }).unwrap();
 
     // A bind group defines how buffers are accessed by shaders.
     // It is to WebGPU what a descriptor set is to Vulkan.
@@ -109,7 +109,7 @@ async fn execute_gpu_inner(
         layout: None,
         module: &cs_module,
         entry_point: "main",
-    });
+    }).unwrap();
 
     // Instantiates the bind group, once again specifying the binding of buffers.
     let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
@@ -120,12 +120,13 @@ async fn execute_gpu_inner(
             binding: 0,
             resource: storage_buffer.as_entire_binding(),
         }],
-    });
+    }).unwrap();
 
     // A command encoder executes one or many pipelines.
     // It is to WebGPU what a command buffer is to Vulkan.
     let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+        .unwrap();
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
@@ -138,16 +139,16 @@ async fn execute_gpu_inner(
     }
     // Sets adds copy operation to command encoder.
     // Will copy data from storage buffer on GPU to staging buffer on CPU.
-    encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
+    encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size).unwrap();
 
     // Submits command encoder for processing
-    queue.submit(Some(encoder.finish()));
+    queue.submit(Some(encoder.finish().unwrap()));
 
     // Note that we're not calling `.await` here.
     let buffer_slice = staging_buffer.slice(..);
     // Sets the buffer up for mapping, sending over the result of the mapping back to us when it is finished.
     let (sender, receiver) = flume::bounded(1);
-    buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+    buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap()).unwrap();
 
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
@@ -164,11 +165,11 @@ async fn execute_gpu_inner(
         // With the current interface, we have to make sure all mapped views are
         // dropped before we unmap the buffer.
         drop(data);
-        staging_buffer.unmap(); // Unmaps buffer from memory
-                                // If you are familiar with C++ these 2 lines can be thought of similarly to:
-                                //   delete myPointer;
-                                //   myPointer = NULL;
-                                // It effectively frees the memory
+        staging_buffer.unmap().unwrap(); // Unmaps buffer from memory
+                                         // If you are familiar with C++ these 2 lines can be thought of similarly to:
+                                         //   delete myPointer;
+                                         //   myPointer = NULL;
+                                         // It effectively frees the memory
 
         // Returns data from buffer
         Some(result)

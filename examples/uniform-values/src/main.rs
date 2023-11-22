@@ -125,7 +125,7 @@ impl WgpuContext {
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
                 "shader.wgsl"
             ))),
-        });
+        }).unwrap();
 
         // (2)
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -133,7 +133,7 @@ impl WgpuContext {
             size: std::mem::size_of::<AppState>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         // (3)
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -148,7 +148,7 @@ impl WgpuContext {
                 },
                 count: None,
             }],
-        });
+        }).unwrap();
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &bind_group_layout,
@@ -160,14 +160,14 @@ impl WgpuContext {
                     size: None,
                 }),
             }],
-        });
+        }).unwrap();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             // (4)
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
         let swapchain_capabilities = surface.get_capabilities(&adapter);
         let swapchain_format = swapchain_capabilities.formats[0];
@@ -189,7 +189,7 @@ impl WgpuContext {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -295,7 +295,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             let frame = wgpu_context_ref.surface.get_current_texture().unwrap();
                             let view = frame
                                 .texture
-                                .create_view(&wgpu::TextureViewDescriptor::default());
+                                .create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
                             // (8)
                             wgpu_context_ref.queue.write_buffer(
@@ -305,10 +305,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                                     "Error in encase translating AppState \
                     struct to WGSL bytes.",
                                 ),
-                            );
+                            ).unwrap();
                             let mut encoder = wgpu_context_ref.device.create_command_encoder(
                                 &wgpu::CommandEncoderDescriptor { label: None },
-                            );
+                            ).unwrap();
                             {
                                 let mut render_pass =
                                     encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -332,7 +332,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                                 render_pass.set_bind_group(0, &wgpu_context_ref.bind_group, &[]);
                                 render_pass.draw(0..3, 0..1);
                             }
-                            wgpu_context_ref.queue.submit(Some(encoder.finish()));
+                            wgpu_context_ref.queue.submit(Some(encoder.finish().unwrap()));
                             frame.present();
                         }
                         _ => {}

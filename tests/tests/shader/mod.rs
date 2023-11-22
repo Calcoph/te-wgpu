@@ -217,28 +217,28 @@ fn shader_input_output_test(
                     count: None,
                 },
             ],
-        });
+        }).unwrap();
 
     let input_buffer = ctx.device.create_buffer(&BufferDescriptor {
         label: Some("input buffer"),
         size: MAX_BUFFER_SIZE,
         usage: BufferUsages::COPY_DST | BufferUsages::UNIFORM | BufferUsages::STORAGE,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let output_buffer = ctx.device.create_buffer(&BufferDescriptor {
         label: Some("output buffer"),
         size: MAX_BUFFER_SIZE,
         usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let mapping_buffer = ctx.device.create_buffer(&BufferDescriptor {
         label: Some("mapping buffer"),
         size: MAX_BUFFER_SIZE,
         usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let bg = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: None,
@@ -253,7 +253,7 @@ fn shader_input_output_test(
                 resource: output_buffer.as_entire_binding(),
             },
         ],
-    });
+    }).unwrap();
 
     let pll = ctx
         .device
@@ -267,7 +267,7 @@ fn shader_input_output_test(
                 }],
                 _ => &[],
             },
-        });
+        }).unwrap();
 
     let mut fail = false;
     for test in tests {
@@ -298,7 +298,7 @@ fn shader_input_output_test(
         let sm = ctx.device.create_shader_module(ShaderModuleDescriptor {
             label: Some(&format!("shader {test_name}")),
             source: ShaderSource::Wgsl(Cow::Borrowed(&processed)),
-        });
+        }).unwrap();
 
         let pipeline = ctx
             .device
@@ -307,7 +307,7 @@ fn shader_input_output_test(
                 layout: Some(&pll),
                 module: &sm,
                 entry_point: "cs_main",
-            });
+            }).unwrap();
 
         // -- Initializing data --
 
@@ -332,7 +332,7 @@ fn shader_input_output_test(
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&CommandEncoderDescriptor { label: None }).unwrap();
 
         let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: Some(&format!("cpass {test_name}")),
@@ -352,7 +352,7 @@ fn shader_input_output_test(
 
         encoder.copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, MAX_BUFFER_SIZE);
 
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
 
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
         ctx.device.poll(Maintain::Wait);

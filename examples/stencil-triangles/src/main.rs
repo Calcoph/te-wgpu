@@ -39,24 +39,24 @@ impl wgpu_example::framework::Example for Example {
             label: Some("Outer Vertex Buffer"),
             contents: bytemuck::cast_slice(&outer_vertices),
             usage: wgpu::BufferUsages::VERTEX,
-        });
+        }).unwrap();
 
         let mask_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Mask Vertex Buffer"),
             contents: bytemuck::cast_slice(&mask_vertices),
             usage: wgpu::BufferUsages::VERTEX,
-        });
+        }).unwrap();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        }).unwrap();
 
         let vertex_buffers = [wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
@@ -104,7 +104,7 @@ impl wgpu_example::framework::Example for Example {
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
         let outer_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -137,7 +137,7 @@ impl wgpu_example::framework::Example for Example {
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
         let stencil_buffer = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Stencil buffer"),
@@ -152,7 +152,7 @@ impl wgpu_example::framework::Example for Example {
             format: wgpu::TextureFormat::Stencil8,
             view_formats: &[],
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        });
+        }).unwrap();
 
         // Done
         Example {
@@ -179,9 +179,9 @@ impl wgpu_example::framework::Example for Example {
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
         {
-            let depth_view = self.stencil_buffer.create_view(&Default::default());
+            let depth_view = self.stencil_buffer.create_view(&Default::default()).unwrap();
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -220,7 +220,7 @@ impl wgpu_example::framework::Example for Example {
             rpass.draw(0..3, 0..1);
         }
 
-        queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish().unwrap()));
     }
 }
 

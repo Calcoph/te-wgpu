@@ -93,9 +93,9 @@ impl Example {
                 self.bunnies.as_ptr() as *const u8,
                 self.bunnies.len() * uniform_alignment as usize,
             )
-        });
+        }).unwrap();
 
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
         {
             let clear_color = wgpu::Color {
                 r: 0.1,
@@ -127,7 +127,7 @@ impl Example {
             }
         }
 
-        queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish().unwrap()));
     }
 }
 
@@ -143,7 +143,7 @@ impl wgpu_example::framework::Example for Example {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
                 "../../../wgpu-hal/examples/halmark/shader.wgsl"
             ))),
-        });
+        }).unwrap();
 
         let global_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -176,7 +176,7 @@ impl wgpu_example::framework::Example for Example {
                     },
                 ],
                 label: None,
-            });
+            }).unwrap();
         let local_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
@@ -190,12 +190,12 @@ impl wgpu_example::framework::Example for Example {
                     count: None,
                 }],
                 label: None,
-            });
+            }).unwrap();
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&global_bind_group_layout, &local_bind_group_layout],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -222,7 +222,7 @@ impl wgpu_example::framework::Example for Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
         let texture = {
             let img_data = include_bytes!("../../../logo.png");
@@ -245,7 +245,7 @@ impl wgpu_example::framework::Example for Example {
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
-            });
+            }).unwrap();
             queue.write_texture(
                 texture.as_image_copy(),
                 &buf,
@@ -255,7 +255,7 @@ impl wgpu_example::framework::Example for Example {
                     rows_per_image: None,
                 },
                 size,
-            );
+            ).unwrap();
             texture
         };
 
@@ -268,7 +268,7 @@ impl wgpu_example::framework::Example for Example {
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
-        });
+        }).unwrap();
 
         let globals = Globals {
             mvp: glam::Mat4::orthographic_rh(
@@ -287,7 +287,7 @@ impl wgpu_example::framework::Example for Example {
             label: Some("global"),
             contents: bytemuck::bytes_of(&globals),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-        });
+        }).unwrap();
         let uniform_alignment =
             device.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
         let local_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -295,9 +295,9 @@ impl wgpu_example::framework::Example for Example {
             size: (MAX_BUNNIES as wgpu::BufferAddress) * uniform_alignment,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
         let global_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &global_bind_group_layout,
             entries: &[
@@ -315,7 +315,7 @@ impl wgpu_example::framework::Example for Example {
                 },
             ],
             label: None,
-        });
+        }).unwrap();
         let local_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &local_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
@@ -327,7 +327,7 @@ impl wgpu_example::framework::Example for Example {
                 }),
             }],
             label: None,
-        });
+        }).unwrap();
 
         let rng = WyRand::new_seed(42);
 

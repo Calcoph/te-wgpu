@@ -30,7 +30,7 @@ async fn run(_path: Option<String>) {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    }).unwrap();
 
     let render_target = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
@@ -45,13 +45,13 @@ async fn run(_path: Option<String>) {
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
-    });
+    }).unwrap();
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: texture_data.capacity() as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
@@ -70,16 +70,16 @@ async fn run(_path: Option<String>) {
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
-    });
+    }).unwrap();
 
     log::info!("Wgpu context set up.");
 
     //-----------------------------------------------
 
-    let texture_view = render_target.create_view(&wgpu::TextureViewDescriptor::default());
+    let texture_view = render_target.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     let mut command_encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
     {
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -121,8 +121,8 @@ async fn run(_path: Option<String>) {
             height: TEXTURE_DIMS.1 as u32,
             depth_or_array_layers: 1,
         },
-    );
-    queue.submit(Some(command_encoder.finish()));
+    ).unwrap();
+    queue.submit(Some(command_encoder.finish().unwrap()));
     log::info!("Commands submitted.");
 
     //-----------------------------------------------
@@ -130,7 +130,7 @@ async fn run(_path: Option<String>) {
     // Time to get our image.
     let buffer_slice = output_staging_buffer.slice(..);
     let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
-    buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
+    buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap()).unwrap();
     device.poll(wgpu::Maintain::Wait);
     receiver.receive().await.unwrap().unwrap();
     log::info!("Output buffer mapped.");
@@ -139,7 +139,7 @@ async fn run(_path: Option<String>) {
         texture_data.extend_from_slice(&view[..]);
     }
     log::info!("Image data copied to local.");
-    output_staging_buffer.unmap();
+    output_staging_buffer.unmap().unwrap();
 
     #[cfg(not(target_arch = "wasm32"))]
     output_image_native(texture_data.to_vec(), TEXTURE_DIMS, _path.unwrap());

@@ -39,11 +39,11 @@ fn multi_stage_data_binding_test(ctx: TestingContext) {
     // types for the uniform and push constant blocks between stages.
     let vs_sm = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("issue_3349.vs.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("issue_3349.vs.wgsl")).unwrap();
 
     let fs_sm = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("issue_3349.fs.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("issue_3349.fs.wgsl")).unwrap();
 
     // We start with u8s then convert to float, to make sure we don't have
     // cross-vendor rounding issues unorm.
@@ -56,7 +56,7 @@ fn multi_stage_data_binding_test(ctx: TestingContext) {
             label: Some("buffer"),
             contents: bytemuck::cast_slice(&input),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        }).unwrap();
 
     let bgl = ctx
         .device
@@ -72,7 +72,7 @@ fn multi_stage_data_binding_test(ctx: TestingContext) {
                 },
                 count: None,
             }],
-        });
+        }).unwrap();
 
     let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("bg"),
@@ -81,7 +81,7 @@ fn multi_stage_data_binding_test(ctx: TestingContext) {
             binding: 0,
             resource: buffer.as_entire_binding(),
         }],
-    });
+    }).unwrap();
 
     let pll = ctx
         .device
@@ -92,7 +92,7 @@ fn multi_stage_data_binding_test(ctx: TestingContext) {
                 stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 range: 0..16,
             }],
-        });
+        }).unwrap();
 
     let pipeline = ctx
         .device
@@ -117,7 +117,7 @@ fn multi_stage_data_binding_test(ctx: TestingContext) {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("texture"),
@@ -133,15 +133,15 @@ fn multi_stage_data_binding_test(ctx: TestingContext) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
-    });
+    }).unwrap();
 
-    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("encoder"),
-        });
+        }).unwrap();
 
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -171,7 +171,7 @@ fn multi_stage_data_binding_test(ctx: TestingContext) {
 
     let buffers = ReadbackBuffers::new(&ctx.device, &texture);
     buffers.copy_from(&ctx.device, &mut encoder, &texture);
-    ctx.queue.submit([encoder.finish()]);
+    ctx.queue.submit([encoder.finish().unwrap()]);
 
     let result = input_as_unorm.repeat(4);
     buffers.assert_buffer_contents(&ctx.device, &result);

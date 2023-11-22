@@ -84,7 +84,7 @@ impl wgpu_example::framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let mut uniform_workaround = false;
-        let base_shader_module = device.create_shader_module(wgpu::include_wgsl!("indexing.wgsl"));
+        let base_shader_module = device.create_shader_module(wgpu::include_wgsl!("indexing.wgsl")).unwrap();
         let env_override = match std::env::var("WGPU_TEXTURE_ARRAY_STYLE") {
             Ok(value) => match &*value.to_lowercase() {
                 "nonuniform" | "non_uniform" => Some(true),
@@ -116,7 +116,7 @@ impl wgpu_example::framework::Example for Example {
         // capabilities even if we don't use it. So for now put it in a separate module.
         let fragment_shader_module = if !uniform_workaround {
             non_uniform_shader_module =
-                device.create_shader_module(wgpu::include_wgsl!("non_uniform_indexing.wgsl"));
+                device.create_shader_module(wgpu::include_wgsl!("non_uniform_indexing.wgsl")).unwrap();
             &non_uniform_shader_module
         } else {
             &base_shader_module
@@ -130,14 +130,14 @@ impl wgpu_example::framework::Example for Example {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
-        });
+        }).unwrap();
 
         let index_data = create_indices();
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&index_data),
             usage: wgpu::BufferUsages::INDEX,
-        });
+        }).unwrap();
 
         let mut texture_index_buffer_contents = vec![0u32; 128];
         texture_index_buffer_contents[0] = 0;
@@ -146,7 +146,7 @@ impl wgpu_example::framework::Example for Example {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&texture_index_buffer_contents),
             usage: wgpu::BufferUsages::UNIFORM,
-        });
+        }).unwrap();
 
         let red_texture_data = create_texture_data(Color::Red);
         let green_texture_data = create_texture_data(Color::Green);
@@ -167,27 +167,27 @@ impl wgpu_example::framework::Example for Example {
             label: Some("red"),
             view_formats: &[],
             ..texture_descriptor
-        });
+        }).unwrap();
         let green_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("green"),
             view_formats: &[],
             ..texture_descriptor
-        });
+        }).unwrap();
         let blue_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("blue"),
             view_formats: &[],
             ..texture_descriptor
-        });
+        }).unwrap();
         let white_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("white"),
             view_formats: &[],
             ..texture_descriptor
-        });
+        }).unwrap();
 
-        let red_texture_view = red_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let green_texture_view = green_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let blue_texture_view = blue_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let white_texture_view = white_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let red_texture_view = red_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+        let green_texture_view = green_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+        let blue_texture_view = blue_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+        let white_texture_view = white_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
         queue.write_texture(
             red_texture.as_image_copy(),
@@ -198,7 +198,7 @@ impl wgpu_example::framework::Example for Example {
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),
-        );
+        ).unwrap();
         queue.write_texture(
             green_texture.as_image_copy(),
             &green_texture_data,
@@ -208,7 +208,7 @@ impl wgpu_example::framework::Example for Example {
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),
-        );
+        ).unwrap();
         queue.write_texture(
             blue_texture.as_image_copy(),
             &blue_texture_data,
@@ -218,7 +218,7 @@ impl wgpu_example::framework::Example for Example {
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),
-        );
+        ).unwrap();
         queue.write_texture(
             white_texture.as_image_copy(),
             &white_texture_data,
@@ -228,9 +228,9 @@ impl wgpu_example::framework::Example for Example {
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),
-        );
+        ).unwrap();
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default()).unwrap();
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("bind group layout"),
@@ -272,7 +272,7 @@ impl wgpu_example::framework::Example for Example {
                     count: None,
                 },
             ],
-        });
+        }).unwrap();
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             entries: &[
@@ -305,13 +305,13 @@ impl wgpu_example::framework::Example for Example {
             ],
             layout: &bind_group_layout,
             label: Some("bind group"),
-        });
+        }).unwrap();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
         let index_format = wgpu::IndexFormat::Uint16;
 
@@ -339,7 +339,7 @@ impl wgpu_example::framework::Example for Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
         Self {
             pipeline,
@@ -364,7 +364,7 @@ impl wgpu_example::framework::Example for Example {
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("primary"),
-        });
+        }).unwrap();
 
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -396,7 +396,7 @@ impl wgpu_example::framework::Example for Example {
 
         drop(rpass);
 
-        queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish().unwrap()));
     }
 }
 

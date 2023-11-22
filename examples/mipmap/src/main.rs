@@ -85,7 +85,7 @@ impl Example {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
-        });
+        }).unwrap();
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("blit"),
@@ -107,7 +107,7 @@ impl Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
         let bind_group_layout = pipeline.get_bind_group_layout(0);
 
@@ -120,7 +120,7 @@ impl Example {
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
-        });
+        }).unwrap();
 
         let views = (0..mip_count)
             .map(|mip| {
@@ -133,7 +133,7 @@ impl Example {
                     mip_level_count: Some(1),
                     base_array_layer: 0,
                     array_layer_count: None,
-                })
+                }).unwrap()
             })
             .collect::<Vec<_>>();
 
@@ -151,7 +151,7 @@ impl Example {
                     },
                 ],
                 label: None,
-            });
+            }).unwrap();
 
             let pipeline_query_index_base = target_mip as u32 - 1;
             let timestamp_query_index_base = (target_mip as u32 - 1) * 2;
@@ -193,13 +193,13 @@ impl Example {
                 0..timestamp_query_count,
                 &query_sets.data_buffer,
                 0,
-            );
+            ).unwrap();
             encoder.resolve_query_set(
                 &query_sets.pipeline_statistics,
                 0..MIP_PASS_COUNT,
                 &query_sets.data_buffer,
                 pipeline_statistics_offset(),
-            );
+            ).unwrap();
         }
     }
 }
@@ -216,7 +216,7 @@ impl wgpu_example::framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let mut init_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
         // Create the texture
         let size = 1 << MIP_PASS_COUNT;
@@ -237,15 +237,15 @@ impl wgpu_example::framework::Example for Example {
                 | wgpu::TextureUsages::COPY_DST,
             label: None,
             view_formats: &[],
-        });
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        }).unwrap();
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
         //Note: we could use queue.write_texture instead, and this is what other
         // examples do, but here we want to show another way to do this.
         let temp_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Temporary Buffer"),
             contents: texels.as_slice(),
             usage: wgpu::BufferUsages::COPY_SRC,
-        });
+        }).unwrap();
         init_encoder.copy_buffer_to_texture(
             wgpu::ImageCopyBuffer {
                 buffer: &temp_buf,
@@ -257,7 +257,7 @@ impl wgpu_example::framework::Example for Example {
             },
             texture.as_image_copy(),
             texture_extent,
-        );
+        ).unwrap();
 
         // Create other resources
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -269,20 +269,20 @@ impl wgpu_example::framework::Example for Example {
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Linear,
             ..Default::default()
-        });
+        }).unwrap();
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
             contents: bytemuck::cast_slice(mx_ref),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        }).unwrap();
 
         // Create the render pipeline
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-        });
+        }).unwrap();
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("draw"),
@@ -306,7 +306,7 @@ impl wgpu_example::framework::Example for Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        });
+        }).unwrap();
 
         // Create bind group
         let bind_group_layout = draw_pipeline.get_bind_group_layout(0);
@@ -327,7 +327,7 @@ impl wgpu_example::framework::Example for Example {
                 },
             ],
             label: None,
-        });
+        }).unwrap();
 
         // If both kinds of query are supported, use queries
         let query_sets = if device.features().contains(QUERY_FEATURES) {
@@ -340,7 +340,7 @@ impl wgpu_example::framework::Example for Example {
                 label: None,
                 count: mip_passes * 2,
                 ty: wgpu::QueryType::Timestamp,
-            });
+            }).unwrap();
             // Timestamp queries use an device-specific timestamp unit. We need to figure out how many
             // nanoseconds go by for the timestamp to be incremented by one. The period is this value.
             let timestamp_period = queue.get_timestamp_period();
@@ -352,7 +352,7 @@ impl wgpu_example::framework::Example for Example {
                 ty: wgpu::QueryType::PipelineStatistics(
                     wgpu::PipelineStatisticsTypes::FRAGMENT_SHADER_INVOCATIONS,
                 ),
-            });
+            }).unwrap();
 
             // This databuffer has to store all of the query results, 2 * passes timestamp queries
             // and 1 * passes statistics queries. Each query returns a u64 value.
@@ -363,7 +363,7 @@ impl wgpu_example::framework::Example for Example {
                 size: buffer_size,
                 usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
-            });
+            }).unwrap();
 
             // Mapping buffer
             let mapping_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -371,7 +371,7 @@ impl wgpu_example::framework::Example for Example {
                 size: buffer_size,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
-            });
+            }).unwrap();
 
             Some(QuerySets {
                 timestamp,
@@ -399,16 +399,16 @@ impl wgpu_example::framework::Example for Example {
                 &query_sets.mapping_buffer,
                 0,
                 query_sets.data_buffer.size(),
-            );
+            ).unwrap();
         }
 
-        queue.submit(Some(init_encoder.finish()));
+        queue.submit(Some(init_encoder.finish().unwrap()));
         if let Some(ref query_sets) = query_sets {
             // We can ignore the callback as we're about to wait for the device.
             query_sets
                 .mapping_buffer
                 .slice(..)
-                .map_async(wgpu::MapMode::Read, |_| ());
+                .map_async(wgpu::MapMode::Read, |_| ()).unwrap();
             // Wait for device to be done rendering mipmaps
             device.poll(wgpu::Maintain::Wait);
             // This is guaranteed to be ready.
@@ -464,12 +464,12 @@ impl wgpu_example::framework::Example for Example {
     ) {
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref));
+        queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref)).unwrap();
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
         {
             let clear_color = wgpu::Color {
                 r: 0.1,
@@ -496,7 +496,7 @@ impl wgpu_example::framework::Example for Example {
             rpass.draw(0..4, 0..1);
         }
 
-        queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish().unwrap()));
     }
 }
 

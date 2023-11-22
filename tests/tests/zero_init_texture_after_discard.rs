@@ -133,7 +133,7 @@ impl<'ctx> TestCase<'ctx> {
                 | TextureUsages::RENDER_ATTACHMENT
                 | extra_usages,
             view_formats: &[],
-        });
+        }).unwrap();
 
         // Clear using a write_texture operation. We could also clear using a render_pass clear.
         // However, when making this test intentionally fail (by breaking wgpu impl), it shows that at least on the tested Vulkan driver,
@@ -147,12 +147,12 @@ impl<'ctx> TestCase<'ctx> {
         if format.is_depth_stencil_format() {
             let mut encoder = ctx
                 .device
-                .create_command_encoder(&CommandEncoderDescriptor::default());
+                .create_command_encoder(&CommandEncoderDescriptor::default()).unwrap();
             encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Depth/Stencil setup"),
                 color_attachments: &[],
                 depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: &texture.create_view(&TextureViewDescriptor::default()),
+                    view: &texture.create_view(&TextureViewDescriptor::default()).unwrap(),
                     depth_ops: format.has_depth_aspect().then_some(Operations {
                         load: LoadOp::Clear(1.0),
                         store: StoreOp::Store,
@@ -165,7 +165,7 @@ impl<'ctx> TestCase<'ctx> {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            ctx.queue.submit([encoder.finish()]);
+            ctx.queue.submit([encoder.finish().unwrap()]);
         } else {
             let block_size = format.block_copy_size(None).unwrap();
             let bytes_per_row = texture.width() * block_size;
@@ -208,14 +208,14 @@ impl<'ctx> TestCase<'ctx> {
         self.encoder = Some(
             self.ctx
                 .device
-                .create_command_encoder(&CommandEncoderDescriptor::default()),
+                .create_command_encoder(&CommandEncoderDescriptor::default()).unwrap(),
         )
     }
 
     pub fn submit_command_encoder(&mut self) {
         self.ctx
             .queue
-            .submit([self.encoder.take().unwrap().finish()]);
+            .submit([self.encoder.take().unwrap().finish().unwrap()]);
     }
 
     pub fn discard(&mut self) {
@@ -226,7 +226,7 @@ impl<'ctx> TestCase<'ctx> {
                 label: Some("Discard"),
                 color_attachments: &[self.format.has_color_aspect().then_some(
                     RenderPassColorAttachment {
-                        view: &self.texture.create_view(&TextureViewDescriptor::default()),
+                        view: &self.texture.create_view(&TextureViewDescriptor::default()).unwrap(),
                         resolve_target: None,
                         ops: Operations {
                             load: LoadOp::Load,
@@ -236,7 +236,7 @@ impl<'ctx> TestCase<'ctx> {
                 )],
                 depth_stencil_attachment: self.format.is_depth_stencil_format().then_some(
                     RenderPassDepthStencilAttachment {
-                        view: &self.texture.create_view(&TextureViewDescriptor::default()),
+                        view: &self.texture.create_view(&TextureViewDescriptor::default()).unwrap(),
                         depth_ops: self.format.has_depth_aspect().then_some(Operations {
                             load: LoadOp::Load,
                             store: StoreOp::Discard,
@@ -261,7 +261,7 @@ impl<'ctx> TestCase<'ctx> {
                 color_attachments: &[],
                 depth_stencil_attachment: self.format.is_depth_stencil_format().then_some(
                     RenderPassDepthStencilAttachment {
-                        view: &self.texture.create_view(&TextureViewDescriptor::default()),
+                        view: &self.texture.create_view(&TextureViewDescriptor::default()).unwrap(),
                         depth_ops: Some(Operations {
                             load: LoadOp::Load,
                             store: StoreOp::Discard,
@@ -286,7 +286,7 @@ impl<'ctx> TestCase<'ctx> {
                 color_attachments: &[],
                 depth_stencil_attachment: self.format.is_depth_stencil_format().then_some(
                     RenderPassDepthStencilAttachment {
-                        view: &self.texture.create_view(&TextureViewDescriptor::default()),
+                        view: &self.texture.create_view(&TextureViewDescriptor::default()).unwrap(),
                         depth_ops: self.format.has_depth_aspect().then_some(Operations {
                             load: LoadOp::Clear(0.0),
                             store: StoreOp::Store,
