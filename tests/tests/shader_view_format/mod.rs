@@ -173,11 +173,11 @@ fn reinterpret(
             },
         },
         size,
-    );
+    ).unwrap();
     ctx.queue.submit(Some(encoder.finish().unwrap()));
 
     let slice = read_buffer.slice(..);
-    slice.map_async(wgpu::MapMode::Read, |_| ());
+    slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
     ctx.device.poll(wgpu::Maintain::Wait);
 
     let data: Vec<u8> = slice.get_mapped_range().to_vec();

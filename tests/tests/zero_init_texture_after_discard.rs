@@ -190,7 +190,7 @@ impl<'ctx> TestCase<'ctx> {
                     rows_per_image: None,
                 },
                 texture.size(),
-            );
+            ).unwrap();
         }
 
         let readback_buffers = ReadbackBuffers::new(&ctx.device, &texture);

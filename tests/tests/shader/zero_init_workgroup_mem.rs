@@ -106,7 +106,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
             &output_buffer,
             0,
             bytemuck::cast_slice(&output_pre_init_data),
-        );
+        ).unwrap();
 
         // -- Run test --
 
@@ -130,11 +130,11 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
 
         // -- Pulldown data --
 
-        encoder.copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, BUFFER_SIZE);
+        encoder.copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, BUFFER_SIZE).unwrap();
 
         ctx.queue.submit(Some(encoder.finish().unwrap()));
 
-        mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
+        mapping_buffer.slice(..).map_async(MapMode::Read, |_| ()).unwrap();
         ctx.device.poll(Maintain::Wait);
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();
@@ -152,7 +152,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
         );
 
         drop(mapped);
-        mapping_buffer.unmap();
+        mapping_buffer.unmap().unwrap();
     });
 
 const DISPATCH_SIZE: (u32, u32, u32) = (64, 64, 64);

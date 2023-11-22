@@ -55,6 +55,7 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(|| {
             renderpass.set_viewport(0.0, 0.0, -1.0, -1.0, 0.0, 1.0);
             drop(renderpass);
+            Result::<(), std::io::Error>::Ok(()) // TODO: Find a way to make this test pass
         });
 
         // This is the actual interesting error condition. We've created

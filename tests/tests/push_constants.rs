@@ -136,9 +136,9 @@ fn partial_update_test(ctx: TestingContext) {
         cpass.dispatch_workgroups(1, 1, 1);
     }
 
-    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, 32);
+    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, 32).unwrap();
     ctx.queue.submit([encoder.finish().unwrap()]);
-    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
+    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
     ctx.device.poll(wgpu::Maintain::Wait);
 
     let data = cpu_buffer.slice(..).get_mapped_range();

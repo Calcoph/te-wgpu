@@ -130,11 +130,11 @@ fn pulling_common(
 
     drop(rpass);
 
-    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
+    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size).unwrap();
 
     ctx.queue.submit(Some(encoder.finish().unwrap()));
     let slice = cpu_buffer.slice(..);
-    slice.map_async(wgpu::MapMode::Read, |_| ());
+    slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
     ctx.device.poll(wgpu::Maintain::Wait);
     let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
 

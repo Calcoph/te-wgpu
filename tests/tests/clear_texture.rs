@@ -250,7 +250,7 @@ fn single_texture_clear_test(
             base_array_layer: 0,
             array_layer_count: None,
         },
-    );
+    ).unwrap();
 
     let readback_buffers = ReadbackBuffers::new(&ctx.device, &texture);
 

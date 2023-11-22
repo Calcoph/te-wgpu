@@ -42,6 +42,6 @@ static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration =
                     height: 64,
                     depth_or_array_layers: 4294967295,
                 },
-            );
+            )
         });
     });

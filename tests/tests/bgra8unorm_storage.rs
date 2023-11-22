@@ -133,12 +133,12 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
                 height: 256,
                 depth_or_array_layers: 1,
             },
-        );
+        ).unwrap();
 
         ctx.queue.submit(Some(encoder.finish().unwrap()));
 
         let buffer_slice = readback_buffer.slice(..);
-        buffer_slice.map_async(wgpu::MapMode::Read, Result::unwrap);
+        buffer_slice.map_async(wgpu::MapMode::Read, Result::unwrap).unwrap();
         device.poll(wgpu::Maintain::Wait);
 
         {
@@ -152,5 +152,5 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             }
         }
 
-        readback_buffer.unmap();
+        readback_buffer.unmap().unwrap();
     });

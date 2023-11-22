@@ -19,7 +19,7 @@ fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
 
     // Initialize the whole buffer with values.
     let buffer_contents = vec![0xFF_u8; size as usize];
-    ctx.queue.write_buffer(&gpu_buffer, 0, &buffer_contents);
+    ctx.queue.write_buffer(&gpu_buffer, 0, &buffer_contents).unwrap();
 
     let mut encoder = ctx
         .device
@@ -31,8 +31,8 @@ fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
         &gpu_buffer,
         range.start,
         NonZeroU64::new(range.end - range.start),
-    );
-    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, size);
+    ).unwrap();
+    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, size).unwrap();
 
     ctx.queue.submit(Some(encoder.finish().unwrap()));
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();

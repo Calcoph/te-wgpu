@@ -102,7 +102,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
             usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         }).unwrap();
-        encoder.resolve_query_set(&query_set, 0..3, &query_buffer, 0);
+        encoder.resolve_query_set(&query_set, 0..3, &query_buffer, 0).unwrap();
 
         let mapping_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Mapping buffer"),
@@ -110,7 +110,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         }).unwrap();
-        encoder.copy_buffer_to_buffer(&query_buffer, 0, &mapping_buffer, 0, query_buffer.size());
+        encoder.copy_buffer_to_buffer(&query_buffer, 0, &mapping_buffer, 0, query_buffer.size()).unwrap();
 
         ctx.queue.submit(Some(encoder.finish().unwrap()));
 

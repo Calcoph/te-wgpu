@@ -12,7 +12,7 @@ fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) 
         }).unwrap();
 
         b0.slice(0..0)
-            .map_async(wgpu::MapMode::Read, Result::unwrap);
+            .map_async(wgpu::MapMode::Read, Result::unwrap).unwrap();
 
         ctx.device.poll(wgpu::MaintainBase::Wait);
 
@@ -21,32 +21,32 @@ fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) 
             assert!(view.is_empty());
         }
 
-        b0.unmap();
+        b0.unmap().unwrap();
 
         // Map and unmap right away.
-        b0.slice(0..0).map_async(wgpu::MapMode::Read, move |_| {});
-        b0.unmap();
+        b0.slice(0..0).map_async(wgpu::MapMode::Read, move |_| {}).unwrap();
+        b0.unmap().unwrap();
 
         // Map multiple times before unmapping.
-        b0.slice(0..0).map_async(wgpu::MapMode::Read, move |_| {});
+        b0.slice(0..0).map_async(wgpu::MapMode::Read, move |_| {}).unwrap();
         b0.slice(0..0)
             .map_async(wgpu::MapMode::Read, move |result| {
                 assert!(result.is_err());
-            });
+            }).unwrap();
         b0.slice(0..0)
             .map_async(wgpu::MapMode::Read, move |result| {
                 assert!(result.is_err());
-            });
+            }).unwrap();
         b0.slice(0..0)
             .map_async(wgpu::MapMode::Read, move |result| {
                 assert!(result.is_err());
-            });
-        b0.unmap();
+            }).unwrap();
+        b0.unmap().unwrap();
 
         // Write mode.
         if usage == rw {
             b0.slice(0..0)
-                .map_async(wgpu::MapMode::Write, Result::unwrap);
+                .map_async(wgpu::MapMode::Write, Result::unwrap).unwrap();
 
             ctx.device.poll(wgpu::MaintainBase::Wait);
 
@@ -55,11 +55,11 @@ fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) 
             //    assert!(view.is_empty());
             //}
 
-            b0.unmap();
+            b0.unmap().unwrap();
 
             // Map and unmap right away.
-            b0.slice(0..0).map_async(wgpu::MapMode::Write, move |_| {});
-            b0.unmap();
+            b0.slice(0..0).map_async(wgpu::MapMode::Write, move |_| {}).unwrap();
+            b0.unmap().unwrap();
         }
     }
 
@@ -75,7 +75,7 @@ fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) 
         assert!(view.is_empty());
     }
 
-    b1.unmap();
+    b1.unmap().unwrap();
 
     ctx.device.poll(wgpu::MaintainBase::Wait);
 }
@@ -114,7 +114,7 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|
         .slice(32..)
         .map_async(wgpu::MapMode::Write, move |result| {
             result.unwrap();
-        });
+        }).unwrap();
 
     ctx.device.poll(wgpu::MaintainBase::Wait);
 
@@ -126,19 +126,19 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|
         }
     }
 
-    write_buf.unmap();
+    write_buf.unmap().unwrap();
 
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
-    encoder.copy_buffer_to_buffer(&write_buf, 0, &read_buf, 0, 256);
+    encoder.copy_buffer_to_buffer(&write_buf, 0, &read_buf, 0, 256).unwrap();
 
     ctx.queue.submit(Some(encoder.finish().unwrap()));
 
     read_buf
         .slice(..)
-        .map_async(wgpu::MapMode::Read, Result::unwrap);
+        .map_async(wgpu::MapMode::Read, Result::unwrap).unwrap();
 
     ctx.device.poll(wgpu::MaintainBase::Wait);
 

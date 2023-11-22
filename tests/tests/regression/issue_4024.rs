@@ -31,7 +31,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
                 label: Some("encoder"),
             }).unwrap();
 
-        encoder.clear_buffer(&buffer, 0, None);
+        encoder.clear_buffer(&buffer, 0, None).unwrap();
 
         // Submit the work.
         ctx.queue.submit(Some(encoder.finish().unwrap()));

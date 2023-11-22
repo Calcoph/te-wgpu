@@ -316,12 +316,12 @@ fn shader_input_output_test(
             &output_buffer,
             0,
             bytemuck::cast_slice(&output_pre_init_data),
-        );
+        ).unwrap();
 
         match storage_type {
             InputStorageType::Uniform | InputStorageType::Storage => {
                 ctx.queue
-                    .write_buffer(&input_buffer, 0, bytemuck::cast_slice(&test.input_values));
+                    .write_buffer(&input_buffer, 0, bytemuck::cast_slice(&test.input_values)).unwrap();
             }
             _ => {
                 // Init happens in the compute pass
@@ -350,11 +350,11 @@ fn shader_input_output_test(
 
         // -- Pulldown data --
 
-        encoder.copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, MAX_BUFFER_SIZE);
+        encoder.copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, MAX_BUFFER_SIZE).unwrap();
 
         ctx.queue.submit(Some(encoder.finish().unwrap()));
 
-        mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
+        mapping_buffer.slice(..).map_async(MapMode::Read, |_| ()).unwrap();
         ctx.device.poll(Maintain::Wait);
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();
@@ -377,7 +377,7 @@ fn shader_input_output_test(
         }
 
         drop(mapped);
-        mapping_buffer.unmap();
+        mapping_buffer.unmap().unwrap();
     }
     assert!(!fail);
 }
