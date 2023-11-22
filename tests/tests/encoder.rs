@@ -52,7 +52,7 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
         });
 
         // Set a bad viewport on renderpass, triggering an error.
-        fail(&ctx.device, || {
+        fail(|| {
             renderpass.set_viewport(0.0, 0.0, -1.0, -1.0, 0.0, 1.0);
             drop(renderpass);
         });

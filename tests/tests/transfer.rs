@@ -35,7 +35,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_s
         view_formats: &[],
     }).unwrap();
 
-    fail(&ctx.device, || {
+    fail(|| {
         // Validation should catch the silly selected z layer range without panicking.
         encoder.copy_texture_to_texture(
             wgpu::ImageCopyTexture {
@@ -59,7 +59,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_s
                 height: 3,
                 depth_or_array_layers: 613286111,
             },
-        );
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        )
     });
+    ctx.queue.submit(Some(encoder.finish().unwrap()));
 });

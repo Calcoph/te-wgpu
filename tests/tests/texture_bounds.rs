@@ -8,7 +8,7 @@ static BAD_COPY_ORIGIN_TEST: GpuTestConfiguration = GpuTestConfiguration::new().
         let texture = ctx.device.create_texture(&TEXTURE_DESCRIPTOR).unwrap();
         let data = vec![255; BUFFER_SIZE as usize];
 
-        fail_if(&ctx.device, should_panic, || {
+        fail_if(should_panic, || {
             ctx.queue.write_texture(
                 wgpu::ImageCopyTexture {
                     texture: &texture,

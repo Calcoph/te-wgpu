@@ -15,10 +15,10 @@ static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new().run_sy
 
     ctx.device.poll(wgpu::MaintainBase::Wait);
 
-    fail(&ctx.device, || {
+    fail(|| {
         buffer
             .slice(..)
-            .map_async(wgpu::MapMode::Write, move |_| {});
+            .map_async(wgpu::MapMode::Write, move |_| {})
     });
 
     buffer.destroy();

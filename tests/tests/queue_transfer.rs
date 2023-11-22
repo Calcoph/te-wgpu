@@ -22,7 +22,7 @@ static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration =
 
         let data = vec![255; 128];
 
-        fail(&ctx.device, || {
+        fail(|| {
             ctx.queue.write_texture(
                 wgpu::ImageCopyTexture {
                     texture: &texture,

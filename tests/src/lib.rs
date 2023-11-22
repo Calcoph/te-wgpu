@@ -21,6 +21,30 @@ pub use params::{FailureCase, FailureReasons, TestParameters};
 pub use run::{execute_test, TestingContext};
 pub use wgpu_macros::gpu_test;
 
+/// Run some code in an error scope and assert that validation fails.
+pub fn fail<T, E: std::error::Error>(callback: impl FnOnce() -> Result<T, E>) {
+    assert!(callback().is_err());
+}
+
+/// Run some code in an error scope and assert that validation succeeds.
+pub fn valid<T, E: std::error::Error>(callback: impl FnOnce() -> Result<T, E>) -> T {
+    let result = callback();
+    assert!(result.is_ok());
+
+    result.unwrap()
+}
+
+/// Run some code in an error scope and assert that validation succeeds or fails depending on the
+/// provided `should_fail` boolean.
+pub fn fail_if<T, E: std::error::Error>(should_fail: bool, callback: impl FnOnce() -> Result<T, E>) -> Option<T> {
+    if should_fail {
+        fail(callback);
+        None
+    } else {
+        Some(valid(callback))
+    }
+}
+
 /// Adds the necissary main function for our gpu test harness.
 #[macro_export]
 macro_rules! gpu_test_main {

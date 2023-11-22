@@ -1,7 +1,7 @@
 //! Tests for buffer usages validation.
 
 use wgpu::BufferUsages as Bu;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters};
 use wgt::BufferAddress;
 
 const BUFFER_SIZE: BufferAddress = 1234;
@@ -31,13 +31,13 @@ fn try_create(ctx: wgpu_test::TestingContext, usages: &[(bool, &[wgpu::BufferUsa
         .iter()
         .flat_map(|&(expect_error, usages)| usages.iter().copied().map(move |u| (expect_error, u)))
     {
-        fail_if(&ctx.device, expect_validation_error, || {
-            let _buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        fail_if(expect_validation_error, || {
+            ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: BUFFER_SIZE,
                 usage,
                 mapped_at_creation: false,
-            });
+            })
         });
     }
 }

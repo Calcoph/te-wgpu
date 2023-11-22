@@ -1,4 +1,4 @@
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -233,23 +233,23 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // the device is not valid.
 
         // Creating a commmand encoder should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             ctx.device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
         });
 
         // Creating a buffer should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: 256,
                 usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
-            });
+            })
         });
 
         // Creating a texture should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             ctx.device.create_texture(&wgpu::TextureDescriptor {
                 label: None,
                 size: wgpu::Extent3d {
@@ -263,11 +263,11 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                 format: wgpu::TextureFormat::Rg8Uint,
                 usage: wgpu::TextureUsages::COPY_SRC,
                 view_formats: &[],
-            });
+            })
         });
 
         // Texture clear should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             encoder_for_clear.clear_texture(
                 &texture_for_write,
                 &wgpu::ImageSubresourceRange {
@@ -277,19 +277,19 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     base_array_layer: 0,
                     array_layer_count: None,
                 },
-            ).unwrap();
+            )
         });
 
         // Creating a compute pass should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             encoder_for_compute_pass.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
                 timestamp_writes: None,
-            });
+            })
         });
 
         // Creating a render pass should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             encoder_for_render_pass.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -300,22 +300,22 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            })
         });
 
         // Copying a buffer to a buffer should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             encoder_for_buffer_buffer_copy.copy_buffer_to_buffer(
                 &buffer_source,
                 0,
                 &buffer_dest,
                 0,
                 256,
-            );
+            )
         });
 
         // Copying a buffer to a texture should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             encoder_for_buffer_texture_copy.copy_buffer_to_texture(
                 wgpu::ImageCopyBuffer {
                     buffer: &buffer_source,
@@ -327,11 +327,11 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                 },
                 texture_for_write.as_image_copy(),
                 texture_extent,
-            );
+            )
         });
 
         // Copying a texture to a buffer should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             encoder_for_texture_buffer_copy.copy_texture_to_buffer(
                 texture_for_read.as_image_copy(),
                 wgpu::ImageCopyBuffer {
@@ -343,29 +343,29 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     },
                 },
                 texture_extent,
-            );
+            )
         });
 
         // Copying a texture to a texture should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             encoder_for_texture_texture_copy.copy_texture_to_texture(
                 texture_for_read.as_image_copy(),
                 texture_for_write.as_image_copy(),
                 texture_extent,
-            );
+            )
         });
 
         // Creating a bind group layout should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             ctx.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
                     entries: &[],
-                });
+                })
         });
 
         // Creating a bind group should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
                 layout: &bind_group_layout,
@@ -375,39 +375,39 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                         buffer_source.as_entire_buffer_binding(),
                     ),
                 }],
-            });
+            })
         });
 
         // Creating a pipeline layout should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             ctx.device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: None,
                     bind_group_layouts: &[],
                     push_constant_ranges: &[],
-                });
+                })
         });
 
         // Creating a shader module should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             ctx.device
                 .create_shader_module(wgpu::ShaderModuleDescriptor {
                     label: None,
                     source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
-                });
+                })
         });
 
         // Creating a shader module spirv should fail.
-        fail(&ctx.device, || unsafe {
+        fail(|| unsafe {
             ctx.device
                 .create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
                     label: None,
                     source: std::borrow::Cow::Borrowed(&[]),
-                });
+                })
         });
 
         // Creating a render pipeline should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             ctx.device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: None,
@@ -422,30 +422,30 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     multisample: wgpu::MultisampleState::default(),
                     fragment: None,
                     multiview: None,
-                });
+                })
         });
 
         // Creating a compute pipeline should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             ctx.device
                 .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                     label: None,
                     layout: None,
                     module: &shader_module,
                     entry_point: "",
-                });
+                })
         });
 
         // Buffer map should fail.
-        fail(&ctx.device, || {
+        fail(|| {
             buffer_for_map
                 .slice(..)
-                .map_async(wgpu::MapMode::Write, |_| ());
+                .map_async(wgpu::MapMode::Write, |_| ())
         });
 
         // Buffer unmap should fail.
-        fail(&ctx.device, || {
-            buffer_for_unmap.unmap();
+        fail(|| {
+            buffer_for_unmap.unmap()
         });
     });
 

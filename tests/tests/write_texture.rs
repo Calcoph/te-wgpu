@@ -53,7 +53,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration = GpuTestConfiguration::new
             size: (size * size) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let mut encoder = ctx
             .device
