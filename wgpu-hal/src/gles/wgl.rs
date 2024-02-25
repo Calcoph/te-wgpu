@@ -4,7 +4,7 @@ use glutin_wgl_sys::wgl_extra::{
     CONTEXT_PROFILE_MASK_ARB,
 };
 use once_cell::sync::Lazy;
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::{Mutex, MutexGuard, RwLock};
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use std::{
     collections::HashSet,
@@ -76,6 +76,24 @@ impl AdapterContext {
         inner.context.make_current(inner.device.dc).unwrap();
 
         AdapterContextLock { inner }
+    }
+
+    /// Obtain a lock to the WGL context and get handle to the [`glow::Context`] that can be used to
+    /// do rendering.
+    ///
+    /// Unlike [`lock`](Self::lock), this accepts a device to pass to `make_current` and exposes the error
+    /// when `make_current` fails.
+    #[track_caller]
+    fn lock_with_dc(&self, device: HDC) -> Result<AdapterContextLock<'_>, Error> {
+        let inner = self
+            .inner
+            .try_lock_for(Duration::from_secs(CONTEXT_LOCK_TIMEOUT_SECS))
+            .expect("Could not lock adapter context. This is most-likely a deadlock.");
+
+        inner
+            .context
+            .make_current(device)
+            .map(|()| AdapterContextLock { inner })
     }
 }
 
@@ -527,7 +545,7 @@ impl crate::Instance<super::Api> for Instance {
         Ok(Surface {
             window: window.hwnd.get() as *mut _,
             presentable: true,
-            swapchain: None,
+            swapchain: RwLock::new(None),
             srgb_capable: self.srgb_capable,
         })
     }
@@ -573,7 +591,7 @@ pub struct Swapchain {
 pub struct Surface {
     window: HWND,
     pub(super) presentable: bool,
-    swapchain: Option<Swapchain>,
+    swapchain: RwLock<Option<Swapchain>>,
     srgb_capable: bool,
 }
 
@@ -582,11 +600,12 @@ unsafe impl Sync for Surface {}
 
 impl Surface {
     pub(super) unsafe fn present(
-        &mut self,
+        &self,
         _suf_texture: super::Texture,
         context: &AdapterContext,
     ) -> Result<(), crate::SurfaceError> {
-        let sc = self.swapchain.as_ref().unwrap();
+        let swapchain = self.swapchain.read();
+        let sc = swapchain.as_ref().unwrap();
         let dc = unsafe { GetDC(self.window) };
         if dc.is_null() {
             log::error!(
@@ -602,16 +621,10 @@ impl Surface {
             window: self.window,
         };
 
-        let inner = context.inner.lock();
-
-        if let Err(e) = inner.context.make_current(dc.device) {
+        let gl = context.lock_with_dc(dc.device).map_err(|e| {
             log::error!("unable to make the OpenGL context current for surface: {e}",);
-            return Err(crate::SurfaceError::Other(
-                "unable to make the OpenGL context current for surface",
-            ));
-        }
-
-        let gl = &inner.gl;
+            crate::SurfaceError::Other("unable to make the OpenGL context current for surface")
+        })?;
 
         unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer)) };
@@ -662,7 +675,7 @@ impl Surface {
 
 impl crate::Surface<super::Api> for Surface {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
@@ -692,16 +705,11 @@ impl crate::Surface<super::Api> for Surface {
         }
 
         let format_desc = device.shared.describe_texture_format(config.format);
-        let inner = &device.shared.context.inner.lock();
-
-        if let Err(e) = inner.context.make_current(dc.device) {
+        let gl = &device.shared.context.lock_with_dc(dc.device).map_err(|e| {
             log::error!("unable to make the OpenGL context current for surface: {e}",);
-            return Err(crate::SurfaceError::Other(
-                "unable to make the OpenGL context current for surface",
-            ));
-        }
+            crate::SurfaceError::Other("unable to make the OpenGL context current for surface")
+        })?;
 
-        let gl = &inner.gl;
         let renderbuffer = unsafe { gl.create_renderbuffer() }.map_err(|error| {
             log::error!("Internal swapchain renderbuffer creation failed: {error}");
             crate::DeviceError::OutOfMemory
@@ -743,7 +751,7 @@ impl crate::Surface<super::Api> for Surface {
         }
 
         let vsync = match config.present_mode {
-            wgt::PresentMode::Mailbox => false,
+            wgt::PresentMode::Immediate => false,
             wgt::PresentMode::Fifo => true,
             _ => {
                 log::error!("unsupported present mode: {:?}", config.present_mode);
@@ -756,7 +764,7 @@ impl crate::Surface<super::Api> for Surface {
             return Err(crate::SurfaceError::Other("unable to set swap interval"));
         }
 
-        self.swapchain = Some(Swapchain {
+        self.swapchain.write().replace(Swapchain {
             renderbuffer,
             framebuffer,
             extent: config.extent,
@@ -768,9 +776,9 @@ impl crate::Surface<super::Api> for Surface {
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &super::Device) {
+    unsafe fn unconfigure(&self, device: &super::Device) {
         let gl = &device.shared.context.lock();
-        if let Some(sc) = self.swapchain.take() {
+        if let Some(sc) = self.swapchain.write().take() {
             unsafe {
                 gl.delete_renderbuffer(sc.renderbuffer);
                 gl.delete_framebuffer(sc.framebuffer)
@@ -779,10 +787,11 @@ impl crate::Surface<super::Api> for Surface {
     }
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         _timeout_ms: Option<Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
-        let sc = self.swapchain.as_ref().unwrap();
+        let swapchain = self.swapchain.read();
+        let sc = swapchain.as_ref().unwrap();
         let texture = super::Texture {
             inner: super::TextureInner::Renderbuffer {
                 raw: sc.renderbuffer,
@@ -803,5 +812,5 @@ impl crate::Surface<super::Api> for Surface {
             suboptimal: false,
         }))
     }
-    unsafe fn discard_texture(&mut self, _texture: super::Texture) {}
+    unsafe fn discard_texture(&self, _texture: super::Texture) {}
 }

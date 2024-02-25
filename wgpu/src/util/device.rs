@@ -46,30 +46,55 @@ impl Display for CreateTextureWithDataError {
 
 impl std::error::Error for CreateTextureWithDataError {}
 
+/// Order in which TextureData is laid out in memory.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
+pub enum TextureDataOrder {
+    /// The texture is laid out densely in memory as:
+    ///
+    /// ```text
+    /// Layer0Mip0 Layer0Mip1 Layer0Mip2
+    /// Layer1Mip0 Layer1Mip1 Layer1Mip2
+    /// Layer2Mip0 Layer2Mip1 Layer2Mip2
+    /// ````
+    ///
+    /// This is the layout used by dds files.
+    ///
+    /// This was the previous behavior of [`DeviceExt::create_texture_with_data`].
+    #[default]
+    LayerMajor,
+    /// The texture is laid out densely in memory as:
+    ///
+    /// ```text
+    /// Layer0Mip0 Layer1Mip0 Layer2Mip0
+    /// Layer0Mip1 Layer1Mip1 Layer2Mip1
+    /// Layer0Mip2 Layer1Mip2 Layer2Mip2
+    /// ```
+    ///
+    /// This is the layout used by ktx and ktx2 files.
+    MipMajor,
+}
+
 /// Utility methods not meant to be in the main API.
 pub trait DeviceExt {
     /// Creates a [Buffer](crate::Buffer) with data to initialize it.
     fn create_buffer_init(
         &self,
-        desc: &BufferInitDescriptor,
+        desc: &BufferInitDescriptor<'_>
     ) -> Result<crate::Buffer, CreateBufferError>;
 
     /// Upload an entire texture and its mipmaps from a source buffer.
     ///
     /// Expects all mipmaps to be tightly packed in the data buffer.
     ///
-    /// If the texture is a 2DArray texture, uploads each layer in order, expecting
-    /// each layer and its mips to be tightly packed.
-    ///
-    /// Example:
-    /// Layer0Mip0 Layer0Mip1 Layer0Mip2 ... Layer1Mip0 Layer1Mip1 Layer1Mip2 ...
+    /// See [`TextureDataOrder`] for the order in which the data is laid out in memory.
     ///
     /// Implicitly adds the `COPY_DST` usage if it is not present in the descriptor,
     /// as it is required to be able to upload the data to the gpu.
     fn create_texture_with_data(
         &self,
         queue: &crate::Queue,
-        desc: &crate::TextureDescriptor,
+        desc: &crate::TextureDescriptor<'_>,
+        order: TextureDataOrder,
         data: &[u8],
     ) -> Result<crate::Texture, CreateTextureWithDataError>;
 }
@@ -119,7 +144,8 @@ impl DeviceExt for crate::Device {
     fn create_texture_with_data(
         &self,
         queue: &crate::Queue,
-        desc: &crate::TextureDescriptor,
+        desc: &crate::TextureDescriptor<'_>,
+        order: TextureDataOrder,
         data: &[u8],
     ) -> Result<crate::Texture, CreateTextureWithDataError> {
         // Implicitly add the COPY_DST usage
@@ -134,9 +160,27 @@ impl DeviceExt for crate::Device {
         let (block_width, block_height) = desc.format.block_dimensions();
         let layer_iterations = desc.array_layer_count();
 
+        let outer_iteration;
+        let inner_iteration;
+        match order {
+            TextureDataOrder::LayerMajor => {
+                outer_iteration = layer_iterations;
+                inner_iteration = desc.mip_level_count;
+            }
+            TextureDataOrder::MipMajor => {
+                outer_iteration = desc.mip_level_count;
+                inner_iteration = layer_iterations;
+            }
+        }
+
         let mut binary_offset = 0;
-        for layer in 0..layer_iterations {
-            for mip in 0..desc.mip_level_count {
+        for outer in 0..outer_iteration {
+            for inner in 0..inner_iteration {
+                let (layer, mip) = match order {
+                    TextureDataOrder::LayerMajor => (outer, inner),
+                    TextureDataOrder::MipMajor => (inner, outer),
+                };
+
                 let mut mip_size = desc.mip_level_size(mip).unwrap();
                 // copying layers separately
                 if desc.dimension != wgt::TextureDimension::D3 {

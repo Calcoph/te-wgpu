@@ -22,25 +22,31 @@ use error::WebGpuResult;
 #[macro_use]
 mod macros {
     macro_rules! gfx_select {
-    ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
+    ($id:expr => $p0:ident.$p1:tt.$method:ident $params:tt) => {
+      gfx_select!($id => {$p0.$p1}, $method $params)
+    };
+
+    ($id:expr => $p0:ident.$method:ident $params:tt) => {
+      gfx_select!($id => {$p0}, $method $params)
+    };
+
+    ($id:expr => {$($c:tt)*}, $method:ident $params:tt) => {
       match $id.backend() {
         #[cfg(any(
             all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")),
             feature = "vulkan-portability"
         ))]
-        wgpu_types::Backend::Vulkan => $global.$method::<wgpu_core::api::Vulkan>( $($param),* ),
+        wgpu_types::Backend::Vulkan => $($c)*.$method::<wgpu_core::api::Vulkan> $params,
         #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
-        wgpu_types::Backend::Metal => $global.$method::<wgpu_core::api::Metal>( $($param),* ),
+        wgpu_types::Backend::Metal => $($c)*.$method::<wgpu_core::api::Metal> $params,
         #[cfg(all(not(target_arch = "wasm32"), windows))]
-        wgpu_types::Backend::Dx12 => $global.$method::<wgpu_core::api::Dx12>( $($param),* ),
-        #[cfg(all(not(target_arch = "wasm32"), windows))]
-        wgpu_types::Backend::Dx11 => $global.$method::<wgpu_core::api::Dx11>( $($param),* ),
+        wgpu_types::Backend::Dx12 => $($c)*.$method::<wgpu_core::api::Dx12> $params,
         #[cfg(any(
             all(unix, not(target_os = "macos"), not(target_os = "ios")),
             feature = "angle",
             target_arch = "wasm32"
         ))]
-        wgpu_types::Backend::Gl => $global.$method::<wgpu_core::api::Gles>( $($param),+ ),
+        wgpu_types::Backend::Gl => $($c)*.$method::<wgpu_core::api::Gles> $params,
         other => panic!("Unexpected backend {:?}", other),
       }
     };
@@ -100,8 +106,7 @@ impl Resource for WebGpuAdapter {
     }
 
     fn close(self: Rc<Self>) {
-        let instance = &self.0;
-        gfx_select!(self.1 => instance.adapter_drop(self.1));
+        gfx_select!(self.1 => self.0.adapter_drop(self.1));
     }
 }
 
@@ -112,8 +117,7 @@ impl Resource for WebGpuDevice {
     }
 
     fn close(self: Rc<Self>) {
-        let instance = &self.0;
-        gfx_select!(self.1 => instance.device_drop(self.1));
+        gfx_select!(self.1 => self.0.device_drop(self.1));
     }
 }
 
@@ -124,8 +128,7 @@ impl Resource for WebGpuQuerySet {
     }
 
     fn close(self: Rc<Self>) {
-        let instance = &self.0;
-        gfx_select!(self.1 => instance.query_set_drop(self.1));
+        gfx_select!(self.1 => self.0.query_set_drop(self.1));
     }
 }
 
@@ -265,6 +268,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     }
     if features.contains(wgpu_types::Features::BGRA8UNORM_STORAGE) {
         return_features.push("bgra8unorm-storage");
+    }
+    if features.contains(wgpu_types::Features::FLOAT32_FILTERABLE) {
+        return_features.push("float32-filterable");
     }
 
     // extended from spec
@@ -498,6 +504,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             wgpu_types::Features::BGRA8UNORM_STORAGE,
             required_features.0.contains("bgra8unorm-storage"),
         );
+        features.set(
+            wgpu_types::Features::FLOAT32_FILTERABLE,
+            required_features.0.contains("float32-filterable"),
+        );
 
         // extended from spec
 
@@ -657,14 +667,15 @@ pub async fn op_webgpu_request_device(
 
     let descriptor = wgpu_types::DeviceDescriptor {
         label: Some(Cow::Owned(label)),
-        features: required_features.into(),
-        limits: required_limits.unwrap_or_default(),
+        required_features: required_features.into(),
+        required_limits: required_limits.unwrap_or_default(),
     };
 
-    let device = gfx_select!(adapter => instance.adapter_request_device(
+    let (device, _queue) = gfx_select!(adapter => instance.adapter_request_device(
       adapter,
       &descriptor,
       std::env::var("DENO_WEBGPU_TRACE").ok().as_ref().map(std::path::Path::new),
+      (),
       ()
     ))
     .map_err(|err| DomExceptionOperationError::new(&err.to_string()))?;

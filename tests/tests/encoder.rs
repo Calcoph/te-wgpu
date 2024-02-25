@@ -1,4 +1,4 @@
-use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {

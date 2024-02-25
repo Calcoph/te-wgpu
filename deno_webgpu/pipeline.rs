@@ -24,8 +24,7 @@ impl Resource for WebGpuPipelineLayout {
     }
 
     fn close(self: Rc<Self>) {
-        let instance = &self.0;
-        gfx_select!(self.1 => instance.pipeline_layout_drop(self.1));
+        gfx_select!(self.1 => self.0.pipeline_layout_drop(self.1));
     }
 }
 
@@ -39,8 +38,7 @@ impl Resource for WebGpuComputePipeline {
     }
 
     fn close(self: Rc<Self>) {
-        let instance = &self.0;
-        gfx_select!(self.1 => instance.compute_pipeline_drop(self.1));
+        gfx_select!(self.1 => self.0.compute_pipeline_drop(self.1));
     }
 }
 
@@ -54,8 +52,7 @@ impl Resource for WebGpuRenderPipeline {
     }
 
     fn close(self: Rc<Self>) {
-        let instance = &self.0;
-        gfx_select!(self.1 => instance.render_pipeline_drop(self.1));
+        gfx_select!(self.1 => self.0.render_pipeline_drop(self.1));
     }
 }
 

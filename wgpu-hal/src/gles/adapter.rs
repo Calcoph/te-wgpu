@@ -1,5 +1,6 @@
 use glow::HasContext;
-use std::sync::Arc;
+use parking_lot::Mutex;
+use std::sync::{atomic::AtomicU8, Arc};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -197,14 +198,14 @@ impl super::Adapter {
         let (vendor_const, renderer_const) = if extensions.contains("WEBGL_debug_renderer_info") {
             // emscripten doesn't enable "WEBGL_debug_renderer_info" extension by default. so, we do it manually.
             // See https://github.com/gfx-rs/wgpu/issues/3245 for context
-            #[cfg(target_os = "emscripten")]
+            #[cfg(Emscripten)]
             if unsafe { super::emscripten::enable_extension("WEBGL_debug_renderer_info\0") } {
                 (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
             } else {
                 (glow::VENDOR, glow::RENDERER)
             }
             // glow already enables WEBGL_debug_renderer_info on wasm32-unknown-unknown target by default.
-            #[cfg(not(target_os = "emscripten"))]
+            #[cfg(not(Emscripten))]
             (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
         } else {
             (glow::VENDOR, glow::RENDERER)
@@ -213,19 +214,15 @@ impl super::Adapter {
         let vendor = unsafe { gl.get_parameter_string(vendor_const) };
         let renderer = unsafe { gl.get_parameter_string(renderer_const) };
         let version = unsafe { gl.get_parameter_string(glow::VERSION) };
-        log::trace!("Vendor: {}", vendor);
-        log::trace!("Renderer: {}", renderer);
-        log::trace!("Version: {}", version);
+        log::debug!("Vendor: {}", vendor);
+        log::debug!("Renderer: {}", renderer);
+        log::debug!("Version: {}", version);
 
         let full_ver = Self::parse_full_version(&version).ok();
-        let es_ver = full_ver
-            .is_none()
-            .then_some(())
-            .and_then(|_| Self::parse_version(&version).ok());
-        let web_gl = cfg!(target_arch = "wasm32");
+        let es_ver = full_ver.map_or_else(|| Self::parse_version(&version).ok(), |_| None);
 
         if let Some(full_ver) = full_ver {
-            let core_profile = (full_ver >= (3, 2)).then_some(unsafe {
+            let core_profile = (full_ver >= (3, 2)).then(|| unsafe {
                 gl.get_parameter_i32(glow::CONTEXT_PROFILE_MASK)
                     & glow::CONTEXT_CORE_PROFILE_BIT as i32
                     != 0
@@ -271,7 +268,7 @@ impl super::Adapter {
 
         let shading_language_version = {
             let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
-            log::trace!("SL version: {}", &sl_version);
+            log::debug!("SL version: {}", &sl_version);
             if full_ver.is_some() {
                 let (sl_major, sl_minor) = Self::parse_full_version(&sl_version).ok()?;
                 let mut value = sl_major as u16 * 100 + sl_minor as u16 * 10;
@@ -285,12 +282,12 @@ impl super::Adapter {
                 let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
                 naga::back::glsl::Version::Embedded {
                     version: value,
-                    is_webgl: cfg!(target_arch = "wasm32"),
+                    is_webgl: cfg!(any(webgl, Emscripten)),
                 }
             }
         };
 
-        log::trace!("Supported GL Extensions: {:#?}", extensions);
+        log::debug!("Supported GL Extensions: {:#?}", extensions);
 
         let supported = |(req_es_major, req_es_minor), (req_full_major, req_full_minor)| {
             let es_supported = es_ver
@@ -378,7 +375,8 @@ impl super::Adapter {
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
-            | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
+            | wgt::DownlevelFlags::COMPARISON_SAMPLERS
+            | wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
@@ -388,8 +386,6 @@ impl super::Adapter {
             wgt::DownlevelFlags::INDIRECT_EXECUTION,
             supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect"),
         );
-        //TODO: we can actually support positive `base_vertex` in the same way
-        // as we emulate the `start_instance`. But we can't deal with negatives...
         downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, supported((3, 2), (3, 2)));
         downlevel_flags.set(
             wgt::DownlevelFlags::INDEPENDENT_BLEND,
@@ -411,16 +407,16 @@ impl super::Adapter {
         }
         downlevel_flags.set(
             wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
-            !(cfg!(target_arch = "wasm32") || is_angle),
+            !(cfg!(any(webgl, Emscripten)) || is_angle),
         );
         // see https://registry.khronos.org/webgl/specs/latest/2.0/#BUFFER_OBJECT_BINDING
         downlevel_flags.set(
             wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER,
-            !cfg!(target_arch = "wasm32"),
+            !cfg!(any(webgl, Emscripten)),
         );
         downlevel_flags.set(
             wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES,
-            !cfg!(target_arch = "wasm32"),
+            !cfg!(any(webgl, Emscripten)),
         );
         downlevel_flags.set(
             wgt::DownlevelFlags::FULL_DRAW_INDEX_UINT32,
@@ -494,7 +490,7 @@ impl super::Adapter {
             "EXT_texture_compression_rgtc",
             "EXT_texture_compression_bptc",
         ];
-        let bcn_exts = if cfg!(target_arch = "wasm32") {
+        let bcn_exts = if cfg!(any(webgl, Emscripten)) {
             &webgl_bcn_exts[..]
         } else if es_ver.is_some() {
             &gles_bcn_exts[..]
@@ -505,7 +501,7 @@ impl super::Adapter {
             wgt::Features::TEXTURE_COMPRESSION_BC,
             bcn_exts.iter().all(|&ext| extensions.contains(ext)),
         );
-        let has_etc = if cfg!(target_arch = "wasm32") {
+        let has_etc = if cfg!(any(webgl, Emscripten)) {
             extensions.contains("WEBGL_compressed_texture_etc")
         } else {
             // This is a required part of GLES3, but not part of Desktop GL at all.
@@ -517,7 +513,7 @@ impl super::Adapter {
         if extensions.contains("WEBGL_compressed_texture_astc")
             || extensions.contains("GL_OES_texture_compression_astc")
         {
-            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            #[cfg(webgl)]
             {
                 if context
                     .glow_context
@@ -533,7 +529,7 @@ impl super::Adapter {
                 }
             }
 
-            #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+            #[cfg(any(native, Emscripten))]
             {
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
@@ -547,6 +543,17 @@ impl super::Adapter {
                 wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR,
                 extensions.contains("GL_KHR_texture_compression_astc_hdr"),
             );
+        }
+
+        features.set(
+            wgt::Features::FLOAT32_FILTERABLE,
+            extensions.contains("GL_ARB_color_buffer_float")
+                || extensions.contains("GL_EXT_color_buffer_float")
+                || extensions.contains("OES_texture_float_linear"),
+        );
+
+        if es_ver.is_none() {
+            features |= wgt::Features::POLYGON_MODE_LINE | wgt::Features::POLYGON_MODE_POINT;
         }
 
         // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
@@ -575,11 +582,11 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE,
-            !cfg!(target_arch = "wasm32"),
+            !cfg!(any(webgl, Emscripten)),
         );
         private_caps.set(
             super::PrivateCapabilities::GET_BUFFER_SUB_DATA,
-            cfg!(target_arch = "wasm32") || full_ver.is_some(),
+            cfg!(any(webgl, Emscripten)) || full_ver.is_some(),
         );
         let color_buffer_float = extensions.contains("GL_EXT_color_buffer_float")
             || extensions.contains("GL_ARB_color_buffer_float")
@@ -594,27 +601,32 @@ impl super::Adapter {
             super::PrivateCapabilities::COLOR_BUFFER_FLOAT,
             color_buffer_float,
         );
-        private_caps.set(
-            super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR,
-            if full_ver.is_some() {
-                color_buffer_float
-            } else {
-                extensions.contains("OES_texture_float_linear")
-            },
-        );
         private_caps.set(super::PrivateCapabilities::QUERY_BUFFERS, query_buffers);
+        private_caps.set(super::PrivateCapabilities::QUERY_64BIT, full_ver.is_some());
         private_caps.set(
             super::PrivateCapabilities::TEXTURE_STORAGE,
             supported((3, 0), (4, 2)),
         );
-        private_caps.set(
-            super::PrivateCapabilities::DEBUG_FNS,
-            supported((3, 2), (4, 3)) && !web_gl,
-        );
+        private_caps.set(super::PrivateCapabilities::DEBUG_FNS, gl.supports_debug());
         private_caps.set(
             super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,
             supported((3, 0), (4, 3)),
         );
+        if let Some(full_ver) = full_ver {
+            let supported =
+                full_ver >= (4, 2) && extensions.contains("GL_ARB_shader_draw_parameters");
+            private_caps.set(
+                super::PrivateCapabilities::FULLY_FEATURED_INSTANCING,
+                supported,
+            );
+            // Desktop 4.2 and greater specify the first instance parameter.
+            //
+            // For all other versions, the behavior is undefined.
+            //
+            // We only support indirect first instance when we also have ARB_shader_draw_parameters as
+            // that's the only way to get gl_InstanceID to work correctly.
+            features.set(wgt::Features::INDIRECT_FIRST_INSTANCE, supported);
+        }
 
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
@@ -747,7 +759,7 @@ impl super::Adapter {
 
         workarounds.set(
             super::Workarounds::EMULATE_BUFFER_MAP,
-            cfg!(target_arch = "wasm32"),
+            cfg!(any(webgl, Emscripten)),
         );
 
         let r = renderer.to_lowercase();
@@ -771,7 +783,7 @@ impl super::Adapter {
         // Drop the GL guard so we can move the context into AdapterShared
         // ( on Wasm the gl handle is just a ref so we tell clippy to allow
         // dropping the ref )
-        #[cfg_attr(target_arch = "wasm32", allow(clippy::drop_ref))]
+        #[cfg_attr(target_arch = "wasm32", allow(dropping_references))]
         drop(gl);
 
         Some(crate::ExposedAdapter {
@@ -782,7 +794,6 @@ impl super::Adapter {
                     workarounds,
                     features,
                     shading_language_version,
-                    max_texture_size,
                     next_shader_id: Default::default(),
                     program_cache: Default::default(),
                     es: es_ver.is_some(),
@@ -906,7 +917,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 main_vao,
-                #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
+                #[cfg(all(native, feature = "renderdoc"))]
                 render_doc: Default::default(),
             },
             queue: super::Queue {
@@ -919,9 +930,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 shader_clear_program,
                 shader_clear_program_color_uniform_location,
                 zero_buffer,
-                temp_query_results: Vec::new(),
-                draw_buffer_count: 1,
-                current_index_buffer: None,
+                temp_query_results: Mutex::new(Vec::new()),
+                draw_buffer_count: AtomicU8::new(1),
+                current_index_buffer: Mutex::new(None),
             },
         })
     }
@@ -1007,8 +1018,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 | Tfc::MULTISAMPLE_RESOLVE,
         );
 
-        let texture_float_linear =
-            private_caps_fn(super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR, filterable);
+        let texture_float_linear = feature_fn(wgt::Features::FLOAT32_FILTERABLE, filterable);
 
         match format {
             Tf::R8Unorm => filterable_renderable,
@@ -1032,9 +1042,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rg16Unorm => empty,
             Tf::Rg16Snorm => empty,
             Tf::Rg16Float => filterable | half_float_renderable,
-            Tf::Rgba8Unorm | Tf::Rgba8UnormSrgb => filterable_renderable | storage,
+            Tf::Rgba8Unorm => filterable_renderable | storage,
+            Tf::Rgba8UnormSrgb => filterable_renderable,
             Tf::Bgra8Unorm | Tf::Bgra8UnormSrgb => filterable_renderable,
-            Tf::Rgba8Snorm => filterable,
+            Tf::Rgba8Snorm => filterable | storage,
             Tf::Rgba8Uint => renderable | storage,
             Tf::Rgba8Sint => renderable | storage,
             Tf::Rgb10a2Uint => renderable,
@@ -1057,6 +1068,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Depth32FloatStencil8
             | Tf::Depth24Plus
             | Tf::Depth24PlusStencil8 => depth,
+            Tf::NV12 => empty,
             Tf::Rgb9e5Ufloat => filterable,
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb
@@ -1100,13 +1112,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
         if surface.presentable {
             let mut formats = vec![
                 wgt::TextureFormat::Rgba8Unorm,
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(native)]
                 wgt::TextureFormat::Bgra8Unorm,
             ];
             if surface.supports_srgb() {
                 formats.extend([
                     wgt::TextureFormat::Rgba8UnormSrgb,
-                    #[cfg(not(target_arch = "wasm32"))]
+                    #[cfg(native)]
                     wgt::TextureFormat::Bgra8UnormSrgb,
                 ])
             }
@@ -1121,22 +1133,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Some(crate::SurfaceCapabilities {
                 formats,
                 present_modes: if cfg!(windows) {
-                    vec![wgt::PresentMode::Fifo, wgt::PresentMode::Mailbox]
+                    vec![wgt::PresentMode::Fifo, wgt::PresentMode::Immediate]
                 } else {
                     vec![wgt::PresentMode::Fifo] //TODO
                 },
                 composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
-                swap_chain_sizes: 2..=2,
+                maximum_frame_latency: 2..=2, //TODO, unused currently
                 current_extent: None,
-                extents: wgt::Extent3d {
-                    width: 4,
-                    height: 4,
-                    depth_or_array_layers: 1,
-                }..=wgt::Extent3d {
-                    width: self.shared.max_texture_size,
-                    height: self.shared.max_texture_size,
-                    depth_or_array_layers: 1,
-                },
                 usage: crate::TextureUses::COLOR_TARGET,
             })
         } else {
@@ -1175,17 +1178,9 @@ impl super::AdapterShared {
     }
 }
 
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Sync for super::Adapter {}
-#[cfg(all(
-    target_arch = "wasm32",
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
-))]
+#[cfg(send_sync)]
 unsafe impl Send for super::Adapter {}
 
 #[cfg(test)]

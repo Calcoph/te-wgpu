@@ -26,8 +26,7 @@ impl Resource for WebGpuBuffer {
     }
 
     fn close(self: Rc<Self>) {
-        let instance = &self.0;
-        gfx_select!(self.1 => instance.buffer_drop(self.1, true));
+        gfx_select!(self.1 => self.0.buffer_drop(self.1, true));
     }
 }
 
@@ -106,7 +105,7 @@ pub async fn op_webgpu_buffer_get_map_async(
                     2 => wgpu_core::device::HostMap::Write,
                     _ => unreachable!(),
                 },
-                callback: wgpu_core::resource::BufferMapCallback::from_rust(callback),
+                callback: Some(wgpu_core::resource::BufferMapCallback::from_rust(callback)),
             }
         ))
         .err();
@@ -123,7 +122,7 @@ pub async fn op_webgpu_buffer_get_map_async(
             {
                 let state = state.borrow();
                 let instance = state.borrow::<super::Instance>();
-                gfx_select!(device => instance.device_poll(device, wgpu_types::Maintain::Wait))
+                gfx_select!(device => instance.device_poll(device, wgpu_types::Maintain::wait()))
                     .unwrap();
             }
             tokio::time::sleep(Duration::from_millis(10)).await;

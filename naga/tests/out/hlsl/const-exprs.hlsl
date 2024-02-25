@@ -10,6 +10,8 @@ static const float4 DIV = float4(0.44444445, 0.0, 0.0, 0.0);
 static const int TEXTURE_KIND_REGULAR = 0;
 static const int TEXTURE_KIND_WARP = 1;
 static const int TEXTURE_KIND_SKY = 2;
+static const float2 add_vec = float2(4.0, 5.0);
+static const bool2 compare_vec = bool2(true, false);
 
 void swizzle_of_compose()
 {
@@ -61,6 +63,12 @@ void compose_of_constant()
 
 }
 
+void compose_of_splat()
+{
+    float4 x_1 = float4(2.0, 1.0, 1.0, 1.0);
+
+}
+
 uint map_texture_kind(int texture_kind)
 {
     switch(texture_kind) {
@@ -88,5 +96,6 @@ void main()
     non_constant_initializers();
     splat_of_constant();
     compose_of_constant();
+    compose_of_splat();
     return;
 }

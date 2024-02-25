@@ -6,7 +6,6 @@
 mod belt;
 mod device;
 mod encoder;
-mod indirect;
 mod init;
 
 use std::sync::Arc;
@@ -17,14 +16,13 @@ use std::{
 };
 
 pub use belt::StagingBelt;
-pub use device::{BufferInitDescriptor, DeviceExt};
+pub use device::{BufferInitDescriptor, DeviceExt, TextureDataOrder};
 pub use encoder::RenderEncoder;
-pub use indirect::*;
 pub use init::*;
 use wgc::command::{CommandEncoderError, CopyError};
 use wgc::device::DeviceError;
 use wgc::resource::{BufferAccessError, CreateBufferError};
-pub use wgt::math::*;
+pub use wgt::{math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs};
 
 /// Treat the given byte slice as a SPIR-V module.
 ///
@@ -37,7 +35,7 @@ pub use wgt::math::*;
 /// - Input is empty
 /// - SPIR-V magic number is missing from beginning of stream
 #[cfg(feature = "spirv")]
-pub fn make_spirv(data: &[u8]) -> super::ShaderSource {
+pub fn make_spirv(data: &[u8]) -> super::ShaderSource<'_> {
     super::ShaderSource::SpirV(make_spirv_raw(data))
 }
 
@@ -45,7 +43,7 @@ pub fn make_spirv(data: &[u8]) -> super::ShaderSource {
 /// Returns raw slice instead of ShaderSource.
 ///
 /// [`Device::create_shader_module_spirv`]: crate::Device::create_shader_module_spirv
-pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
+pub fn make_spirv_raw(data: &[u8]) -> Cow<'_, [u32]> {
     const MAGIC_NUMBER: u32 = 0x0723_0203;
     assert_eq!(
         data.len() % size_of::<u32>(),
@@ -54,7 +52,7 @@ pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
     );
     assert_ne!(data.len(), 0, "data size must be larger than zero");
 
-    //If the data happens to be aligned, directly use the byte array,
+    // If the data happens to be aligned, directly use the byte array,
     // otherwise copy the byte array in an owned vector and use that instead.
     let mut words = if data.as_ptr().align_offset(align_of::<u32>()) == 0 {
         let (pre, words, post) = unsafe { data.align_to::<u32>() };
@@ -135,7 +133,7 @@ impl DownloadBuffer {
     pub fn read_buffer(
         device: &super::Device,
         queue: &super::Queue,
-        buffer: &super::BufferSlice,
+        buffer: &super::BufferSlice<'_>,
         callback: impl FnOnce(Result<Self, super::BufferAsyncError>) + Send + 'static,
     ) -> Result<(), ReadBufferError> {
         let size = match buffer.size {

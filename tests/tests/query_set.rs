@@ -1,12 +1,8 @@
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static DROP_FAILED_TIMESTAMP_QUERY_SET: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            // https://github.com/gfx-rs/wgpu/issues/4139
-            .expect_fail(FailureCase::always()),
-    )
+    .parameters(TestParameters::default())
     .run_sync(|ctx| {
         // Creating this query set should fail, since we didn't include
         // TIMESTAMP_QUERY in our required features.

@@ -23,7 +23,7 @@ const BUNNY_SIZE: f32 = 0.15 * 256.0;
 const GRAVITY: f32 = -9.8 * 100.0;
 const MAX_VELOCITY: f32 = 750.0;
 const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
-const DESIRED_FRAMES: u32 = 3;
+const DESIRED_MAX_LATENCY: u32 = 2;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -100,7 +100,7 @@ impl<A: hal::Api> Example<A> {
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let mut surface = {
+        let surface = {
             let raw_window_handle = window.window_handle()?.as_raw();
             let raw_display_handle = window.display_handle()?.as_raw();
 
@@ -119,11 +119,12 @@ impl<A: hal::Api> Example<A> {
             let exposed = adapters.swap_remove(0);
             (exposed.adapter, exposed.capabilities)
         };
+
         let surface_caps = unsafe { adapter.surface_capabilities(&surface) }
             .ok_or("failed to get surface capabilities")?;
         log::info!("Surface caps: {:#?}", surface_caps);
 
-        let hal::OpenDevice { device, mut queue } = unsafe {
+        let hal::OpenDevice { device, queue } = unsafe {
             adapter
                 .open(wgt::Features::empty(), &wgt::Limits::default())
                 .unwrap()
@@ -131,9 +132,9 @@ impl<A: hal::Api> Example<A> {
 
         let window_size: (u32, u32) = window.inner_size().into();
         let surface_config = hal::SurfaceConfiguration {
-            swap_chain_size: DESIRED_FRAMES.clamp(
-                *surface_caps.swap_chain_sizes.start(),
-                *surface_caps.swap_chain_sizes.end(),
+            maximum_frame_latency: DESIRED_MAX_LATENCY.clamp(
+                *surface_caps.maximum_frame_latency.start(),
+                *surface_caps.maximum_frame_latency.end(),
             ),
             present_mode: wgt::PresentMode::Fifo,
             composite_alpha_mode: wgt::CompositeAlphaMode::Opaque,
@@ -440,6 +441,7 @@ impl<A: hal::Api> Example<A> {
                 buffers: &[global_buffer_binding],
                 samplers: &[&sampler],
                 textures: &[texture_binding],
+                acceleration_structures: &[],
                 entries: &[
                     hal::BindGroupEntry {
                         binding: 0,
@@ -473,6 +475,7 @@ impl<A: hal::Api> Example<A> {
                 buffers: &[local_buffer_binding],
                 samplers: &[],
                 textures: &[],
+                acceleration_structures: &[],
                 entries: &[hal::BindGroupEntry {
                     binding: 0,
                     resource_index: 0,
@@ -727,13 +730,13 @@ impl<A: hal::Api> Example<A> {
                 None
             };
             self.queue.submit(&[&cmd_buf], fence_param).unwrap();
-            self.queue.present(&mut self.surface, surface_tex).unwrap();
+            self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);
         };
 
         if do_fence {
-            log::info!("Context switch from {}", self.context_index);
+            log::debug!("Context switch from {}", self.context_index);
             let old_fence_value = ctx.fence_value;
             if self.contexts.len() == 1 {
                 let hal_desc = hal::CommandEncoderDescriptor {

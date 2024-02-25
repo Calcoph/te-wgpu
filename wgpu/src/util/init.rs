@@ -2,12 +2,13 @@ use wgt::{Backends, PowerPreference, RequestAdapterOptions};
 
 use crate::{Adapter, Instance, Surface};
 
-#[cfg(any(not(target_arch = "wasm32"), feature = "wgc"))]
+#[cfg(wgpu_core)]
+#[cfg_attr(docsrs, doc(cfg(all())))]
 pub use wgc::instance::parse_backends_from_comma_list;
-/// Always returns WEBGPU on wasm over webgpu.
-#[cfg(all(target_arch = "wasm32", not(feature = "wgc")))]
+/// Just return ALL, if wgpu_core is not enabled.
+#[cfg(not(wgpu_core))]
 pub fn parse_backends_from_comma_list(_string: &str) -> Backends {
-    Backends::BROWSER_WEBGPU
+    Backends::all()
 }
 
 /// Get a set of backend bits from the environment variable WGPU_BACKEND.
@@ -37,10 +38,10 @@ pub fn power_preference_from_env() -> Option<PowerPreference> {
 }
 
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(native)]
 pub fn initialize_adapter_from_env(
     instance: &Instance,
-    compatible_surface: Option<&Surface>,
+    compatible_surface: Option<&Surface<'_>>,
 ) -> Option<Adapter> {
     let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
         .as_deref()
@@ -69,10 +70,10 @@ pub fn initialize_adapter_from_env(
 }
 
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable.
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(native))]
 pub fn initialize_adapter_from_env(
     _instance: &Instance,
-    _compatible_surface: Option<&Surface>,
+    _compatible_surface: Option<&Surface<'_>>,
 ) -> Option<Adapter> {
     None
 }
@@ -80,7 +81,7 @@ pub fn initialize_adapter_from_env(
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable and if it doesn't exist fall back on a default adapter.
 pub async fn initialize_adapter_from_env_or_default(
     instance: &Instance,
-    compatible_surface: Option<&Surface>,
+    compatible_surface: Option<&Surface<'_>>,
 ) -> Option<Adapter> {
     match initialize_adapter_from_env(instance, compatible_surface) {
         Some(a) => Some(a),

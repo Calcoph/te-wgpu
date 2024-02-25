@@ -3,7 +3,7 @@ use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameter
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::always()))
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         // Create a bind group uisng a layout from another device. This should be a validation
         // error but currently crashes.
         let (device2, _) =
@@ -23,8 +23,45 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
             });
         }
 
-        ctx.device.poll(wgpu::Maintain::Poll);
+        ctx.async_poll(wgpu::Maintain::Poll)
+            .await
+            .panic_on_timeout();
     });
+
+#[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
+#[test]
+fn device_lifetime_check() {
+    use pollster::FutureExt as _;
+
+    env_logger::init();
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
+        dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
+        gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
+        flags: wgpu::InstanceFlags::debugging().with_env(),
+    });
+
+    let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
+        .block_on()
+        .expect("failed to create adapter");
+
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor::default(), None)
+        .block_on()
+        .expect("failed to create device");
+
+    instance.poll_all(false);
+
+    let pre_report = instance.generate_report().unwrap().unwrap();
+
+    drop(queue);
+    drop(device);
+    let post_report = instance.generate_report().unwrap().unwrap();
+    assert_ne!(
+        pre_report, post_report,
+        "Queue and Device has not been dropped as expected"
+    );
+}
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
@@ -38,14 +75,14 @@ static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration =
 async fn request_device_error_message() {
     // Not using initialize_test() because that doesn't let us catch the error
     // nor .await anything
-    let (adapter, _surface_guard) = wgpu_test::initialize_adapter(0).await;
+    let (_instance, adapter, _surface_guard) = wgpu_test::initialize_adapter(0).await;
 
     let device_error = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
                 // Force a failure by requesting absurd limits.
-                features: wgpu::Features::all(),
-                limits: wgpu::Limits {
+                required_features: wgpu::Features::all(),
+                required_limits: wgpu::Limits {
                     max_texture_dimension_1d: u32::MAX,
                     max_texture_dimension_2d: u32::MAX,
                     max_texture_dimension_3d: u32::MAX,
@@ -88,11 +125,7 @@ async fn request_device_error_message() {
 // The DX12 issue may be related to https://github.com/gfx-rs/wgpu/issues/3193.
 #[gpu_test]
 static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::CLEAR_TEXTURE)
-            .expect_fail(FailureCase::backend(wgpu::Backends::DX12)),
-    )
+    .parameters(TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE))
     .run_sync(|ctx| {
         // Create some resources on the device that we will attempt to use *after* losing
         // the device.
@@ -455,7 +488,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
 #[gpu_test]
 static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         // This test checks that when device.destroy is called, the provided
         // DeviceLostClosure is called with reason DeviceLostReason::Destroyed.
         let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
@@ -476,7 +509,43 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
 
         // Make sure the device queues are empty, which ensures that the closure
         // has been called.
-        assert!(ctx.device.poll(wgpu::Maintain::Wait));
+        assert!(ctx
+            .async_poll(wgpu::Maintain::wait())
+            .await
+            .is_queue_empty());
+
+        assert!(
+            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            "Device lost callback should have been called."
+        );
+    });
+
+#[gpu_test]
+static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
+    .run_sync(|ctx| {
+        // This test checks that when the device is dropped (such as in a GC),
+        // the provided DeviceLostClosure is called with reason DeviceLostReason::Unknown.
+        // Fails on webgl because webgl doesn't implement drop.
+        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
+
+        // Set a LoseDeviceCallback on the device.
+        let was_called_clone = was_called.clone();
+        let callback = Box::new(move |reason, message| {
+            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert!(
+                matches!(reason, wgt::DeviceLostReason::Unknown),
+                "Device lost info reason should match DeviceLostReason::Unknown."
+            );
+            assert!(
+                message == "Device dropped.",
+                "Device lost info message should be \"Device dropped.\"."
+            );
+        });
+        ctx.device.set_device_lost_callback(callback);
+
+        // Drop the device.
+        drop(ctx.device);
 
         assert!(
             was_called.load(std::sync::atomic::Ordering::SeqCst),

@@ -1,13 +1,32 @@
 use wgpu::{Adapter, Device, Instance, Queue};
 use wgt::{Backends, Features, Limits};
 
+/// Initialize the logger for the test runner.
+pub fn init_logger() {
+    // We don't actually care if it fails
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = env_logger::try_init();
+    #[cfg(target_arch = "wasm32")]
+    let _ = console_log::init_with_level(log::Level::Info);
+}
+
 /// Initialize a wgpu instance with the options from the environment.
 pub fn initialize_instance() -> Instance {
     // We ignore `WGPU_BACKEND` for now, merely using test filtering to only run a single backend's tests.
     //
     // We can potentially work support back into the test runner in the future, but as the adapters are matched up
     // based on adapter index, removing some backends messes up the indexes in annoying ways.
-    let backends = Backends::all();
+    //
+    // WORKAROUND for https://github.com/rust-lang/cargo/issues/7160:
+    // `--no-default-features` is not passed through correctly to the test runner.
+    // We use it whenever we want to explicitly run with webgl instead of webgpu.
+    // To "disable" webgpu regardless, we do this by removing the webgpu backend whenever we see
+    // the webgl feature.
+    let backends = if cfg!(feature = "webgl") {
+        Backends::all() - Backends::BROWSER_WEBGPU
+    } else {
+        Backends::all()
+    };
     let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
     let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
     Instance::new(wgpu::InstanceDescriptor {
@@ -19,7 +38,7 @@ pub fn initialize_instance() -> Instance {
 }
 
 /// Initialize a wgpu adapter, taking the `n`th adapter from the instance.
-pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<SurfaceGuard>) {
+pub async fn initialize_adapter(adapter_index: usize) -> (Instance, Adapter, Option<SurfaceGuard>) {
     let instance = initialize_instance();
     #[allow(unused_variables)]
     let _surface: wgpu::Surface;
@@ -42,7 +61,7 @@ pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<Surfac
         let canvas = initialize_html_canvas();
 
         _surface = instance
-            .create_surface_from_canvas(canvas.clone())
+            .create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))
             .expect("could not create surface from canvas");
 
         surface_guard = Some(SurfaceGuard { canvas });
@@ -63,7 +82,7 @@ pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<Surfac
 
     log::info!("Testing using adapter: {:#?}", adapter.get_info());
 
-    (adapter, surface_guard)
+    (instance, adapter, surface_guard)
 }
 
 /// Initialize a wgpu device from a given adapter.
@@ -76,8 +95,8 @@ pub async fn initialize_device(
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features,
-                limits,
+                required_features: features,
+                required_limits: limits,
             },
             None,
         )

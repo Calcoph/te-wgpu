@@ -22,10 +22,9 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 vendor: Some(5140),
                 adapter: Some("Microsoft Basic Render Driver"),
                 ..FailureCase::default()
-            })
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+            }),
     )
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         let bgl = ctx
             .device
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -135,7 +134,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
         ctx.queue.submit(Some(encoder.finish().unwrap()));
 
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ()).unwrap();
-        ctx.device.poll(Maintain::Wait);
+        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();
 

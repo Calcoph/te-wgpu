@@ -130,7 +130,7 @@ impl StagingBelt {
         offset: BufferAddress,
         size: BufferSize,
         device: &Device,
-    ) -> Result<BufferViewMut, WriteBufferError> {
+    ) -> Result<BufferViewMut<'_>, WriteBufferError> {
         let mut chunk = if let Some(index) = self
             .active_chunks
             .iter()
