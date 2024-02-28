@@ -920,6 +920,7 @@ pub struct RenderPass<'a> {
     id: ObjectId,
     data: Box<Data>,
     parent: &'a mut CommandEncoder,
+    encoded: bool
 }
 
 /// In-progress recording of a compute pass.
@@ -3310,6 +3311,7 @@ impl CommandEncoder {
             id,
             data,
             parent: self,
+            encoded: false,
         }
     }
 
@@ -4127,19 +4129,33 @@ impl<'a> RenderPass<'a> {
     }
 }
 
+impl<'a> RenderPass<'a> {
+    /// This function does what drop() would do, but gives the caller the chance to error handle
+    pub fn encode(mut self) -> Result<(), core::command::RenderPassError> {
+        self.encoded = true;
+        self.encode_inner()
+    }
+
+    fn encode_inner(&mut self) -> Result<(), core::command::RenderPassError> {
+        let parent_id = self.parent.id.as_ref().unwrap();
+        self.parent
+            .context
+            .command_encoder_end_render_pass(
+                parent_id,
+                self.parent.data.as_ref(),
+                &mut self.id,
+                self.data.as_mut(),
+            )
+    }
+}
+
 impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            let parent_id = self.parent.id.as_ref().unwrap();
-            self.parent
-                .context
-                .command_encoder_end_render_pass(
-                    parent_id,
-                    self.parent.data.as_ref(),
-                    &mut self.id,
-                    self.data.as_mut(),
-                )
-                .unwrap()
+            if !self.encoded {
+                self.encoded = true;
+                self.encode_inner().expect("Error happening while dropping RenderPass. Use encode() to handle it instead of panicing")
+            }
         }
     }
 }
