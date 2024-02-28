@@ -1,3 +1,21 @@
+# Te-WGPU
+This is a fork of the [wgpu](https://github.com/gfx-rs/wgpu) library. The API is **not** compatible.
+
+## Why use this fork?
+The original wgpu uses its own error handling system based on callbacks, this fork reworked its API so that functions that can cause errors return a `Result<T, E>` Instead.
+
+## Why not use this fork?
+Maintainance and testing are at a minimum (only), so it should not be used for production at the moment.
+
+Of course, don't use this fork if you like wgpu's error handling system.
+
+If you need to use a library that uses the original wgpu, you won't be able to use this fork unless you (or anyone else) make it compatible with te-wgpu.
+
+List of libraries compatible with wgpu:
+ * <u>imgui-wgpu</u>: Have to use [this fork](https://github.com/Calcoph/imgui-wgpu-rs) (branch tewgpu)
+
+**Below is the README of the original wgpu**
+
 <img align="right" width="25%" src="logo.png">
 
 # wgpu
@@ -82,11 +100,11 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 | OpenGL | :ok: (GL 3.3+)     | :ok: (GL ES 3.0+)  | :triangular_ruler: | :ok: (WebGL2)      |
 | WebGPU |                    |                    |                    | :white_check_mark: |
 
-:white_check_mark: = First Class Support  
-:ok: = Downlevel/Best Effort Support  
-:triangular_ruler: = Requires the [ANGLE](#angle) translation layer (GL ES 3.0 only)  
-:volcano: = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
-:hammer_and_wrench: = Unsupported, though open to contributions  
+:white_check_mark: = First Class Support
+:ok: = Downlevel/Best Effort Support
+:triangular_ruler: = Requires the [ANGLE](#angle) translation layer (GL ES 3.0 only)
+:volcano: = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer
+:hammer_and_wrench: = Unsupported, though open to contributions
 
 ### Shader Support
 
