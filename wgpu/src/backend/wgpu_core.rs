@@ -22,13 +22,9 @@ use std::{
     slice,
 };
 use wgc::{
-    command::{bundle_ffi::*, compute_commands::*, render_commands::*},
-    device::DeviceLostClosure,
-    id::{CommandEncoderId, TextureViewId},
+    binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError}, command::{bundle_ffi::*, compute_commands::*, render_commands::*, CommandEncoderError}, device::{queue::QueueWriteError, DeviceError, DeviceLostClosure}, id::{CommandEncoderId, TextureViewId}, pipeline::{CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError}, resource::{BufferAccessResult, CreateBufferError, CreateQuerySetError, CreateSamplerError, CreateTextureError, CreateTextureViewError}
 };
 use wgt::WasmNotSendSync;
-
-const LABEL: &str = "label";
 
 pub struct ContextWgpuCore(wgc::global::Global);
 
@@ -231,80 +227,6 @@ impl ContextWgpuCore {
         self.0.generate_report()
     }
 
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
-    pub unsafe fn create_surface_from_core_animation_layer(
-        &self,
-        layer: *mut std::ffi::c_void,
-    ) -> Surface {
-        let id = unsafe { self.0.instance_create_surface_metal(layer, ()) };
-        Surface {
-            id,
-            configured_device: Mutex::default(),
-        }
-    }
-
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-    pub fn instance_create_surface_from_canvas(
-        &self,
-        canvas: web_sys::HtmlCanvasElement,
-    ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self.0.create_surface_webgl_canvas(canvas, ())?;
-        Ok(Surface {
-            id,
-            configured_device: Mutex::default(),
-        })
-    }
-
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-    pub fn instance_create_surface_from_offscreen_canvas(
-        &self,
-        canvas: web_sys::OffscreenCanvas,
-    ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self.0.create_surface_webgl_offscreen_canvas(canvas, ())?;
-        Ok(Surface {
-            id,
-            configured_device: Mutex::default(),
-        })
-    }
-
-    #[cfg(target_os = "windows")]
-    pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
-        let id = unsafe { self.0.instance_create_surface_from_visual(visual, ()) };
-        Surface {
-            id,
-            configured_device: Mutex::default(),
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    pub unsafe fn create_surface_from_surface_handle(
-        &self,
-        surface_handle: *mut std::ffi::c_void,
-    ) -> Surface {
-        let id = unsafe {
-            self.0
-                .instance_create_surface_from_surface_handle(surface_handle, ())
-        };
-        Surface {
-            id,
-            configured_device: Mutex::default(),
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    pub unsafe fn create_surface_from_swap_chain_panel(
-        &self,
-        swap_chain_panel: *mut std::ffi::c_void,
-    ) -> Surface {
-        let id = unsafe {
-            self.0
-                .instance_create_surface_from_swap_chain_panel(swap_chain_panel, ())
-        };
-        Surface {
-            id,
-            configured_device: Mutex::default(),
-        }
-    }
     #[track_caller]
     fn handle_error_fatal(
         &self,
@@ -1265,10 +1187,6 @@ impl crate::Context for ContextWgpuCore {
             Ok(encoder) => (Unused, encoder),
             Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
         }
-    }
-    #[doc(hidden)]
-    fn device_make_invalid(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
-        wgc::gfx_select!(device => self.0.device_make_invalid(*device));
     }
     #[cfg_attr(not(any(native, Emscripten)), allow(unused))]
     fn device_drop(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {

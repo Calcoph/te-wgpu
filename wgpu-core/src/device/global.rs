@@ -27,7 +27,7 @@ use wgt::{BufferAddress, TextureFormat};
 use std::{
     borrow::Cow,
     iter, ptr,
-    sync::atomic::Ordering,
+    sync::{atomic::Ordering, Arc},
 };
 
 use super::{ImplicitPipelineIds, InvalidDevice, UserClosures};
@@ -2113,15 +2113,6 @@ impl Global {
             }
             unsafe { device.raw().stop_capture() };
         }
-    }
-
-    // This is a test-only function to force the device into an
-    // invalid state by inserting an error value in its place in
-    // the registry.
-    pub fn device_make_invalid<A: HalApi>(&self, device_id: DeviceId) {
-        let hub = A::hub(self);
-        hub.devices
-            .force_replace_with_error(device_id, "Made invalid.");
     }
 
     pub fn device_drop<A: HalApi>(&self, device_id: DeviceId) {

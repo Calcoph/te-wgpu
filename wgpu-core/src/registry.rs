@@ -152,7 +152,7 @@ impl<T: Resource> Registry<T> {
         value.as_info_mut().set_id(id);
         storage.force_replace(id, value)
     }
-    pub(crate) fn unregister(&self, id: I) -> Option<Arc<T>> {
+    pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<Arc<T>> {
         let value = self.storage.write().remove(id);
         // This needs to happen *after* removing it from the storage, to maintain the
         // invariant that `self.identity` only contains ids which are actually available
