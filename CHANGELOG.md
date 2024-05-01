@@ -61,6 +61,29 @@ Bottom level categories:
         - `tan`
         - `tanh`
 
+## v0.19.3 (2024-03-01)
+
+### Major Changes
+
+#### Vendored WebGPU Bindings from `web_sys` 
+
+**`--cfg=web_sys_unstable_apis` is no longer needed in your `RUSTFLAGS` to compile for WebGPU!!!**
+
+While WebGPU's javascript api is stable in the browsers, the `web_sys` bindings for WebGPU are still improving. As such they are hidden behind the special cfg `--cfg=web_sys_unstable_apis` and are not available by default. Everyone who wanted to use our WebGPU backend needed to enable this cfg in their `RUSTFLAGS`. This was very inconvenient and made it hard to use WebGPU, especially when WebGPU is enabled by default. Additionally, the unstable APIs don't adhere to semver, so there were repeated breakages.
+
+To combat this problem we have decided to vendor the `web_sys` bindings for WebGPU within the crate. Notably we are not forking the bindings, merely vendoring, so any improvements we make to the bindings will be contributed directly to upstream `web_sys`.
+
+By @cwfitzgerald in [#5325](https://github.com/gfx-rs/wgpu/pull/5325).
+
+### Bug Fixes
+
+#### General
+
+- Fix an issue where command encoders weren't properly freed if an error occurred during command encoding. By @ErichDonGubler in [#5251](https://github.com/gfx-rs/wgpu/pull/5251).
+
+#### Android
+- Fix linking error when targeting android without `winit`. By @ashdnazg in [#5326](https://github.com/gfx-rs/wgpu/pull/5326).
+
 ## v0.19.2 (2024-02-29)
 
 ### Added/New Features
