@@ -2,6 +2,7 @@ use super::conv;
 
 use arrayvec::ArrayVec;
 use ash::{extensions::khr, vk};
+use naga::back::spv::ZeroInitializeWorkgroupMemoryMode;
 use parking_lot::Mutex;
 
 use std::{
@@ -627,8 +628,16 @@ impl super::Device {
         let images =
             unsafe { functor.get_swapchain_images(raw) }.map_err(crate::DeviceError::from)?;
 
-        let vk_info = vk::FenceCreateInfo::builder().build();
-        let fence = unsafe { self.shared.raw.create_fence(&vk_info, None) }
+        // NOTE: It's important that we define at least images.len() + 1 wait
+        // semaphores, since we prospectively need to provide the call to
+        // acquire the next image with an unsignaled semaphore.
+        let surface_semaphores = (0..images.len() + 1)
+            .map(|_| unsafe {
+                self.shared
+                    .raw
+                    .create_semaphore(&vk::SemaphoreCreateInfo::builder(), None)
+            })
+            .collect::<Result<Vec<_>, _>>()
             .map_err(crate::DeviceError::from)?;
 
         Ok(super::Swapchain {
@@ -636,10 +645,11 @@ impl super::Device {
             raw_flags,
             functor,
             device: Arc::clone(&self.shared),
-            fence,
             images,
             config: config.clone(),
             view_formats: wgt_view_formats,
+            surface_semaphores,
+            next_surface_index: 0,
         })
     }
 
@@ -728,7 +738,8 @@ impl super::Device {
                 };
                 let needs_temp_options = !runtime_checks
                     || !binding_map.is_empty()
-                    || naga_shader.debug_source.is_some();
+                    || naga_shader.debug_source.is_some()
+                    || !stage.zero_initialize_workgroup_memory;
                 let mut temp_options;
                 let options = if needs_temp_options {
                     temp_options = self.naga_options.clone();
@@ -751,27 +762,40 @@ impl super::Device {
                             file_name: debug.file_name.as_ref().as_ref(),
                         })
                     }
+                    if !stage.zero_initialize_workgroup_memory {
+                        temp_options.zero_initialize_workgroup_memory =
+                            ZeroInitializeWorkgroupMemoryMode::None;
+                    }
 
                     &temp_options
                 } else {
                     &self.naga_options
                 };
+
+                let (module, info) = naga::back::pipeline_constants::process_overrides(
+                    &naga_shader.module,
+                    &naga_shader.info,
+                    stage.constants,
+                )
+                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
+
                 let spv = {
                     profiling::scope!("naga::spv::write_vec");
-                    naga::back::spv::write_vec(
-                        &naga_shader.module,
-                        &naga_shader.info,
-                        options,
-                        Some(&pipeline_options),
-                    )
+                    naga::back::spv::write_vec(&module, &info, options, Some(&pipeline_options))
                 }
                 .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
                 self.create_shader_module_impl(&spv)?
             }
         };
 
+        let mut flags = vk::PipelineShaderStageCreateFlags::empty();
+        if self.shared.private_caps.subgroup_size_control {
+            flags |= vk::PipelineShaderStageCreateFlags::ALLOW_VARYING_SUBGROUP_SIZE
+        }
+
         let entry_point = CString::new(stage.entry_point).unwrap();
         let create_info = vk::PipelineShaderStageCreateInfo::builder()
+            .flags(flags)
             .stage(conv::map_shader_stage(stage_flags))
             .module(vk_module)
             .name(&entry_point)
@@ -821,7 +845,9 @@ impl super::Device {
     }
 }
 
-impl crate::Device<super::Api> for super::Device {
+impl crate::Device for super::Device {
+    type A = super::Api;
+
     unsafe fn exit(self, queue: super::Queue) {
         unsafe { self.mem_allocator.into_inner().cleanup(&*self.shared) };
         unsafe { self.desc_allocator.into_inner().cleanup(&*self.shared) };
@@ -1576,6 +1602,7 @@ impl crate::Device<super::Api> for super::Device {
                     .shared
                     .workarounds
                     .contains(super::Workarounds::SEPARATE_ENTRY_POINTS)
+                    || !naga_shader.module.overrides.is_empty()
                 {
                     return Ok(super::ShaderModule::Intermediate {
                         naga_shader,
@@ -2140,7 +2167,7 @@ impl crate::Device<super::Api> for super::Device {
                         .geometry(vk::AccelerationStructureGeometryDataKHR {
                             triangles: *triangle_data,
                         })
-                        .flags(conv::map_acceleration_structure_geomety_flags(
+                        .flags(conv::map_acceleration_structure_geometry_flags(
                             triangles.flags,
                         ));
 
@@ -2162,7 +2189,7 @@ impl crate::Device<super::Api> for super::Device {
                     let geometry = vk::AccelerationStructureGeometryKHR::builder()
                         .geometry_type(vk::GeometryTypeKHR::AABBS)
                         .geometry(vk::AccelerationStructureGeometryDataKHR { aabbs: *aabbs_data })
-                        .flags(conv::map_acceleration_structure_geomety_flags(aabb.flags));
+                        .flags(conv::map_acceleration_structure_geometry_flags(aabb.flags));
 
                     geometries.push(*geometry);
                     primitive_counts.push(aabb.count);

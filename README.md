@@ -137,8 +137,9 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 ### MSRV policy
 
 Due to complex dependants, we have two MSRV policies:
- - `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.70**.
- - The rest of the workspace has an MSRV of **1.71**.
+
+- `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.74**.
+- The rest of the workspace has an MSRV of **1.76**.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
 This version can only be upgraded in breaking releases, though we release a breaking version every three months.
@@ -216,7 +217,7 @@ To run a given set of tests:
 
 ```
 # Must be inside the `cts` folder we just checked out, else this will fail
-cargo run --manifest-path ../Cargo.toml --bin cts_runner -- ./tools/run_deno --verbose "<test string>"
+cargo run --manifest-path ../Cargo.toml -p cts_runner --bin cts_runner -- ./tools/run_deno --verbose "<test string>"
 ```
 
 To find the full list of tests, go to the [online cts viewer](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).

@@ -101,17 +101,25 @@ pub struct DebugUtilsCreateInfo {
     callback_data: Box<DebugUtilsMessengerUserData>,
 }
 
+#[derive(Debug)]
+/// The properties related to the validation layer needed for the
+/// DebugUtilsMessenger for their workarounds
+struct ValidationLayerProperties {
+    /// Validation layer description, from `vk::LayerProperties`.
+    layer_description: std::ffi::CString,
+
+    /// Validation layer specification version, from `vk::LayerProperties`.
+    layer_spec_version: u32,
+}
+
 /// User data needed by `instance::debug_utils_messenger_callback`.
 ///
 /// When we create the [`vk::DebugUtilsMessengerEXT`], the `pUserData`
 /// pointer refers to one of these values.
 #[derive(Debug)]
 pub struct DebugUtilsMessengerUserData {
-    /// Validation layer description, from `vk::LayerProperties`.
-    validation_layer_description: std::ffi::CString,
-
-    /// Validation layer specification version, from `vk::LayerProperties`.
-    validation_layer_spec_version: u32,
+    /// The properties related to the validation layer, if present
+    validation_layer_properties: Option<ValidationLayerProperties>,
 
     /// If the OBS layer is present. OBS never increments the version of their layer,
     /// so there's no reason to have the version.
@@ -146,10 +154,14 @@ struct Swapchain {
     raw_flags: vk::SwapchainCreateFlagsKHR,
     functor: khr::Swapchain,
     device: Arc<DeviceShared>,
-    fence: vk::Fence,
     images: Vec<vk::Image>,
     config: crate::SurfaceConfiguration,
     view_formats: Vec<wgt::TextureFormat>,
+    /// One wait semaphore per swapchain image. This will be associated with the
+    /// surface texture, and later collected during submission.
+    surface_semaphores: Vec<vk::Semaphore>,
+    /// Current semaphore index to use when acquiring a surface.
+    next_surface_index: usize,
 }
 
 pub struct Surface {
@@ -163,6 +175,7 @@ pub struct Surface {
 pub struct SurfaceTexture {
     index: u32,
     texture: Texture,
+    wait_semaphore: vk::Semaphore,
 }
 
 impl Borrow<Texture> for SurfaceTexture {
@@ -176,7 +189,7 @@ pub struct Adapter {
     instance: Arc<InstanceShared>,
     //queue_families: Vec<vk::QueueFamilyProperties>,
     known_memory_flags: vk::MemoryPropertyFlags,
-    phd_capabilities: adapter::PhysicalDeviceCapabilities,
+    phd_capabilities: adapter::PhysicalDeviceProperties,
     //phd_features: adapter::PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
@@ -225,6 +238,7 @@ struct PrivateCapabilities {
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
+    subgroup_size_control: bool,
 }
 
 bitflags::bitflags!(
@@ -400,6 +414,15 @@ pub struct TextureView {
     attachment: FramebufferAttachment,
 }
 
+impl TextureView {
+    /// # Safety
+    ///
+    /// - The image view handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::ImageView {
+        self.raw
+    }
+}
+
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
@@ -425,6 +448,7 @@ pub struct BindGroup {
     set: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
 }
 
+/// Miscellaneous allocation recycling pool for `CommandAllocator`.
 #[derive(Default)]
 struct Temp {
     marker: Vec<u8>,
@@ -454,11 +478,31 @@ impl Temp {
 pub struct CommandEncoder {
     raw: vk::CommandPool,
     device: Arc<DeviceShared>,
+
+    /// The current command buffer, if `self` is in the ["recording"]
+    /// state.
+    ///
+    /// ["recording"]: crate::CommandEncoder
+    ///
+    /// If non-`null`, the buffer is in the Vulkan "recording" state.
     active: vk::CommandBuffer,
+
+    /// What kind of pass we are currently within: compute or render.
     bind_point: vk::PipelineBindPoint,
+
+    /// Allocation recycling pool for this encoder.
     temp: Temp,
+
+    /// A pool of available command buffers.
+    ///
+    /// These are all in the Vulkan "initial" state.
     free: Vec<vk::CommandBuffer>,
+
+    /// A pool of discarded command buffers.
+    ///
+    /// These could be in any Vulkan state except "pending".
     discarded: Vec<vk::CommandBuffer>,
+
     /// If this is true, the active renderpass enabled a debug span,
     /// and needs to be disabled on renderpass close.
     rpass_debug_marker_active: bool,
@@ -466,6 +510,15 @@ pub struct CommandEncoder {
     /// If set, the end of the next render/compute pass will write a timestamp at
     /// the given pool & location.
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
+}
+
+impl CommandEncoder {
+    /// # Safety
+    ///
+    /// - The command buffer handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::CommandBuffer {
+        self.active
+    }
 }
 
 impl fmt::Debug for CommandEncoder {
@@ -506,9 +559,47 @@ pub struct QuerySet {
     raw: vk::QueryPool,
 }
 
+/// The [`Api::Fence`] type for [`vulkan::Api`].
+///
+/// This is an `enum` because there are two possible implementations of
+/// `wgpu-hal` fences on Vulkan: Vulkan fences, which work on any version of
+/// Vulkan, and Vulkan timeline semaphores, which are easier and cheaper but
+/// require non-1.0 features.
+///
+/// [`Device::create_fence`] returns a [`TimelineSemaphore`] if
+/// [`VK_KHR_timeline_semaphore`] is available and enabled, and a [`FencePool`]
+/// otherwise.
+///
+/// [`Api::Fence`]: crate::Api::Fence
+/// [`vulkan::Api`]: Api
+/// [`Device::create_fence`]: crate::Device::create_fence
+/// [`TimelineSemaphore`]: Fence::TimelineSemaphore
+/// [`VK_KHR_timeline_semaphore`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VK_KHR_timeline_semaphore
+/// [`FencePool`]: Fence::FencePool
 #[derive(Debug)]
 pub enum Fence {
+    /// A Vulkan [timeline semaphore].
+    ///
+    /// These are simpler to use than Vulkan fences, since timeline semaphores
+    /// work exactly the way [`wpgu_hal::Api::Fence`] is specified to work.
+    ///
+    /// [timeline semaphore]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#synchronization-semaphores
+    /// [`wpgu_hal::Api::Fence`]: crate::Api::Fence
     TimelineSemaphore(vk::Semaphore),
+
+    /// A collection of Vulkan [fence]s, each associated with a [`FenceValue`].
+    ///
+    /// The effective [`FenceValue`] of this variant is the greater of
+    /// `last_completed` and the maximum value associated with a signalled fence
+    /// in `active`.
+    ///
+    /// Fences are available in all versions of Vulkan, but since they only have
+    /// two states, "signaled" and "unsignaled", we need to use a separate fence
+    /// for each queue submission we might want to wait for, and remember which
+    /// [`FenceValue`] each one represents.
+    ///
+    /// [fence]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#synchronization-fences
+    /// [`FenceValue`]: crate::FenceValue
     FencePool {
         last_completed: crate::FenceValue,
         /// The pending fence values have to be ascending.
@@ -518,21 +609,32 @@ pub enum Fence {
 }
 
 impl Fence {
+    /// Return the highest [`FenceValue`] among the signalled fences in `active`.
+    ///
+    /// As an optimization, assume that we already know that the fence has
+    /// reached `last_completed`, and don't bother checking fences whose values
+    /// are less than that: those fences remain in the `active` array only
+    /// because we haven't called `maintain` yet to clean them up.
+    ///
+    /// [`FenceValue`]: crate::FenceValue
     fn check_active(
         device: &ash::Device,
-        mut max_value: crate::FenceValue,
+        mut last_completed: crate::FenceValue,
         active: &[(crate::FenceValue, vk::Fence)],
     ) -> Result<crate::FenceValue, crate::DeviceError> {
         for &(value, raw) in active.iter() {
             unsafe {
-                if value > max_value && device.get_fence_status(raw)? {
-                    max_value = value;
+                if value > last_completed && device.get_fence_status(raw)? {
+                    last_completed = value;
                 }
             }
         }
-        Ok(max_value)
+        Ok(last_completed)
     }
 
+    /// Return the highest signalled [`FenceValue`] for `self`.
+    ///
+    /// [`FenceValue`]: crate::FenceValue
     fn get_latest(
         &self,
         device: &ash::Device,
@@ -553,6 +655,18 @@ impl Fence {
         }
     }
 
+    /// Trim the internal state of this [`Fence`].
+    ///
+    /// This function has no externally visible effect, but you should call it
+    /// periodically to keep this fence's resource consumption under control.
+    ///
+    /// For fences using the [`FencePool`] implementation, this function
+    /// recycles fences that have been signaled. If you don't call this,
+    /// [`Queue::submit`] will just keep allocating a new Vulkan fence every
+    /// time it's called.
+    ///
+    /// [`FencePool`]: Fence::FencePool
+    /// [`Queue::submit`]: crate::Queue::submit
     fn maintain(&mut self, device: &ash::Device) -> Result<(), crate::DeviceError> {
         match *self {
             Self::TimelineSemaphore(_) => {}
@@ -581,33 +695,49 @@ impl Fence {
     }
 }
 
-impl crate::Queue<Api> for Queue {
+impl crate::Queue for Queue {
+    type A = Api;
+
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],
+        surface_textures: &[&SurfaceTexture],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
-        let vk_cmd_buffers = command_buffers
-            .iter()
-            .map(|cmd| cmd.raw)
-            .collect::<Vec<_>>();
-
-        let mut vk_info = vk::SubmitInfo::builder().command_buffers(&vk_cmd_buffers);
-
         let mut fence_raw = vk::Fence::null();
-        let mut vk_timeline_info;
-        let mut signal_semaphores = [vk::Semaphore::null(), vk::Semaphore::null()];
-        let signal_values;
+
+        let mut wait_stage_masks = Vec::new();
+        let mut wait_semaphores = Vec::new();
+        let mut signal_semaphores = ArrayVec::<_, 2>::new();
+        let mut signal_values = ArrayVec::<_, 2>::new();
+
+        for &surface_texture in surface_textures {
+            wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
+            wait_semaphores.push(surface_texture.wait_semaphore);
+        }
+
+        let old_index = self.relay_index.load(Ordering::Relaxed);
+
+        let sem_index = if old_index >= 0 {
+            wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
+            wait_semaphores.push(self.relay_semaphores[old_index as usize]);
+            (old_index as usize + 1) % self.relay_semaphores.len()
+        } else {
+            0
+        };
+
+        signal_semaphores.push(self.relay_semaphores[sem_index]);
+
+        self.relay_index
+            .store(sem_index as isize, Ordering::Relaxed);
 
         if let Some((fence, value)) = signal_fence {
             fence.maintain(&self.device.raw)?;
             match *fence {
                 Fence::TimelineSemaphore(raw) => {
-                    signal_values = [!0, value];
-                    signal_semaphores[1] = raw;
-                    vk_timeline_info = vk::TimelineSemaphoreSubmitInfo::builder()
-                        .signal_semaphore_values(&signal_values);
-                    vk_info = vk_info.push_next(&mut vk_timeline_info);
+                    signal_semaphores.push(raw);
+                    signal_values.push(!0);
+                    signal_values.push(value);
                 }
                 Fence::FencePool {
                     ref mut active,
@@ -627,26 +757,25 @@ impl crate::Queue<Api> for Queue {
             }
         }
 
-        let wait_stage_mask = [vk::PipelineStageFlags::TOP_OF_PIPE];
-        let old_index = self.relay_index.load(Ordering::Relaxed);
-        let sem_index = if old_index >= 0 {
-            vk_info = vk_info
-                .wait_semaphores(&self.relay_semaphores[old_index as usize..old_index as usize + 1])
-                .wait_dst_stage_mask(&wait_stage_mask);
-            (old_index as usize + 1) % self.relay_semaphores.len()
-        } else {
-            0
-        };
-        self.relay_index
-            .store(sem_index as isize, Ordering::Relaxed);
-        signal_semaphores[0] = self.relay_semaphores[sem_index];
+        let vk_cmd_buffers = command_buffers
+            .iter()
+            .map(|cmd| cmd.raw)
+            .collect::<Vec<_>>();
 
-        let signal_count = if signal_semaphores[1] == vk::Semaphore::null() {
-            1
-        } else {
-            2
-        };
-        vk_info = vk_info.signal_semaphores(&signal_semaphores[..signal_count]);
+        let mut vk_info = vk::SubmitInfo::builder().command_buffers(&vk_cmd_buffers);
+
+        vk_info = vk_info
+            .wait_semaphores(&wait_semaphores)
+            .wait_dst_stage_mask(&wait_stage_masks)
+            .signal_semaphores(&signal_semaphores);
+
+        let mut vk_timeline_info;
+
+        if !signal_values.is_empty() {
+            vk_timeline_info =
+                vk::TimelineSemaphoreSubmitInfo::builder().signal_semaphore_values(&signal_values);
+            vk_info = vk_info.push_next(&mut vk_timeline_info);
+        }
 
         profiling::scope!("vkQueueSubmit");
         unsafe {
@@ -706,13 +835,25 @@ impl crate::Queue<Api> for Queue {
 
 impl From<vk::Result> for crate::DeviceError {
     fn from(result: vk::Result) -> Self {
+        #![allow(unreachable_code)]
         match result {
             vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+                #[cfg(feature = "oom_panic")]
+                panic!("Out of memory ({result:?})");
+
                 Self::OutOfMemory
             }
-            vk::Result::ERROR_DEVICE_LOST => Self::Lost,
+            vk::Result::ERROR_DEVICE_LOST => {
+                #[cfg(feature = "device_lost_panic")]
+                panic!("Device lost");
+
+                Self::Lost
+            }
             _ => {
-                log::warn!("Unrecognized device error {:?}", result);
+                #[cfg(feature = "internal_error_panic")]
+                panic!("Internal error: {result:?}");
+
+                log::warn!("Unrecognized device error {result:?}");
                 Self::Lost
             }
         }

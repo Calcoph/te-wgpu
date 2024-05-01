@@ -2,11 +2,10 @@ use crate::{
     binding_model,
     hal_api::HalApi,
     hub::Hub,
-    id::{self},
-    identity::{GlobalIdentityHandlerFactory, Input},
-    resource::{Buffer, BufferAccessResult},
-    resource::{BufferAccessError, BufferMapOperation},
-    resource_log, Label, DOWNLEVEL_ERROR_MESSAGE,
+    id::{BindGroupLayoutId, PipelineLayoutId},
+    resource::{Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation},
+    snatch::SnatchGuard,
+    Label, DOWNLEVEL_ERROR_MESSAGE,
 };
 
 use arrayvec::ArrayVec;
@@ -41,15 +40,14 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HostMap {
     Read,
     Write,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct AttachmentData<T> {
     pub colors: ArrayVec<Option<T>, { hal::MAX_COLOR_ATTACHMENTS }>,
     pub resolves: ArrayVec<T, { hal::MAX_COLOR_ATTACHMENTS }>,
@@ -73,7 +71,7 @@ pub enum RenderPassCompatibilityCheckType {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct RenderPassContext {
     pub attachments: AttachmentData<TextureFormat>,
     pub sample_count: u32,
@@ -318,10 +316,10 @@ fn map_buffer<A: HalApi>(
     offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
+    snatch_guard: &SnatchGuard,
 ) -> Result<ptr::NonNull<u8>, BufferAccessError> {
-    let snatch_guard = buffer.device.snatchable_lock.read();
     let raw_buffer = buffer
-        .raw(&snatch_guard)
+        .raw(snatch_guard)
         .ok_or(BufferAccessError::Destroyed)?;
     let mapping = unsafe {
         raw.map_buffer(raw_buffer, offset..offset + size)
@@ -377,42 +375,6 @@ fn map_buffer<A: HalApi>(
     Ok(mapping.ptr)
 }
 
-pub(crate) struct CommandAllocator<A: HalApi> {
-    free_encoders: Vec<A::CommandEncoder>,
-}
-
-impl<A: HalApi> CommandAllocator<A> {
-    fn acquire_encoder(
-        &mut self,
-        device: &A::Device,
-        queue: &A::Queue,
-    ) -> Result<A::CommandEncoder, hal::DeviceError> {
-        match self.free_encoders.pop() {
-            Some(encoder) => Ok(encoder),
-            None => unsafe {
-                let hal_desc = hal::CommandEncoderDescriptor { label: None, queue };
-                device.create_command_encoder(&hal_desc)
-            },
-        }
-    }
-
-    fn release_encoder(&mut self, encoder: A::CommandEncoder) {
-        self.free_encoders.push(encoder);
-    }
-
-    fn dispose(self, device: &A::Device) {
-        resource_log!(
-            "CommandAllocator::dispose encoders {}",
-            self.free_encoders.len()
-        );
-        for cmd_encoder in self.free_encoders {
-            unsafe {
-                device.destroy_command_encoder(cmd_encoder);
-            }
-        }
-    }
-}
-
 #[derive(Clone, Debug, Error)]
 #[error("Device is invalid")]
 pub struct InvalidDevice;
@@ -456,26 +418,25 @@ pub struct MissingFeatures(pub wgt::Features);
 pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ImplicitPipelineContext {
-    pub root_id: id::PipelineLayoutId,
-    pub group_ids: ArrayVec<id::BindGroupLayoutId, { hal::MAX_BIND_GROUPS }>,
+    pub root_id: PipelineLayoutId,
+    pub group_ids: ArrayVec<BindGroupLayoutId, { hal::MAX_BIND_GROUPS }>,
 }
 
-pub struct ImplicitPipelineIds<'a, G: GlobalIdentityHandlerFactory> {
-    pub root_id: Input<G, id::PipelineLayoutId>,
-    pub group_ids: &'a [Input<G, id::BindGroupLayoutId>],
+pub struct ImplicitPipelineIds<'a> {
+    pub root_id: Option<PipelineLayoutId>,
+    pub group_ids: &'a [Option<BindGroupLayoutId>],
 }
 
-impl<G: GlobalIdentityHandlerFactory> ImplicitPipelineIds<'_, G> {
+impl ImplicitPipelineIds<'_> {
     fn prepare<A: HalApi>(self, hub: &Hub<A>) -> ImplicitPipelineContext {
         ImplicitPipelineContext {
-            root_id: hub.pipeline_layouts.prepare::<G>(self.root_id).into_id(),
+            root_id: hub.pipeline_layouts.prepare(self.root_id).into_id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare::<G>(*id_in).into_id())
+                .map(|id_in| hub.bind_group_layouts.prepare(*id_in).into_id())
                 .collect(),
         }
     }

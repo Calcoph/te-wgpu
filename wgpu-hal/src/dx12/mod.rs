@@ -1,7 +1,7 @@
 /*!
 # DirectX12 API internals.
 
-Generally the mapping is straightforwad.
+Generally the mapping is straightforward.
 
 ## Resource transitions
 
@@ -195,6 +195,7 @@ struct PrivateCapabilities {
     heap_create_not_zeroed: bool,
     casting_fully_typed_format_supported: bool,
     suballocation_supported: bool,
+    shader_model: naga::back::hlsl::ShaderModel,
 }
 
 #[derive(Default)]
@@ -237,6 +238,9 @@ struct DeviceShared {
     heap_views: descriptor::GeneralHeap,
     heap_samplers: descriptor::GeneralHeap,
 }
+
+unsafe impl Send for DeviceShared {}
+unsafe impl Sync for DeviceShared {}
 
 pub struct Device {
     raw: d3d12::Device,
@@ -386,7 +390,6 @@ impl fmt::Debug for CommandEncoder {
 #[derive(Debug)]
 pub struct CommandBuffer {
     raw: d3d12::GraphicsCommandList,
-    closed: bool,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -437,7 +440,7 @@ impl Texture {
         }
     }
 
-    /// see https://learn.microsoft.com/en-us/windows/win32/direct3d12/subresources#plane-slice
+    /// see <https://learn.microsoft.com/en-us/windows/win32/direct3d12/subresources#plane-slice>
     fn calc_subresource(&self, mip_level: u32, array_layer: u32, plane: u32) -> u32 {
         mip_level + (array_layer + plane * self.array_layer_count()) * self.mip_level_count
     }
@@ -637,7 +640,9 @@ impl SwapChain {
     }
 }
 
-impl crate::Surface<Api> for Surface {
+impl crate::Surface for Surface {
+    type A = Api;
+
     unsafe fn configure(
         &self,
         device: &Device,
@@ -882,10 +887,13 @@ impl crate::Surface<Api> for Surface {
     }
 }
 
-impl crate::Queue<Api> for Queue {
+impl crate::Queue for Queue {
+    type A = Api;
+
     unsafe fn submit(
         &self,
         command_buffers: &[&CommandBuffer],
+        _surface_textures: &[&Texture],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
         let mut temp_lists = self.temp_lists.lock();

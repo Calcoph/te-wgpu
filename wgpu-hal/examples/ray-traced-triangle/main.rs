@@ -371,6 +371,8 @@ impl<A: hal::Api> Example<A> {
                 stage: hal::ProgrammableStage {
                     module: &shader_module,
                     entry_point: "main",
+                    constants: &Default::default(),
+                    zero_initialize_workgroup_memory: true,
                 },
             })
         }
@@ -755,7 +757,7 @@ impl<A: hal::Api> Example<A> {
             let mut fence = device.create_fence().unwrap();
             let init_cmd = cmd_encoder.end_encoding().unwrap();
             queue
-                .submit(&[&init_cmd], Some((&mut fence, init_fence_value)))
+                .submit(&[&init_cmd], &[], Some((&mut fence, init_fence_value)))
                 .unwrap();
             device.wait(&fence, init_fence_value, !0).unwrap();
             cmd_encoder.reset_all(iter::once(init_cmd));
@@ -960,7 +962,9 @@ impl<A: hal::Api> Example<A> {
             } else {
                 None
             };
-            self.queue.submit(&[&cmd_buf], fence_param).unwrap();
+            self.queue
+                .submit(&[&cmd_buf], &[&surface_tex], fence_param)
+                .unwrap();
             self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);
@@ -999,7 +1003,7 @@ impl<A: hal::Api> Example<A> {
             {
                 let ctx = &mut self.contexts[self.context_index];
                 self.queue
-                    .submit(&[], Some((&mut ctx.fence, ctx.fence_value)))
+                    .submit(&[], &[], Some((&mut ctx.fence, ctx.fence_value)))
                     .unwrap();
             }
 

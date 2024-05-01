@@ -21,11 +21,16 @@ use std::{
     ops::Range,
     slice,
 };
-use wgc::{binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError}, command::{bundle_ffi::{wgpu_render_bundle_draw, wgpu_render_bundle_draw_indexed, wgpu_render_bundle_draw_indexed_indirect, wgpu_render_bundle_draw_indirect, wgpu_render_bundle_set_bind_group, wgpu_render_bundle_set_pipeline, wgpu_render_bundle_set_push_constants, wgpu_render_bundle_set_vertex_buffer}, compute_ffi::{wgpu_compute_pass_begin_pipeline_statistics_query, wgpu_compute_pass_dispatch_workgroups, wgpu_compute_pass_dispatch_workgroups_indirect, wgpu_compute_pass_end_pipeline_statistics_query, wgpu_compute_pass_insert_debug_marker, wgpu_compute_pass_pop_debug_group, wgpu_compute_pass_push_debug_group, wgpu_compute_pass_set_bind_group, wgpu_compute_pass_set_pipeline, wgpu_compute_pass_set_push_constant, wgpu_compute_pass_write_timestamp}, render_ffi::{wgpu_render_pass_begin_occlusion_query, wgpu_render_pass_begin_pipeline_statistics_query, wgpu_render_pass_draw, wgpu_render_pass_draw_indexed, wgpu_render_pass_draw_indexed_indirect, wgpu_render_pass_draw_indirect, wgpu_render_pass_end_occlusion_query, wgpu_render_pass_end_pipeline_statistics_query, wgpu_render_pass_execute_bundles, wgpu_render_pass_insert_debug_marker, wgpu_render_pass_multi_draw_indexed_indirect, wgpu_render_pass_multi_draw_indexed_indirect_count, wgpu_render_pass_multi_draw_indirect, wgpu_render_pass_multi_draw_indirect_count, wgpu_render_pass_pop_debug_group, wgpu_render_pass_push_debug_group, wgpu_render_pass_set_bind_group, wgpu_render_pass_set_blend_constant, wgpu_render_pass_set_pipeline, wgpu_render_pass_set_push_constants, wgpu_render_pass_set_scissor_rect, wgpu_render_pass_set_stencil_reference, wgpu_render_pass_set_vertex_buffer, wgpu_render_pass_set_viewport, wgpu_render_pass_write_timestamp}, CommandEncoderError}, device::{queue::QueueWriteError, DeviceError, DeviceLostClosure}, pipeline::{CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError}, resource::{BufferAccessResult, CreateBufferError, CreateQuerySetError, CreateSamplerError, CreateTextureError, CreateTextureViewError}};
-use wgc::id::TypedId;
+use wgc::{
+    command::{bundle_ffi::*, compute_commands::*, render_commands::*},
+    device::DeviceLostClosure,
+    id::{CommandEncoderId, TextureViewId},
+};
 use wgt::WasmNotSendSync;
 
-pub struct ContextWgpuCore(wgc::global::Global<wgc::identity::IdentityManagerFactory>);
+const LABEL: &str = "label";
+
+pub struct ContextWgpuCore(wgc::global::Global);
 
 impl Drop for ContextWgpuCore {
     fn drop(&mut self) {
@@ -43,13 +48,7 @@ impl fmt::Debug for ContextWgpuCore {
 
 impl ContextWgpuCore {
     pub unsafe fn from_hal_instance<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
-        Self(unsafe {
-            wgc::global::Global::from_hal_instance::<A>(
-                "wgpu",
-                wgc::identity::IdentityManagerFactory,
-                hal_instance,
-            )
-        })
+        Self(unsafe { wgc::global::Global::from_hal_instance::<A>("wgpu", hal_instance) })
     }
 
     /// # Safety
@@ -60,25 +59,23 @@ impl ContextWgpuCore {
     }
 
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
-        Self(unsafe {
-            wgc::global::Global::from_instance(wgc::identity::IdentityManagerFactory, core_instance)
-        })
+        Self(unsafe { wgc::global::Global::from_instance(core_instance) })
     }
 
-    pub(crate) fn global(&self) -> &wgc::global::Global<wgc::identity::IdentityManagerFactory> {
+    pub(crate) fn global(&self) -> &wgc::global::Global {
         &self.0
     }
 
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
         self.0
-            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| ()))
+            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| None))
     }
 
     pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
-        unsafe { self.0.create_adapter_from_hal(hal_adapter, ()) }
+        unsafe { self.0.create_adapter_from_hal(hal_adapter, None) }
     }
 
     pub unsafe fn adapter_as_hal<
@@ -109,8 +106,8 @@ impl ContextWgpuCore {
                 hal_device,
                 &desc.map_label(|l| l.map(Borrowed)),
                 trace_dir,
-                (),
-                (),
+                None,
+                None,
             )
         }?;
         let device = Device {
@@ -132,7 +129,7 @@ impl ContextWgpuCore {
         let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let id = unsafe {
             self.0
-                .create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, ())
+                .create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, None)
         }?;
         Ok(Texture {
             id,
@@ -150,7 +147,7 @@ impl ContextWgpuCore {
                 hal_buffer,
                 device.id,
                 &desc.map_label(|l| l.map(Borrowed)),
-                (),
+                None,
             )?
         };
         Ok((id, Buffer {}))
@@ -182,14 +179,51 @@ impl ContextWgpuCore {
         }
     }
 
-    pub unsafe fn texture_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn texture_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::Texture>) -> R,
+        R,
+    >(
         &self,
         texture: &Texture,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         unsafe {
             self.0
-                .texture_as_hal::<A, F>(texture.id, hal_texture_callback)
+                .texture_as_hal::<A, F, R>(texture.id, hal_texture_callback)
+        }
+    }
+
+    pub unsafe fn texture_view_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::TextureView>) -> R,
+        R,
+    >(
+        &self,
+        texture_view_id: TextureViewId,
+        hal_texture_view_callback: F,
+    ) -> R {
+        unsafe {
+            self.0
+                .texture_view_as_hal::<A, F, R>(texture_view_id, hal_texture_view_callback)
+        }
+    }
+
+    /// This method will start the wgpu_core level command recording.
+    pub unsafe fn command_encoder_as_hal_mut<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        unsafe {
+            self.0.command_encoder_as_hal_mut::<A, F, R>(
+                command_encoder_id,
+                hal_command_encoder_callback,
+            )
         }
     }
 
@@ -499,11 +533,7 @@ impl crate::Context for ContextWgpuCore {
     >;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
-        Self(wgc::global::Global::new(
-            "wgpu",
-            wgc::identity::IdentityManagerFactory,
-            instance_desc,
-        ))
+        Self(wgc::global::Global::new("wgpu", instance_desc))
     }
 
     unsafe fn instance_create_surface(
@@ -516,31 +546,31 @@ impl crate::Context for ContextWgpuCore {
                 raw_window_handle,
             } => unsafe {
                 self.0
-                    .instance_create_surface(raw_display_handle, raw_window_handle, ())?
+                    .instance_create_surface(raw_display_handle, raw_window_handle, None)
             },
 
             #[cfg(metal)]
             SurfaceTargetUnsafe::CoreAnimationLayer(layer) => unsafe {
-                self.0.instance_create_surface_metal(layer, ())
+                self.0.instance_create_surface_metal(layer, None)
             },
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::CompositionVisual(visual) => unsafe {
-                self.0.instance_create_surface_from_visual(visual, ())
+                self.0.instance_create_surface_from_visual(visual, None)
             },
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::SurfaceHandle(surface_handle) => unsafe {
                 self.0
-                    .instance_create_surface_from_surface_handle(surface_handle, ())
+                    .instance_create_surface_from_surface_handle(surface_handle, None)
             },
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::SwapChainPanel(swap_chain_panel) => unsafe {
                 self.0
-                    .instance_create_surface_from_swap_chain_panel(swap_chain_panel, ())
+                    .instance_create_surface_from_swap_chain_panel(swap_chain_panel, None)
             },
-        };
+        }?;
 
         Ok((
             id,
@@ -561,7 +591,7 @@ impl crate::Context for ContextWgpuCore {
                 force_fallback_adapter: options.force_fallback_adapter,
                 compatible_surface: options.compatible_surface.map(|surface| surface.id.into()),
             },
-            wgc::instance::AdapterInputs::Mask(wgt::Backends::all(), |_| ()),
+            wgc::instance::AdapterInputs::Mask(wgt::Backends::all(), |_| None),
         );
         ready(id.ok().map(|id| (id, ())))
     }
@@ -577,8 +607,8 @@ impl crate::Context for ContextWgpuCore {
             *adapter,
             &desc.map_label(|l| l.map(Borrowed)),
             trace_dir,
-            (),
-            ()
+            None,
+            None
         )) {
             Ok(device_id) => device_id,
             Err(e) => return ready(Err(e.into())),
@@ -591,7 +621,7 @@ impl crate::Context for ContextWgpuCore {
         let queue = Queue {
             id: queue_id,
         };
-        ready(Ok((device_id, device, device_id, queue)))
+        ready(Ok((device_id, device, device_id.into_queue_id(), queue)))
     }
 
     fn instance_poll_all_devices(&self, force_wait: bool) -> bool {
@@ -729,7 +759,7 @@ impl crate::Context for ContextWgpuCore {
             .lock()
             .expect("Surface was not configured?");
         match wgc::gfx_select!(
-            device_id => self.0.surface_get_current_texture(*surface, ())
+            device_id => self.0.surface_get_current_texture(*surface, None)
         ) {
             Ok(wgc::present::SurfaceOutput { status, texture_id }) => {
                 let (id, data) = { (texture_id, texture_id.map(|id| Texture { id })) };
@@ -823,25 +853,16 @@ impl crate::Context for ContextWgpuCore {
                     strict_capabilities: true,
                     block_ctx_dump_prefix: None,
                 };
-                let parser = naga::front::spv::Frontend::new(spv.iter().cloned(), &options);
-                let module = parser.parse().unwrap();
-                wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
+                wgc::pipeline::ShaderModuleSource::SpirV(Borrowed(spv), options)
             }
             #[cfg(feature = "glsl")]
             ShaderSource::Glsl {
                 ref shader,
                 stage,
-                ref defines,
+                defines,
             } => {
-                // Parse the given shader code and store its representation.
-                let options = naga::front::glsl::Options {
-                    stage,
-                    defines: defines.clone(),
-                };
-                let mut parser = naga::front::glsl::Frontend::default();
-                let module = parser.parse(&options, shader).unwrap();
-
-                wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
+                let options = naga::front::glsl::Options { stage, defines };
+                wgc::pipeline::ShaderModuleSource::Glsl(Borrowed(shader), options)
             }
             #[cfg(feature = "wgsl")]
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
@@ -850,7 +871,7 @@ impl crate::Context for ContextWgpuCore {
             ShaderSource::Dummy(_) => panic!("found `ShaderSource::Dummy`"),
         };
         let id = wgc::gfx_select!(
-            device => self.0.device_create_shader_module(*device, &descriptor, source, ())
+            device => self.0.device_create_shader_module(*device, &descriptor, source, None)
         )?;
         Ok((id, ()))
     }
@@ -868,7 +889,7 @@ impl crate::Context for ContextWgpuCore {
             shader_bound_checks: unsafe { wgt::ShaderBoundChecks::unchecked() },
         };
         let id = wgc::gfx_select!(
-            device => self.0.device_create_shader_module_spirv(*device, &descriptor, Borrowed(&desc.source), ())
+            device => self.0.device_create_shader_module_spirv(*device, &descriptor, Borrowed(&desc.source), None)
         )?;
         Ok((id, ()))
     }
@@ -884,7 +905,7 @@ impl crate::Context for ContextWgpuCore {
             entries: Borrowed(desc.entries),
         };
         let id = wgc::gfx_select!(
-            device => self.0.device_create_bind_group_layout(*device, &descriptor, ())
+            device => self.0.device_create_bind_group_layout(*device, &descriptor, None)
         )?;
         Ok((id, ()))
     }
@@ -989,7 +1010,7 @@ impl crate::Context for ContextWgpuCore {
         let id = wgc::gfx_select!(device => self.0.device_create_bind_group(
             *device,
             &descriptor,
-            ()
+            None
         ))?;
         Ok((id, ()))
     }
@@ -1022,7 +1043,7 @@ impl crate::Context for ContextWgpuCore {
         let id = wgc::gfx_select!(device => self.0.device_create_pipeline_layout(
             *device,
             &descriptor,
-            ()
+            None
         ))?;
         Ok((id, ()))
     }
@@ -1048,8 +1069,8 @@ impl crate::Context for ContextWgpuCore {
         let implicit_pipeline_ids = match desc.layout {
             Some(_) => None,
             None => Some(wgc::device::ImplicitPipelineIds {
-                root_id: (),
-                group_ids: &[(); wgc::MAX_BIND_GROUPS],
+                root_id: None,
+                group_ids: &[None; wgc::MAX_BIND_GROUPS],
             }),
         };
         let descriptor = pipe::RenderPipelineDescriptor {
@@ -1058,7 +1079,12 @@ impl crate::Context for ContextWgpuCore {
             vertex: pipe::VertexState {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: desc.vertex.module.id.into(),
-                    entry_point: Borrowed(desc.vertex.entry_point),
+                    entry_point: Some(Borrowed(desc.vertex.entry_point)),
+                    constants: Borrowed(desc.vertex.compilation_options.constants),
+                    zero_initialize_workgroup_memory: desc
+                        .vertex
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
                 },
                 buffers: Borrowed(&vertex_buffers),
             },
@@ -1068,7 +1094,11 @@ impl crate::Context for ContextWgpuCore {
             fragment: desc.fragment.as_ref().map(|frag| pipe::FragmentState {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: frag.module.id.into(),
-                    entry_point: Borrowed(frag.entry_point),
+                    entry_point: Some(Borrowed(frag.entry_point)),
+                    constants: Borrowed(frag.compilation_options.constants),
+                    zero_initialize_workgroup_memory: frag
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
                 },
                 targets: Borrowed(frag.targets),
             }),
@@ -1078,7 +1108,7 @@ impl crate::Context for ContextWgpuCore {
         let id = match wgc::gfx_select!(device => self.0.device_create_render_pipeline(
             *device,
             &descriptor,
-            (),
+            None,
             implicit_pipeline_ids
         )) {
             Ok(id) => id,
@@ -1105,8 +1135,8 @@ impl crate::Context for ContextWgpuCore {
         let implicit_pipeline_ids = match desc.layout {
             Some(_) => None,
             None => Some(wgc::device::ImplicitPipelineIds {
-                root_id: (),
-                group_ids: &[(); wgc::MAX_BIND_GROUPS],
+                root_id: None,
+                group_ids: &[None; wgc::MAX_BIND_GROUPS],
             }),
         };
         let descriptor = pipe::ComputePipelineDescriptor {
@@ -1114,14 +1144,18 @@ impl crate::Context for ContextWgpuCore {
             layout: desc.layout.map(|l| l.id.into()),
             stage: pipe::ProgrammableStageDescriptor {
                 module: desc.module.id.into(),
-                entry_point: Borrowed(desc.entry_point),
+                entry_point: Some(Borrowed(desc.entry_point)),
+                constants: Borrowed(desc.compilation_options.constants),
+                zero_initialize_workgroup_memory: desc
+                    .compilation_options
+                    .zero_initialize_workgroup_memory,
             },
         };
 
         let id = wgc::gfx_select!(device => self.0.device_create_compute_pipeline(
             *device,
             &descriptor,
-            (),
+            None,
             implicit_pipeline_ids
         ))?;
 
@@ -1136,7 +1170,7 @@ impl crate::Context for ContextWgpuCore {
         let id = wgc::gfx_select!(device => self.0.device_create_buffer(
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
-            ()
+            None
         ))?;
 
         Ok((id, Buffer {}))
@@ -1151,7 +1185,7 @@ impl crate::Context for ContextWgpuCore {
         let id = wgc::gfx_select!(device => self.0.device_create_texture(
             *device,
             &wgt_desc,
-            ()
+            None
         ))?;
 
         Ok((id, Texture { id }))
@@ -1182,7 +1216,7 @@ impl crate::Context for ContextWgpuCore {
         let id = wgc::gfx_select!(device => self.0.device_create_sampler(
             *device,
             &descriptor,
-            ()
+            None
         ))?;
         Ok((id, ()))
     }
@@ -1195,7 +1229,7 @@ impl crate::Context for ContextWgpuCore {
         let id = wgc::gfx_select!(device => self.0.device_create_query_set(
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
-            ()
+            None
         ))?;
 
         Ok((id, ()))
@@ -1209,7 +1243,7 @@ impl crate::Context for ContextWgpuCore {
         let id = wgc::gfx_select!(device => self.0.device_create_command_encoder(
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
-            ()
+            None
         ))?;
 
         Ok((id, CommandEncoder { open: true }))
@@ -1232,14 +1266,17 @@ impl crate::Context for ContextWgpuCore {
             Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
         }
     }
+    #[doc(hidden)]
+    fn device_make_invalid(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+        wgc::gfx_select!(device => self.0.device_make_invalid(*device));
+    }
     #[cfg_attr(not(any(native, Emscripten)), allow(unused))]
     fn device_drop(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         #[cfg(any(native, Emscripten))]
         {
-            match wgc::gfx_select!(device => self.0.device_poll(*device, wgt::Maintain::wait())) {
-                Ok(_) => {}
-                Err(err) => self.handle_error_fatal(err, "Device::drop"),
-            }
+            // Call device_poll, but don't check for errors. We have to use its
+            // return value, but we just drop it.
+            let _ = wgc::gfx_select!(device => self.0.device_poll(*device, wgt::Maintain::wait()));
             wgc::gfx_select!(device => self.0.device_drop(*device));
         }
     }
@@ -1308,7 +1345,8 @@ impl crate::Context for ContextWgpuCore {
             ))),
         };
 
-        wgc::gfx_select!(buffer => self.0.buffer_map_async(*buffer, range, operation))
+        wgc::gfx_select!(buffer => self.0.buffer_map_async(*buffer, range.start, Some(range.end-range.start), operation))
+
     }
     fn buffer_get_mapped_range(
         &self,
@@ -1358,7 +1396,7 @@ impl crate::Context for ContextWgpuCore {
         };
 
         let id = wgc::gfx_select!(
-            texture => self.0.texture_create_view(*texture, &descriptor, ())
+            texture => self.0.texture_create_view(*texture, &descriptor, None)
         )?;
 
         Ok((id, ()))
@@ -1484,7 +1522,7 @@ impl crate::Context for ContextWgpuCore {
         _pipeline_data: &Self::ComputePipelineData,
         index: u32,
     ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
-        let id = match wgc::gfx_select!(*pipeline => self.0.compute_pipeline_get_bind_group_layout(*pipeline, index, ())) {
+        let id = match wgc::gfx_select!(*pipeline => self.0.compute_pipeline_get_bind_group_layout(*pipeline, index, None)) {
             Ok(id) => id,
             Err(err) => panic!("Error reflecting bind group {index}: {err}"),
         };
@@ -1497,7 +1535,7 @@ impl crate::Context for ContextWgpuCore {
         _pipeline_data: &Self::RenderPipelineData,
         index: u32,
     ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
-        let id = match wgc::gfx_select!(*pipeline => self.0.render_pipeline_get_bind_group_layout(*pipeline, index, ())) {
+        let id = match wgc::gfx_select!(*pipeline => self.0.render_pipeline_get_bind_group_layout(*pipeline, index, None)) {
             Ok(id) => id,
             Err(err) => panic!("Error reflecting bind group {index}: {err}"),
         };
@@ -1798,7 +1836,7 @@ impl crate::Context for ContextWgpuCore {
         let id = wgc::gfx_select!(encoder_data.parent() => self.0.render_bundle_encoder_finish(
             encoder_data,
             &desc.map_label(|l| l.map(Borrowed)),
-            ()
+            None
         ))
         .expect("RenderBundleEncoder::finish");
 
@@ -1840,7 +1878,7 @@ impl crate::Context for ContextWgpuCore {
         size: wgt::BufferSize,
     ) -> Result<Box<dyn crate::context::QueueWriteBuffer>, QueueWriteError> {
         match wgc::gfx_select!(
-            *queue => self.0.queue_create_staging_buffer(*queue, size, ())
+            *queue => self.0.queue_create_staging_buffer(*queue, size, None)
         ) {
             Ok((buffer_id, ptr)) => Ok(Box::new(QueueWriteBuffer {
                 buffer_id,
@@ -1989,15 +2027,7 @@ impl crate::Context for ContextWgpuCore {
         _bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        unsafe {
-            wgpu_compute_pass_set_bind_group(
-                pass_data,
-                index,
-                *bind_group,
-                offsets.as_ptr(),
-                offsets.len(),
-            )
-        }
+        wgpu_compute_pass_set_bind_group(pass_data, index, *bind_group, offsets);
     }
 
     fn compute_pass_set_push_constants(
@@ -2007,14 +2037,7 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        unsafe {
-            wgpu_compute_pass_set_push_constant(
-                pass_data,
-                offset,
-                data.len().try_into().unwrap(),
-                data.as_ptr(),
-            )
-        }
+        wgpu_compute_pass_set_push_constant(pass_data, offset, data);
     }
 
     fn compute_pass_insert_debug_marker(
@@ -2023,10 +2046,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         label: &str,
     ) {
-        unsafe {
-            let label = std::ffi::CString::new(label).unwrap();
-            wgpu_compute_pass_insert_debug_marker(pass_data, label.as_ptr(), 0);
-        }
+        wgpu_compute_pass_insert_debug_marker(pass_data, label, 0);
     }
 
     fn compute_pass_push_debug_group(
@@ -2035,10 +2055,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         group_label: &str,
     ) {
-        unsafe {
-            let label = std::ffi::CString::new(group_label).unwrap();
-            wgpu_compute_pass_push_debug_group(pass_data, label.as_ptr(), 0);
-        }
+        wgpu_compute_pass_push_debug_group(pass_data, group_label, 0);
     }
 
     fn compute_pass_pop_debug_group(
@@ -2305,15 +2322,7 @@ impl crate::Context for ContextWgpuCore {
         _bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        unsafe {
-            wgpu_render_pass_set_bind_group(
-                pass_data,
-                index,
-                *bind_group,
-                offsets.as_ptr(),
-                offsets.len(),
-            )
-        }
+        wgpu_render_pass_set_bind_group(pass_data, index, *bind_group, offsets)
     }
 
     fn render_pass_set_index_buffer(
@@ -2350,15 +2359,7 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        unsafe {
-            wgpu_render_pass_set_push_constants(
-                pass_data,
-                stages,
-                offset,
-                data.len().try_into().unwrap(),
-                data.as_ptr(),
-            )
-        }
+        wgpu_render_pass_set_push_constants(pass_data, stages, offset, data)
     }
 
     fn render_pass_draw(
@@ -2540,10 +2541,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         label: &str,
     ) {
-        unsafe {
-            let label = std::ffi::CString::new(label).unwrap();
-            wgpu_render_pass_insert_debug_marker(pass_data, label.as_ptr(), 0);
-        }
+        wgpu_render_pass_insert_debug_marker(pass_data, label, 0);
     }
 
     fn render_pass_push_debug_group(
@@ -2552,10 +2550,7 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         group_label: &str,
     ) {
-        unsafe {
-            let label = std::ffi::CString::new(group_label).unwrap();
-            wgpu_render_pass_push_debug_group(pass_data, label.as_ptr(), 0);
-        }
+        wgpu_render_pass_push_debug_group(pass_data, group_label, 0);
     }
 
     fn render_pass_pop_debug_group(
@@ -2620,22 +2615,16 @@ impl crate::Context for ContextWgpuCore {
         render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     ) {
         let temp_render_bundles = render_bundles.map(|(i, _)| i).collect::<SmallVec<[_; 4]>>();
-        unsafe {
-            wgpu_render_pass_execute_bundles(
-                pass_data,
-                temp_render_bundles.as_ptr(),
-                temp_render_bundles.len(),
-            )
-        }
+        wgpu_render_pass_execute_bundles(pass_data, &temp_render_bundles)
     }
 }
 
 impl<T> From<ObjectId> for wgc::id::Id<T>
 where
-    T: 'static + WasmNotSendSync,
+    T: wgc::id::Marker,
 {
     fn from(id: ObjectId) -> Self {
-        let id = id.id();
+        let id = wgc::id::RawId::from_non_zero(id.id());
         // SAFETY: The id was created via the impl below
         unsafe { Self::from_raw(id) }
     }
@@ -2643,10 +2632,10 @@ where
 
 impl<T> From<wgc::id::Id<T>> for ObjectId
 where
-    T: 'static + WasmNotSendSync,
+    T: wgc::id::Marker,
 {
     fn from(id: wgc::id::Id<T>) -> Self {
-        let id = id.into_raw();
+        let id = id.into_raw().into_non_zero();
         Self::from_global_id(id)
     }
 }
