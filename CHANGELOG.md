@@ -61,11 +61,49 @@ Bottom level categories:
         - `tan`
         - `tanh`
 
-## v0.19.1 (2024-01-21)
+## v0.19.2 (2024-02-29)
+
+### Added/New Features
+
+#### General
+- `wgpu::Id` now implements `PartialOrd`/`Ord` allowing it to be put in `BTreeMap`s. By @cwfitzgerald and @9291Sam in [#5176](https://github.com/gfx-rs/wgpu/pull/5176)
+
+#### OpenGL
+- Log an error when OpenGL texture format heuristics fail. By @PolyMeilex in [#5266](https://github.com/gfx-rs/wgpu/issues/5266)
+
+#### `wgsl-out`
+- Learned to generate acceleration structure types. By @JMS55 in [#5261](https://github.com/gfx-rs/wgpu/pull/5261)
+
+### Documentation
+- Fix link in `wgpu::Instance::create_surface` documentation. By @HexoKnight in [#5280](https://github.com/gfx-rs/wgpu/pull/5280).
+- Fix typo in `wgpu::CommandEncoder::clear_buffer` documentation. By @PWhiddy in [#5281](https://github.com/gfx-rs/wgpu/pull/5281).
+- `Surface` configuration incorrectly claimed that `wgpu::Instance::create_surface` was unsafe. By @hackaugusto in [#5265](https://github.com/gfx-rs/wgpu/pull/5265).
 
 ### Bug Fixes
 
+#### General
+- Device lost callbacks are invoked when replaced and when global is dropped. By @bradwerth in [#5168](https://github.com/gfx-rs/wgpu/pull/5168)
+- Fix performance regression when allocating a large amount of resources of the same type. By @nical in [#5229](https://github.com/gfx-rs/wgpu/pull/5229)
+- Fix docs.rs wasm32 builds. By @cwfitzgerald in [#5310](https://github.com/gfx-rs/wgpu/pull/5310)
+- Improve error message when binding count limit hit. By @hackaugusto in [#5298](https://github.com/gfx-rs/wgpu/pull/5298)
+- Remove an unnecessary `clone` during GLSL shader injestion. By @a1phyr in [#5118](https://github.com/gfx-rs/wgpu/pull/5118).
+- Fix missing validation for `Device::clear_buffer` where `offset + size > buffer.size` was not checked when `size` was omitted. By @ErichDonGubler in [#5282](https://github.com/gfx-rs/wgpu/pull/5282).
+
 #### DX12
+- Fix `panic!` when dropping `Instance` without `InstanceFlags::VALIDATION`. By @hakolao in [#5134](https://github.com/gfx-rs/wgpu/pull/5134)
+
+#### OpenGL
+- Fix internal format for the `Etc2Rgba8Unorm` format. By @andristarr in [#5178](https://github.com/gfx-rs/wgpu/pull/5178)
+- Try to load `libX11.so.6` in addition to `libX11.so` on linux. [#5307](https://github.com/gfx-rs/wgpu/pull/5307)
+- Make use of `GL_EXT_texture_shadow_lod` to support sampling a cube depth texture with an explicit LOD. By @cmrschwarz in #[5171](https://github.com/gfx-rs/wgpu/pull/5171).
+
+#### `glsl-in`
+
+- Fix code generation from nested loops. By @cwfitzgerald and @teoxoy in [#5311](https://github.com/gfx-rs/wgpu/pull/5311)
+
+## v0.19.1 (2024-01-21)
+
+#### WGL
 
 - Properly register all swapchain buffers to prevent error on surface present. By @dtzxporter in [#5091](https://github.com/gfx-rs/wgpu/pull/5091)
 - Check for extra null states when creating resources. By @nical in [#5096](https://github.com/gfx-rs/wgpu/pull/5096)

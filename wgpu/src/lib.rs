@@ -74,6 +74,7 @@ mod macros;
 use std::{
     any::Any,
     borrow::Cow,
+    cmp::Ordering,
     error, fmt,
     future::Future,
     marker::PhantomData,
@@ -402,7 +403,7 @@ static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 /// Handle to a presentable surface.
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
-/// be presented. A `Surface` may be created with the unsafe function [`Instance::create_surface`].
+/// be presented. A `Surface` may be created with the function [`Instance::create_surface`].
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context)
@@ -1968,7 +1969,7 @@ impl Instance {
     /// Creates a new surface targeting a given window/canvas/surface/etc..
     ///
     /// See [`SurfaceTarget`] for what targets are supported.
-    /// See [`Instance::create_surface`] for surface creation with unsafe target variants.
+    /// See [`Instance::create_surface_unsafe`] for surface creation with unsafe target variants.
     ///
     /// Most commonly used are window handles (or provider of windows handles)
     /// which can be passed directly as they're automatically converted to [`SurfaceTarget`].
@@ -3451,7 +3452,7 @@ impl CommandEncoder {
     /// # Panics
     ///
     /// - Buffer does not have `COPY_DST` usage.
-    /// - Range it out of bounds
+    /// - Range is out of bounds
     pub fn clear_buffer(
         &mut self,
         buffer: &Buffer,
@@ -5001,6 +5002,18 @@ impl<T> PartialEq for Id<T> {
 }
 
 impl<T> Eq for Id<T> {}
+
+impl<T> PartialOrd for Id<T> {
+    fn partial_cmp(&self, other: &Id<T>) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<T> Ord for Id<T> {
+    fn cmp(&self, other: &Id<T>) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
 
 impl<T> std::hash::Hash for Id<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
