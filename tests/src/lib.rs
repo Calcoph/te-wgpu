@@ -13,6 +13,8 @@ mod poll;
 mod report;
 mod run;
 
+use std::fmt::Debug;
+
 #[cfg(target_arch = "wasm32")]
 pub use init::initialize_html_canvas;
 
@@ -25,6 +27,35 @@ pub use init::{initialize_adapter, initialize_device, initialize_instance};
 pub use params::TestParameters;
 pub use run::{execute_test, TestingContext};
 pub use wgpu_macros::gpu_test;
+
+/// Run some code in an error scope and assert that validation fails.
+pub fn fail<T, E: Debug>(callback: impl FnOnce() -> Result<T, E>) -> E {
+    let result = callback();
+    assert!(result.is_err());
+
+    match result {
+        Ok(_) => unreachable!(),
+        Err(e) => e,
+    }
+}
+
+/// Run some code in an error scope and assert that validation succeeds.
+pub fn valid<T, E: Debug>(callback: impl FnOnce() -> Result<T, E>) -> T {
+    let result = callback();
+    assert!(result.is_ok());
+
+    result.unwrap()
+}
+
+/// Run some code in an error scope and assert that validation succeeds or fails depending on the
+/// provided `should_fail` boolean.
+pub fn fail_if<T, E: Debug>(should_fail: bool, callback: impl FnOnce() -> Result<T, E>) -> Result<T, E> {
+    if should_fail {
+        Err(fail(callback))
+    } else {
+        Ok(valid(callback))
+    }
+}
 
 /// Adds the necissary main function for our gpu test harness.
 #[macro_export]
