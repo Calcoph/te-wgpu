@@ -125,11 +125,10 @@ impl GlobalPlay for wgc::global::Global {
                 }
             }
         }
-        let cmd_buf = self
-            .command_encoder_finish::<A>(encoder, &wgt::CommandBufferDescriptor { label: None })
-            .unwrap();
 
-        cmd_buf
+        self
+            .command_encoder_finish::<A>(encoder, &wgt::CommandBufferDescriptor { label: None })
+            .unwrap()
     }
 
     fn process<A: wgc::hal_api::HalApi>(

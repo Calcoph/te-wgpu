@@ -4436,11 +4436,9 @@ impl<'a> RenderPass<'a> {
 
 impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
-        if !thread::panicking() {
-            if !self.encoded {
-                self.encoded = true;
-                self.encode_inner().expect("Error happening while dropping RenderPass. Use encode() to handle it instead of panicing")
-            }
+        if !thread::panicking() && !self.encoded {
+            self.encoded = true;
+            self.encode_inner().expect("Error happening while dropping RenderPass. Use encode() to handle it instead of panicing")
         }
     }
 }
@@ -4938,7 +4936,6 @@ impl Queue {
     /// internally to happen at the start of the next `submit()` call.
     ///
     /// This method fails if `size` is greater than the size of `buffer` starting at `offset`.
-    #[must_use]
     pub fn write_buffer_with<'a>(
         &'a self,
         buffer: &'a Buffer,
