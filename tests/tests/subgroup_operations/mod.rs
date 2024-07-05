@@ -122,5 +122,5 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                     panic!("{}", msg);
                 }
             },
-        );
+        ).unwrap();
     });

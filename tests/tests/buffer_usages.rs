@@ -31,7 +31,7 @@ fn try_create(ctx: TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {
         .iter()
         .flat_map(|&(expect_error, usages)| usages.iter().copied().map(move |u| (expect_error, u)))
     {
-        fail_if(expect_validation_error, || {
+        let _ = fail_if(expect_validation_error, || {
             ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: BUFFER_SIZE,
@@ -108,7 +108,7 @@ async fn map_test(
         || (map_mode_type == Ma::Read && !usage.contains(Bu::MAP_READ))
         || (map_mode_type == Ma::Write && !usage.contains(Bu::MAP_WRITE));
 
-    fail_if(map_async_validation_error, || {
+    let _ = fail_if(map_async_validation_error, || {
         buffer.slice(0..size).map_async(map_mode_type, |_| {})
     });
 
@@ -117,7 +117,7 @@ async fn map_test(
     }
 
     if before_unmap {
-        buffer.unmap();
+        buffer.unmap().unwrap();
     }
 
     if before_destroy {
@@ -135,7 +135,7 @@ async fn map_test(
         }
 
         if after_unmap {
-            buffer.unmap();
+            buffer.unmap().unwrap();
         }
 
         if after_destroy {

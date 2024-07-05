@@ -53,13 +53,13 @@ static FLOAT32_FILTERABLE_WITHOUT_FEATURE: GpuTestConfiguration = GpuTestConfigu
     .run_sync(|ctx| {
         let device = &ctx.device;
         // Unorm textures are always filterable
-        create_texture_binding(device, wgpu::TextureFormat::R8Unorm, true);
-        create_texture_binding(device, wgpu::TextureFormat::R8Unorm, false);
+        create_texture_binding(device, wgpu::TextureFormat::R8Unorm, true).unwrap();
+        create_texture_binding(device, wgpu::TextureFormat::R8Unorm, false).unwrap();
         // As are float16 textures
-        create_texture_binding(device, wgpu::TextureFormat::R16Float, true);
-        create_texture_binding(device, wgpu::TextureFormat::R16Float, false);
+        create_texture_binding(device, wgpu::TextureFormat::R16Float, true).unwrap();
+        create_texture_binding(device, wgpu::TextureFormat::R16Float, false).unwrap();
         // Float 32 textures can be used as non-filterable only
-        create_texture_binding(device, wgpu::TextureFormat::R32Float, false);
+        create_texture_binding(device, wgpu::TextureFormat::R32Float, false).unwrap();
         // This is supposed to fail, since we have not activated the feature
         fail(|| {
             create_texture_binding(device, wgpu::TextureFormat::R32Float, true)
@@ -72,7 +72,7 @@ static FLOAT32_FILTERABLE_WITH_FEATURE: GpuTestConfiguration = GpuTestConfigurat
     .run_sync(|ctx| {
         let device = &ctx.device;
         // With the feature enabled, it does work!
-        create_texture_binding(device, wgpu::TextureFormat::R32Float, true);
-        create_texture_binding(device, wgpu::TextureFormat::Rg32Float, true);
-        create_texture_binding(device, wgpu::TextureFormat::Rgba32Float, true);
+        create_texture_binding(device, wgpu::TextureFormat::R32Float, true).unwrap();
+        create_texture_binding(device, wgpu::TextureFormat::Rg32Float, true).unwrap();
+        create_texture_binding(device, wgpu::TextureFormat::Rgba32Float, true).unwrap();
     });

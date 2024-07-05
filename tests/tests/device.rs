@@ -756,7 +756,7 @@ fn vs_main() -> @builtin(position) vec4<f32> {
                     resource: wgpu::BindingResource::TextureView(&my_texture_view),
                 },
             ],
-        });
+        }).unwrap();
     });
 
 #[gpu_test]
