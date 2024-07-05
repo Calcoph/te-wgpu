@@ -82,78 +82,88 @@ impl Example {
         query_sets: &Option<QuerySets>,
         mip_count: u32,
     ) {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
-        }).unwrap();
+        let shader = device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
+            })
+            .unwrap();
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("blit"),
-            layout: None,
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                compilation_options: Default::default(),
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                compilation_options: Default::default(),
-                targets: &[Some(TEXTURE_FORMAT.into())],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        }).unwrap();
+        let pipeline = device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("blit"),
+                layout: None,
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "fs_main",
+                    compilation_options: Default::default(),
+                    targets: &[Some(TEXTURE_FORMAT.into())],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    ..Default::default()
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+            })
+            .unwrap();
 
         let bind_group_layout = pipeline.get_bind_group_layout(0);
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("mip"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        }).unwrap();
+        let sampler = device
+            .create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("mip"),
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            })
+            .unwrap();
 
         let views = (0..mip_count)
             .map(|mip| {
-                texture.create_view(&wgpu::TextureViewDescriptor {
-                    label: Some("mip"),
-                    format: None,
-                    dimension: None,
-                    aspect: wgpu::TextureAspect::All,
-                    base_mip_level: mip,
-                    mip_level_count: Some(1),
-                    base_array_layer: 0,
-                    array_layer_count: None,
-                }).unwrap()
+                texture
+                    .create_view(&wgpu::TextureViewDescriptor {
+                        label: Some("mip"),
+                        format: None,
+                        dimension: None,
+                        aspect: wgpu::TextureAspect::All,
+                        base_mip_level: mip,
+                        mip_level_count: Some(1),
+                        base_array_layer: 0,
+                        array_layer_count: None,
+                    })
+                    .unwrap()
             })
             .collect::<Vec<_>>();
 
         for target_mip in 1..mip_count as usize {
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&views[target_mip - 1]),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
-                    },
-                ],
-                label: None,
-            }).unwrap();
+            let bind_group = device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&views[target_mip - 1]),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&sampler),
+                        },
+                    ],
+                    label: None,
+                })
+                .unwrap();
 
             let pipeline_query_index_base = target_mip as u32 - 1;
             let timestamp_query_index_base = (target_mip as u32 - 1) * 2;
@@ -190,18 +200,22 @@ impl Example {
 
         if let Some(ref query_sets) = query_sets {
             let timestamp_query_count = MIP_PASS_COUNT * 2;
-            encoder.resolve_query_set(
-                &query_sets.timestamp,
-                0..timestamp_query_count,
-                &query_sets.data_buffer,
-                0,
-            ).unwrap();
-            encoder.resolve_query_set(
-                &query_sets.pipeline_statistics,
-                0..MIP_PASS_COUNT,
-                &query_sets.data_buffer,
-                pipeline_statistics_offset(),
-            ).unwrap();
+            encoder
+                .resolve_query_set(
+                    &query_sets.timestamp,
+                    0..timestamp_query_count,
+                    &query_sets.data_buffer,
+                    0,
+                )
+                .unwrap();
+            encoder
+                .resolve_query_set(
+                    &query_sets.pipeline_statistics,
+                    0..MIP_PASS_COUNT,
+                    &query_sets.data_buffer,
+                    pipeline_statistics_offset(),
+                )
+                .unwrap();
         }
     }
 }
@@ -217,8 +231,9 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let mut init_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
+        let mut init_encoder = device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
 
         // Create the texture
         let size = 1 << MIP_PASS_COUNT;
@@ -228,110 +243,128 @@ impl crate::framework::Example for Example {
             height: size,
             depth_or_array_layers: 1,
         };
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: texture_extent,
-            mip_level_count: MIP_LEVEL_COUNT,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: TEXTURE_FORMAT,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::COPY_DST,
-            label: None,
-            view_formats: &[],
-        }).unwrap();
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+        let texture = device
+            .create_texture(&wgpu::TextureDescriptor {
+                size: texture_extent,
+                mip_level_count: MIP_LEVEL_COUNT,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: TEXTURE_FORMAT,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::COPY_DST,
+                label: None,
+                view_formats: &[],
+            })
+            .unwrap();
+        let texture_view = texture
+            .create_view(&wgpu::TextureViewDescriptor::default())
+            .unwrap();
         //Note: we could use queue.write_texture instead, and this is what other
         // examples do, but here we want to show another way to do this.
-        let temp_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Temporary Buffer"),
-            contents: texels.as_slice(),
-            usage: wgpu::BufferUsages::COPY_SRC,
-        }).unwrap();
-        init_encoder.copy_buffer_to_texture(
-            wgpu::ImageCopyBuffer {
-                buffer: &temp_buf,
-                layout: wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4 * size),
-                    rows_per_image: None,
+        let temp_buf = device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Temporary Buffer"),
+                contents: texels.as_slice(),
+                usage: wgpu::BufferUsages::COPY_SRC,
+            })
+            .unwrap();
+        init_encoder
+            .copy_buffer_to_texture(
+                wgpu::ImageCopyBuffer {
+                    buffer: &temp_buf,
+                    layout: wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(4 * size),
+                        rows_per_image: None,
+                    },
                 },
-            },
-            texture.as_image_copy(),
-            texture_extent,
-        ).unwrap();
+                texture.as_image_copy(),
+                texture_extent,
+            )
+            .unwrap();
 
         // Create other resources
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: None,
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::Repeat,
-            address_mode_w: wgpu::AddressMode::Repeat,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        }).unwrap();
+        let sampler = device
+            .create_sampler(&wgpu::SamplerDescriptor {
+                label: None,
+                address_mode_u: wgpu::AddressMode::Repeat,
+                address_mode_v: wgpu::AddressMode::Repeat,
+                address_mode_w: wgpu::AddressMode::Repeat,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            })
+            .unwrap();
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform Buffer"),
-            contents: bytemuck::cast_slice(mx_ref),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        }).unwrap();
+        let uniform_buf = device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Uniform Buffer"),
+                contents: bytemuck::cast_slice(mx_ref),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            })
+            .unwrap();
 
         // Create the render pipeline
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-        }).unwrap();
+        let shader = device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
+            })
+            .unwrap();
 
-        let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("draw"),
-            layout: None,
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                compilation_options: Default::default(),
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                compilation_options: Default::default(),
-                targets: &[Some(config.view_formats[0].into())],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleStrip,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        }).unwrap();
+        let draw_pipeline = device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("draw"),
+                layout: None,
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "fs_main",
+                    compilation_options: Default::default(),
+                    targets: &[Some(config.view_formats[0].into())],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleStrip,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    ..Default::default()
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+            })
+            .unwrap();
 
         // Create bind group
         let bind_group_layout = draw_pipeline.get_bind_group_layout(0);
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-            label: None,
-        }).unwrap();
+        let bind_group = device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: uniform_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                ],
+                label: None,
+            })
+            .unwrap();
 
         // If both kinds of query are supported, use queries
         let query_sets = if device.features().contains(QUERY_FEATURES) {
@@ -340,42 +373,50 @@ impl crate::framework::Example for Example {
 
             // Create the timestamp query set. We need twice as many queries as we have passes,
             // as we need a query at the beginning and at the end of the operation.
-            let timestamp = device.create_query_set(&wgpu::QuerySetDescriptor {
-                label: None,
-                count: mip_passes * 2,
-                ty: wgpu::QueryType::Timestamp,
-            }).unwrap();
+            let timestamp = device
+                .create_query_set(&wgpu::QuerySetDescriptor {
+                    label: None,
+                    count: mip_passes * 2,
+                    ty: wgpu::QueryType::Timestamp,
+                })
+                .unwrap();
             // Timestamp queries use an device-specific timestamp unit. We need to figure out how many
             // nanoseconds go by for the timestamp to be incremented by one. The period is this value.
             let timestamp_period = queue.get_timestamp_period();
 
             // We only need one pipeline statistics query per pass.
-            let pipeline_statistics = device.create_query_set(&wgpu::QuerySetDescriptor {
-                label: None,
-                count: mip_passes,
-                ty: wgpu::QueryType::PipelineStatistics(
-                    wgpu::PipelineStatisticsTypes::FRAGMENT_SHADER_INVOCATIONS,
-                ),
-            }).unwrap();
+            let pipeline_statistics = device
+                .create_query_set(&wgpu::QuerySetDescriptor {
+                    label: None,
+                    count: mip_passes,
+                    ty: wgpu::QueryType::PipelineStatistics(
+                        wgpu::PipelineStatisticsTypes::FRAGMENT_SHADER_INVOCATIONS,
+                    ),
+                })
+                .unwrap();
 
             // This databuffer has to store all of the query results, 2 * passes timestamp queries
             // and 1 * passes statistics queries. Each query returns a u64 value.
             let buffer_size = pipeline_statistics_offset()
                 + mem::size_of::<PipelineStatisticsQueries>() as wgpu::BufferAddress;
-            let data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("query buffer"),
-                size: buffer_size,
-                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
-                mapped_at_creation: false,
-            }).unwrap();
+            let data_buffer = device
+                .create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("query buffer"),
+                    size: buffer_size,
+                    usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+                    mapped_at_creation: false,
+                })
+                .unwrap();
 
             // Mapping buffer
-            let mapping_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("query buffer"),
-                size: buffer_size,
-                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                mapped_at_creation: false,
-            }).unwrap();
+            let mapping_buffer = device
+                .create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("query buffer"),
+                    size: buffer_size,
+                    usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                    mapped_at_creation: false,
+                })
+                .unwrap();
 
             Some(QuerySets {
                 timestamp,
@@ -397,13 +438,15 @@ impl crate::framework::Example for Example {
         );
 
         if let Some(ref query_sets) = query_sets {
-            init_encoder.copy_buffer_to_buffer(
-                &query_sets.data_buffer,
-                0,
-                &query_sets.mapping_buffer,
-                0,
-                query_sets.data_buffer.size(),
-            ).unwrap();
+            init_encoder
+                .copy_buffer_to_buffer(
+                    &query_sets.data_buffer,
+                    0,
+                    &query_sets.mapping_buffer,
+                    0,
+                    query_sets.data_buffer.size(),
+                )
+                .unwrap();
         }
 
         queue.submit(Some(init_encoder.finish().unwrap()));
@@ -412,7 +455,8 @@ impl crate::framework::Example for Example {
             query_sets
                 .mapping_buffer
                 .slice(..)
-                .map_async(wgpu::MapMode::Read, |_| ()).unwrap();
+                .map_async(wgpu::MapMode::Read, |_| ())
+                .unwrap();
             // Wait for device to be done rendering mipmaps
             device.poll(wgpu::Maintain::wait()).panic_on_timeout();
             // This is guaranteed to be ready.
@@ -468,14 +512,17 @@ impl crate::framework::Example for Example {
     ) -> Result<(), CreateTextureError> {
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref)).unwrap();
+        queue
+            .write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref))
+            .unwrap();
 
         Ok(())
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
+        let mut encoder = device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
         {
             let clear_color = wgpu::Color {
                 r: 0.1,

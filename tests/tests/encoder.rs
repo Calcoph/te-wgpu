@@ -1,4 +1,4 @@
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, fail};
+use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
@@ -27,23 +27,29 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
     .run_sync(|ctx| {
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+            .unwrap();
 
-        let target_tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: wgpu::Extent3d {
-                width: 100,
-                height: 100,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        }).unwrap();
-        let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+        let target_tex = ctx
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d {
+                    width: 100,
+                    height: 100,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::R8Unorm,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
+            .unwrap();
+        let target_view = target_tex
+            .create_view(&wgpu::TextureViewDescriptor::default())
+            .unwrap();
 
         let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("renderpass"),

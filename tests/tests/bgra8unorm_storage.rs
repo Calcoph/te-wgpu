@@ -25,83 +25,101 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     )
     .run_async(|ctx| async move {
         let device = &ctx.device;
-        let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: wgpu::Extent3d {
-                width: 256,
-                height: 256,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Bgra8Unorm,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        }).unwrap();
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor {
-            label: None,
-            format: None,
-            dimension: None,
-            aspect: wgpu::TextureAspect::All,
-            base_mip_level: 0,
-            base_array_layer: 0,
-            mip_level_count: Some(1),
-            array_layer_count: Some(1),
-        }).unwrap();
-
-        let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: 256 * 256 * 4,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        }).unwrap();
-
-        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::StorageTexture {
-                    access: wgpu::StorageTextureAccess::WriteOnly,
-                    format: wgpu::TextureFormat::Bgra8Unorm,
-                    view_dimension: wgpu::TextureViewDimension::D2,
+        let texture = ctx
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d {
+                    width: 256,
+                    height: 256,
+                    depth_or_array_layers: 1,
                 },
-                count: None,
-            }],
-        }).unwrap();
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Bgra8Unorm,
+                usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
+                view_formats: &[],
+            })
+            .unwrap();
 
-        let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&view),
-            }],
-        }).unwrap();
+        let view = texture
+            .create_view(&wgpu::TextureViewDescriptor {
+                label: None,
+                format: None,
+                dimension: None,
+                aspect: wgpu::TextureAspect::All,
+                base_mip_level: 0,
+                base_array_layer: 0,
+                mip_level_count: Some(1),
+                array_layer_count: Some(1),
+            })
+            .unwrap();
 
-        let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
-        }).unwrap();
+        let readback_buffer = device
+            .create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: 256 * 256 * 4,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            })
+            .unwrap();
 
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(SHADER_SRC)),
-        }).unwrap();
+        let bgl = device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::Bgra8Unorm,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
+                    count: None,
+                }],
+            })
+            .unwrap();
 
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pl),
-            entry_point: "main",
-            compilation_options: Default::default(),
-            module: &module,
-        }).unwrap();
+        let bg = device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None,
+                layout: &bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                }],
+            })
+            .unwrap();
 
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
+        let pl = device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[&bgl],
+                push_constant_ranges: &[],
+            })
+            .unwrap();
+
+        let module = device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(SHADER_SRC)),
+            })
+            .unwrap();
+
+        let pipeline = device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pl),
+                entry_point: "main",
+                compilation_options: Default::default(),
+                module: &module,
+            })
+            .unwrap();
+
+        let mut encoder = device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
 
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -114,32 +132,36 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             pass.dispatch_workgroups(256, 256, 1);
         }
 
-        encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::ImageCopyBuffer {
-                buffer: &readback_buffer,
-                layout: wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(256 * 4),
-                    rows_per_image: Some(256),
+        encoder
+            .copy_texture_to_buffer(
+                wgpu::ImageCopyTexture {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
+                    aspect: wgpu::TextureAspect::All,
                 },
-            },
-            wgpu::Extent3d {
-                width: 256,
-                height: 256,
-                depth_or_array_layers: 1,
-            },
-        ).unwrap();
+                wgpu::ImageCopyBuffer {
+                    buffer: &readback_buffer,
+                    layout: wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(256 * 4),
+                        rows_per_image: Some(256),
+                    },
+                },
+                wgpu::Extent3d {
+                    width: 256,
+                    height: 256,
+                    depth_or_array_layers: 1,
+                },
+            )
+            .unwrap();
 
         ctx.queue.submit(Some(encoder.finish().unwrap()));
 
         let buffer_slice = readback_buffer.slice(..);
-        buffer_slice.map_async(wgpu::MapMode::Read, Result::unwrap).unwrap();
+        buffer_slice
+            .map_async(wgpu::MapMode::Read, Result::unwrap)
+            .unwrap();
         ctx.async_poll(wgpu::Maintain::wait())
             .await
             .panic_on_timeout();

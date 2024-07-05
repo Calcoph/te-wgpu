@@ -1054,7 +1054,7 @@ pub struct RenderPass<'a> {
     id: ObjectId,
     data: Box<Data>,
     parent: &'a mut CommandEncoder,
-    encoded: bool
+    encoded: bool,
 }
 
 /// In-progress recording of a compute pass.
@@ -2771,7 +2771,10 @@ impl Device {
     /// Creates a new [`Texture`].
     ///
     /// `desc` specifies the general format of the texture.
-    pub fn create_texture(&self, desc: &TextureDescriptor<'_>) -> Result<Texture, CreateTextureError> {
+    pub fn create_texture(
+        &self,
+        desc: &TextureDescriptor<'_>,
+    ) -> Result<Texture, CreateTextureError> {
         let (id, data) =
             DynContext::device_create_texture(&*self.context, &self.id, self.data.as_ref(), desc)?;
 
@@ -2873,7 +2876,10 @@ impl Device {
     /// Creates a new [`Sampler`].
     ///
     /// `desc` specifies the behavior of the sampler.
-    pub fn create_sampler(&self, desc: &SamplerDescriptor<'_>) -> Result<Sampler, CreateSamplerError> {
+    pub fn create_sampler(
+        &self,
+        desc: &SamplerDescriptor<'_>,
+    ) -> Result<Sampler, CreateSamplerError> {
         let (id, data) =
             DynContext::device_create_sampler(&*self.context, &self.id, self.data.as_ref(), desc)?;
         Ok(Sampler {
@@ -3803,7 +3809,11 @@ impl CommandEncoder {
     /// there is no strict guarantee that timestamps are taken after all commands
     /// recorded so far and all before all commands recorded after.
     /// This may depend both on the backend and the driver.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), QueryError> {
+    pub fn write_timestamp(
+        &mut self,
+        query_set: &QuerySet,
+        query_index: u32,
+    ) -> Result<(), QueryError> {
         DynContext::command_encoder_write_timestamp(
             &*self.context,
             self.id.as_ref().unwrap(),
@@ -4415,14 +4425,12 @@ impl<'a> RenderPass<'a> {
 
     fn encode_inner(&mut self) -> Result<(), core::command::RenderPassError> {
         let parent_id = self.parent.id.as_ref().unwrap();
-        self.parent
-            .context
-            .command_encoder_end_render_pass(
-                parent_id,
-                self.parent.data.as_ref(),
-                &mut self.id,
-                self.data.as_mut(),
-            )
+        self.parent.context.command_encoder_end_render_pass(
+            parent_id,
+            self.parent.data.as_ref(),
+            &mut self.id,
+            self.data.as_mut(),
+        )
     }
 }
 

@@ -3,35 +3,51 @@ use std::ops::Range;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 async fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
-    let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("gpu_buffer"),
-        size,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    }).unwrap();
+    let gpu_buffer = ctx
+        .device
+        .create_buffer(&wgpu::BufferDescriptor {
+            label: Some("gpu_buffer"),
+            size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
-    let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("cpu_buffer"),
-        size,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    }).unwrap();
+    let cpu_buffer = ctx
+        .device
+        .create_buffer(&wgpu::BufferDescriptor {
+            label: Some("cpu_buffer"),
+            size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
     // Initialize the whole buffer with values.
     let buffer_contents = vec![0xFF_u8; size as usize];
-    ctx.queue.write_buffer(&gpu_buffer, 0, &buffer_contents).unwrap();
+    ctx.queue
+        .write_buffer(&gpu_buffer, 0, &buffer_contents)
+        .unwrap();
 
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("encoder"),
-        }).unwrap();
+        })
+        .unwrap();
 
-    encoder.clear_buffer(&gpu_buffer, range.start, Some(range.end - range.start)).unwrap();
-    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, size).unwrap();
+    encoder
+        .clear_buffer(&gpu_buffer, range.start, Some(range.end - range.start))
+        .unwrap();
+    encoder
+        .copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, size)
+        .unwrap();
 
     ctx.queue.submit(Some(encoder.finish().unwrap()));
-    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
+    cpu_buffer
+        .slice(..)
+        .map_async(wgpu::MapMode::Read, |_| ())
+        .unwrap();
     ctx.async_poll(wgpu::Maintain::wait())
         .await
         .panic_on_timeout();

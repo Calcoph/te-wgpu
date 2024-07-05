@@ -23,19 +23,25 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
             .unwrap();
 
         // We use two separate vertex buffers so we can delete one in between submissions
-        let vertex_buffer1 = ctx.device.create_buffer(&BufferDescriptor {
-            label: Some("vertex buffer 1"),
-            size: 3 * 16,
-            usage: BufferUsages::VERTEX,
-            mapped_at_creation: false,
-        }).unwrap();
+        let vertex_buffer1 = ctx
+            .device
+            .create_buffer(&BufferDescriptor {
+                label: Some("vertex buffer 1"),
+                size: 3 * 16,
+                usage: BufferUsages::VERTEX,
+                mapped_at_creation: false,
+            })
+            .unwrap();
 
-        let vertex_buffer2 = ctx.device.create_buffer(&BufferDescriptor {
-            label: Some("vertex buffer 2"),
-            size: 3 * 4,
-            usage: BufferUsages::VERTEX,
-            mapped_at_creation: false,
-        }).unwrap();
+        let vertex_buffer2 = ctx
+            .device
+            .create_buffer(&BufferDescriptor {
+                label: Some("vertex buffer 2"),
+                size: 3 * 4,
+                usage: BufferUsages::VERTEX,
+                mapped_at_creation: false,
+            })
+            .unwrap();
 
         let pipeline_layout = ctx
             .device
@@ -43,7 +49,8 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                 label: Some("Pipeline Layout"),
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
-            }).unwrap();
+            })
+            .unwrap();
 
         let double_pipeline = ctx
             .device
@@ -81,7 +88,8 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                     })],
                 }),
                 multiview: None,
-            }).unwrap();
+            })
+            .unwrap();
 
         let single_pipeline = ctx
             .device
@@ -112,7 +120,8 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                     })],
                 }),
                 multiview: None,
-            }).unwrap();
+            })
+            .unwrap();
 
         let view = ctx
             .device
@@ -129,12 +138,15 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                 format: TextureFormat::Rgba8Unorm,
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
-            }).unwrap()
-            .create_view(&TextureViewDescriptor::default()).unwrap();
+            })
+            .unwrap()
+            .create_view(&TextureViewDescriptor::default())
+            .unwrap();
 
         let mut encoder1 = ctx
             .device
-            .create_command_encoder(&CommandEncoderDescriptor::default()).unwrap();
+            .create_command_encoder(&CommandEncoderDescriptor::default())
+            .unwrap();
 
         let mut double_rpass = encoder1.begin_render_pass(&RenderPassDescriptor {
             label: Some("double renderpass"),
@@ -169,7 +181,8 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
 
         let mut encoder2 = ctx
             .device
-            .create_command_encoder(&CommandEncoderDescriptor::default()).unwrap();
+            .create_command_encoder(&CommandEncoderDescriptor::default())
+            .unwrap();
 
         let mut single_rpass = encoder2.begin_render_pass(&RenderPassDescriptor {
             label: Some("single renderpass"),

@@ -16,12 +16,15 @@ use wgpu::*;
 static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         // Create a mappable buffer
-        let buffer = ctx.device.create_buffer(&BufferDescriptor {
-            label: Some("mappable buffer"),
-            size: 4,
-            usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        }).unwrap();
+        let buffer = ctx
+            .device
+            .create_buffer(&BufferDescriptor {
+                label: Some("mappable buffer"),
+                size: 4,
+                usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+            .unwrap();
 
         // Encode some work using it. The specifics of this work don't matter, just
         // that the buffer is used.
@@ -29,7 +32,8 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("encoder"),
-            }).unwrap();
+            })
+            .unwrap();
 
         encoder.clear_buffer(&buffer, 0, None).unwrap();
 
@@ -59,11 +63,14 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         let ordering_clone_queue_submitted = Arc::clone(&ordering);
 
         // Register the callabacks.
-        buffer.slice(..).map_async(MapMode::Read, move |_| {
-            let mut guard = ordering_clone_map_async.lock();
-            guard.value_read_map_async = Some(guard.counter);
-            guard.counter += 1;
-        }).unwrap();
+        buffer
+            .slice(..)
+            .map_async(MapMode::Read, move |_| {
+                let mut guard = ordering_clone_map_async.lock();
+                guard.value_read_map_async = Some(guard.counter);
+                guard.counter += 1;
+            })
+            .unwrap();
 
         // If the bug is present, this callback will be invoked immediately inside this function,
         // despite the fact there is an outstanding map_async callback.

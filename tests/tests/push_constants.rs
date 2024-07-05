@@ -44,7 +44,8 @@ async fn partial_update_test(ctx: TestingContext) {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: wgpu::ShaderSource::Wgsl(SHADER.into()),
-        }).unwrap();
+        })
+        .unwrap();
 
     let bgl = ctx
         .device
@@ -60,30 +61,40 @@ async fn partial_update_test(ctx: TestingContext) {
                 },
                 count: None,
             }],
-        }).unwrap();
+        })
+        .unwrap();
 
-    let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("gpu_buffer"),
-        size: 32,
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    }).unwrap();
+    let gpu_buffer = ctx
+        .device
+        .create_buffer(&wgpu::BufferDescriptor {
+            label: Some("gpu_buffer"),
+            size: 32,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
-    let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("cpu_buffer"),
-        size: 32,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    }).unwrap();
+    let cpu_buffer = ctx
+        .device
+        .create_buffer(&wgpu::BufferDescriptor {
+            label: Some("cpu_buffer"),
+            size: 32,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
-    let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("bind_group"),
-        layout: &bgl,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: gpu_buffer.as_entire_binding(),
-        }],
-    }).unwrap();
+    let bind_group = ctx
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("bind_group"),
+            layout: &bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: gpu_buffer.as_entire_binding(),
+            }],
+        })
+        .unwrap();
 
     let pipeline_layout = ctx
         .device
@@ -94,7 +105,8 @@ async fn partial_update_test(ctx: TestingContext) {
                 stages: wgpu::ShaderStages::COMPUTE,
                 range: 0..32,
             }],
-        }).unwrap();
+        })
+        .unwrap();
 
     let pipeline = ctx
         .device
@@ -104,13 +116,15 @@ async fn partial_update_test(ctx: TestingContext) {
             module: &sm,
             entry_point: "main",
             compilation_options: Default::default(),
-        }).unwrap();
+        })
+        .unwrap();
 
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("encoder"),
-        }).unwrap();
+        })
+        .unwrap();
 
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -137,9 +151,14 @@ async fn partial_update_test(ctx: TestingContext) {
         cpass.dispatch_workgroups(1, 1, 1);
     }
 
-    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, 32).unwrap();
+    encoder
+        .copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, 32)
+        .unwrap();
     ctx.queue.submit([encoder.finish().unwrap()]);
-    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
+    cpu_buffer
+        .slice(..)
+        .map_async(wgpu::MapMode::Read, |_| ())
+        .unwrap();
     ctx.async_poll(wgpu::Maintain::wait())
         .await
         .panic_on_timeout();

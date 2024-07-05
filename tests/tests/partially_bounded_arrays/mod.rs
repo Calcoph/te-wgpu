@@ -22,67 +22,82 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
             height: 1,
             depth_or_array_layers: 1,
         };
-        let storage_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: texture_extent,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba32Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::STORAGE_BINDING
-                | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        }).unwrap();
+        let storage_texture = device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: texture_extent,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba32Float,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_DST
+                    | wgpu::TextureUsages::STORAGE_BINDING
+                    | wgpu::TextureUsages::COPY_SRC,
+                view_formats: &[],
+            })
+            .unwrap();
 
-        let texture_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+        let texture_view = storage_texture
+            .create_view(&wgpu::TextureViewDescriptor::default())
+            .unwrap();
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("bind group layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::StorageTexture {
-                    access: wgpu::StorageTextureAccess::WriteOnly,
-                    format: wgpu::TextureFormat::Rgba32Float,
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                },
+        let bind_group_layout = device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("bind group layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::Rgba32Float,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
 
-                count: NonZeroU32::new(4),
-            }],
-        }).unwrap();
+                    count: NonZeroU32::new(4),
+                }],
+            })
+            .unwrap();
 
-        let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        }).unwrap();
+        let cs_module = device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            })
+            .unwrap();
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("main"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        }).unwrap();
+        let pipeline_layout = device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("main"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            })
+            .unwrap();
 
-        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            module: &cs_module,
-            entry_point: "main",
-            compilation_options: Default::default(),
-        }).unwrap();
+        let compute_pipeline = device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                module: &cs_module,
+                entry_point: "main",
+                compilation_options: Default::default(),
+            })
+            .unwrap();
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureViewArray(&[&texture_view]),
-            }],
-            layout: &bind_group_layout,
-            label: Some("bind group"),
-        }).unwrap();
+        let bind_group = device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureViewArray(&[&texture_view]),
+                }],
+                layout: &bind_group_layout,
+                label: Some("bind group"),
+            })
+            .unwrap();
 
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
+        let mut encoder = device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,

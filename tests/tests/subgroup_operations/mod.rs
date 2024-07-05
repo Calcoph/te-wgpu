@@ -21,61 +21,74 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(|ctx| {
         let device = &ctx.device;
 
-        let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: THREAD_COUNT * std::mem::size_of::<u32>() as u64,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        }).unwrap();
+        let storage_buffer = device
+            .create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: THREAD_COUNT * std::mem::size_of::<u32>() as u64,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            })
+            .unwrap();
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("bind group layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: NonZeroU64::new(
-                        THREAD_COUNT * std::mem::size_of::<u32>() as u64,
-                    ),
-                },
-                count: None,
-            }],
-        }).unwrap();
+        let bind_group_layout = device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("bind group layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: NonZeroU64::new(
+                            THREAD_COUNT * std::mem::size_of::<u32>() as u64,
+                        ),
+                    },
+                    count: None,
+                }],
+            })
+            .unwrap();
 
-        let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        }).unwrap();
+        let cs_module = device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            })
+            .unwrap();
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("main"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        }).unwrap();
+        let pipeline_layout = device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("main"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            })
+            .unwrap();
 
-        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            module: &cs_module,
-            entry_point: "main",
-            compilation_options: Default::default(),
-        }).unwrap();
+        let compute_pipeline = device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                module: &cs_module,
+                entry_point: "main",
+                compilation_options: Default::default(),
+            })
+            .unwrap();
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: storage_buffer.as_entire_binding(),
-            }],
-            layout: &bind_group_layout,
-            label: Some("bind group"),
-        }).unwrap();
+        let bind_group = device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: storage_buffer.as_entire_binding(),
+                }],
+                layout: &bind_group_layout,
+                label: Some("bind group"),
+            })
+            .unwrap();
 
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
+        let mut encoder = device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
@@ -122,5 +135,6 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                     panic!("{}", msg);
                 }
             },
-        ).unwrap();
+        )
+        .unwrap();
     });

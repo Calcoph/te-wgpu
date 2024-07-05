@@ -42,16 +42,20 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // Local buffer contents -> GPU storage buffer
     // Adds a write buffer command to the queue. This command is more complicated
     // than it appears.
-    context.queue.write_buffer(
-        &context.storage_buffer,
-        0,
-        bytemuck::cast_slice(local_buffer),
-    ).unwrap();
+    context
+        .queue
+        .write_buffer(
+            &context.storage_buffer,
+            0,
+            bytemuck::cast_slice(local_buffer),
+        )
+        .unwrap();
     log::info!("Wrote to buffer.");
 
     let mut command_encoder = context
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+        .unwrap();
 
     {
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -65,16 +69,20 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // We finish the compute pass by dropping it.
 
     // Entire storage buffer -> staging buffer.
-    command_encoder.copy_buffer_to_buffer(
-        &context.storage_buffer,
-        0,
-        &context.output_staging_buffer,
-        0,
-        context.storage_buffer.size(),
-    ).unwrap();
+    command_encoder
+        .copy_buffer_to_buffer(
+            &context.storage_buffer,
+            0,
+            &context.output_staging_buffer,
+            0,
+            context.storage_buffer.size(),
+        )
+        .unwrap();
 
     // Finalize the command encoder, add the contained commands to the queue and flush.
-    context.queue.submit(Some(command_encoder.finish().unwrap()));
+    context
+        .queue
+        .submit(Some(command_encoder.finish().unwrap()));
     log::info!("Submitted commands.");
 
     // Finally time to get our results.
@@ -104,7 +112,9 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // channels is wholly unnecessary, for the sake of portability to WASM (std channels
     // don't work on WASM,) we'll use async channels that work on both native and WASM.
     let (sender, receiver) = flume::bounded(1);
-    buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap()).unwrap();
+    buffer_slice
+        .map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap())
+        .unwrap();
     // In order for the mapping to be completed, one of three things must happen.
     // One of those can be calling `Device::poll`. This isn't necessary on the web as devices
     // are polled automatically but natively, we need to make sure this happens manually.
@@ -179,22 +189,26 @@ impl WgpuContext {
             .unwrap();
 
         // Our shader, kindly compiled with Naga.
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shader.wgsl"
-            ))),
-        }).unwrap();
+        let shader = device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                    "shader.wgsl"
+                ))),
+            })
+            .unwrap();
 
         // This is where the GPU will read from and write to.
-        let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: buffer_size as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        }).unwrap();
+        let storage_buffer = device
+            .create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: buffer_size as wgpu::BufferAddress,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            })
+            .unwrap();
         // For portability reasons, WebGPU draws a distinction between memory that is
         // accessible by the CPU and memory that is accessible by the GPU. Only
         // buffers accessible by the CPU can be mapped and accessed by the CPU and
@@ -202,51 +216,61 @@ impl WgpuContext {
         // data from the GPU, we need to use CommandEncoder::copy_buffer_to_buffer
         // (which we will later) to copy the buffer modified by the GPU into a
         // mappable, CPU-accessible buffer which we'll create here.
-        let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: buffer_size as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        }).unwrap();
+        let output_staging_buffer = device
+            .create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: buffer_size as wgpu::BufferAddress,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            })
+            .unwrap();
 
         // This can be though of as the function signature for our CPU-GPU function.
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    // Going to have this be None just to be safe.
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        }).unwrap();
+        let bind_group_layout = device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        // Going to have this be None just to be safe.
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            })
+            .unwrap();
         // This ties actual resources stored in the GPU to our metaphorical function
         // through the binding slots we defined above.
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: storage_buffer.as_entire_binding(),
-            }],
-        }).unwrap();
+        let bind_group = device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None,
+                layout: &bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: storage_buffer.as_entire_binding(),
+                }],
+            })
+            .unwrap();
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        }).unwrap();
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: "main",
-            compilation_options: Default::default(),
-        }).unwrap();
+        let pipeline_layout = device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            })
+            .unwrap();
+        let pipeline = device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                module: &shader,
+                entry_point: "main",
+                compilation_options: Default::default(),
+            })
+            .unwrap();
 
         WgpuContext {
             device,

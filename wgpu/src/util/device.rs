@@ -79,7 +79,7 @@ pub trait DeviceExt {
     /// Creates a [Buffer](crate::Buffer) with data to initialize it.
     fn create_buffer_init(
         &self,
-        desc: &BufferInitDescriptor<'_>
+        desc: &BufferInitDescriptor<'_>,
     ) -> Result<crate::Buffer, CreateBufferError>;
 
     /// Upload an entire texture and its mipmaps from a source buffer.

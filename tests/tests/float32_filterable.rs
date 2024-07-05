@@ -1,25 +1,33 @@
 //! Tests for FLOAT32_FILTERABLE feature.
 
 use wgpu::core::binding_model::CreateBindGroupLayoutError;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, fail};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters};
 
-fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, filterable: bool) -> Result<(), CreateBindGroupLayoutError>{
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
-        size: wgpu::Extent3d {
-            width: 256,
-            height: 256,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    }).unwrap();
+fn create_texture_binding(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    filterable: bool,
+) -> Result<(), CreateBindGroupLayoutError> {
+    let texture = device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 256,
+                height: 256,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        })
+        .unwrap();
 
-    let view = texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+    let view = texture
+        .create_view(&wgpu::TextureViewDescriptor::default())
+        .unwrap();
 
     let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
@@ -61,9 +69,7 @@ static FLOAT32_FILTERABLE_WITHOUT_FEATURE: GpuTestConfiguration = GpuTestConfigu
         // Float 32 textures can be used as non-filterable only
         create_texture_binding(device, wgpu::TextureFormat::R32Float, false).unwrap();
         // This is supposed to fail, since we have not activated the feature
-        fail(|| {
-            create_texture_binding(device, wgpu::TextureFormat::R32Float, true)
-        });
+        fail(|| create_texture_binding(device, wgpu::TextureFormat::R32Float, true));
     });
 
 #[gpu_test]

@@ -4,15 +4,19 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
     let r = wgpu::BufferUsages::MAP_READ;
     let rw = wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::MAP_WRITE;
     for usage in [r, rw] {
-        let b0 = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(label),
-            size: buffer_size,
-            usage,
-            mapped_at_creation: false,
-        }).unwrap();
+        let b0 = ctx
+            .device
+            .create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size: buffer_size,
+                usage,
+                mapped_at_creation: false,
+            })
+            .unwrap();
 
         b0.slice(0..0)
-            .map_async(wgpu::MapMode::Read, Result::unwrap).unwrap();
+            .map_async(wgpu::MapMode::Read, Result::unwrap)
+            .unwrap();
 
         ctx.async_poll(wgpu::Maintain::wait())
             .await
@@ -26,29 +30,37 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
         b0.unmap().unwrap();
 
         // Map and unmap right away.
-        b0.slice(0..0).map_async(wgpu::MapMode::Read, move |_| {}).unwrap();
+        b0.slice(0..0)
+            .map_async(wgpu::MapMode::Read, move |_| {})
+            .unwrap();
         b0.unmap().unwrap();
 
         // Map multiple times before unmapping.
-        b0.slice(0..0).map_async(wgpu::MapMode::Read, move |_| {}).unwrap();
+        b0.slice(0..0)
+            .map_async(wgpu::MapMode::Read, move |_| {})
+            .unwrap();
         b0.slice(0..0)
             .map_async(wgpu::MapMode::Read, move |result| {
                 assert!(result.is_err());
-            }).unwrap();
+            })
+            .unwrap();
         b0.slice(0..0)
             .map_async(wgpu::MapMode::Read, move |result| {
                 assert!(result.is_err());
-            }).unwrap();
+            })
+            .unwrap();
         b0.slice(0..0)
             .map_async(wgpu::MapMode::Read, move |result| {
                 assert!(result.is_err());
-            }).unwrap();
+            })
+            .unwrap();
         b0.unmap().unwrap();
 
         // Write mode.
         if usage == rw {
             b0.slice(0..0)
-                .map_async(wgpu::MapMode::Write, Result::unwrap).unwrap();
+                .map_async(wgpu::MapMode::Write, Result::unwrap)
+                .unwrap();
 
             ctx.async_poll(wgpu::Maintain::wait())
                 .await
@@ -62,17 +74,22 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
             b0.unmap().unwrap();
 
             // Map and unmap right away.
-            b0.slice(0..0).map_async(wgpu::MapMode::Write, move |_| {}).unwrap();
+            b0.slice(0..0)
+                .map_async(wgpu::MapMode::Write, move |_| {})
+                .unwrap();
             b0.unmap().unwrap();
         }
     }
 
-    let b1 = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some(label),
-        size: buffer_size,
-        usage: rw,
-        mapped_at_creation: true,
-    }).unwrap();
+    let b1 = ctx
+        .device
+        .create_buffer(&wgpu::BufferDescriptor {
+            label: Some(label),
+            size: buffer_size,
+            usage: rw,
+            mapped_at_creation: true,
+        })
+        .unwrap();
 
     {
         let view = b1.slice(0..0).get_mapped_range_mut();
@@ -103,24 +120,31 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_async(
     // The goal is to check that get_mapped_range did not accidentally double-count
     // the mapped offset.
 
-    let write_buf = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: None,
-        size: 256,
-        usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    }).unwrap();
-    let read_buf = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: None,
-        size: 256,
-        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    }).unwrap();
+    let write_buf = ctx
+        .device
+        .create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 256,
+            usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        })
+        .unwrap();
+    let read_buf = ctx
+        .device
+        .create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 256,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
     write_buf
         .slice(32..)
         .map_async(wgpu::MapMode::Write, move |result| {
             result.unwrap();
-        }).unwrap();
+        })
+        .unwrap();
 
     ctx.async_poll(wgpu::Maintain::wait())
         .await
@@ -138,15 +162,19 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_async(
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+        .unwrap();
 
-    encoder.copy_buffer_to_buffer(&write_buf, 0, &read_buf, 0, 256).unwrap();
+    encoder
+        .copy_buffer_to_buffer(&write_buf, 0, &read_buf, 0, 256)
+        .unwrap();
 
     ctx.queue.submit(Some(encoder.finish().unwrap()));
 
     read_buf
         .slice(..)
-        .map_async(wgpu::MapMode::Read, Result::unwrap).unwrap();
+        .map_async(wgpu::MapMode::Read, Result::unwrap)
+        .unwrap();
 
     ctx.async_poll(wgpu::Maintain::wait())
         .await
@@ -191,23 +219,25 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                         }
             "#,
                 )),
-            }).unwrap();
+            })
+            .unwrap();
 
-        let bind_group_layout =
-            ctx.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: std::num::NonZeroU64::new(16),
-                        },
-                        count: None,
-                    }],
-                }).unwrap();
+        let bind_group_layout = ctx
+            .device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: std::num::NonZeroU64::new(16),
+                    },
+                    count: None,
+                }],
+            })
+            .unwrap();
 
         let pipeline_layout = ctx
             .device
@@ -215,7 +245,8 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                 label: None,
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[],
-            }).unwrap();
+            })
+            .unwrap();
 
         wgpu_test::fail(|| {
             ctx.device
@@ -260,23 +291,25 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                         }
             "#,
                 )),
-            }).unwrap();
+            })
+            .unwrap();
 
-        let bind_group_layout =
-            ctx.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                }).unwrap();
+        let bind_group_layout = ctx
+            .device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            })
+            .unwrap();
 
         let pipeline_layout = ctx
             .device
@@ -284,7 +317,8 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 label: None,
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[],
-            }).unwrap();
+            })
+            .unwrap();
 
         let pipeline = ctx
             .device
@@ -294,26 +328,36 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 module: &shader_module,
                 entry_point: "main",
                 compilation_options: Default::default(),
-            }).unwrap();
+            })
+            .unwrap();
 
-        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: 16, // too small for 32-byte var `a` in shader module
-            usage: wgpu::BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        }).unwrap();
+        let buffer = ctx
+            .device
+            .create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: 16, // too small for 32-byte var `a` in shader module
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            })
+            .unwrap();
 
-        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: buffer.as_entire_binding(),
-            }],
-        }).unwrap();
+        let bind_group = ctx
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None,
+                layout: &bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffer.as_entire_binding(),
+                }],
+            })
+            .unwrap();
 
         wgpu_test::fail(|| {
-            let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&Default::default())
+                .unwrap();
 
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
@@ -335,12 +379,15 @@ static CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS: GpuTestConfiguration = GpuTestConfi
     .run_sync(|ctx| {
         let size = 16;
 
-        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size,
-            usage: wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        }).unwrap();
+        let buffer = ctx
+            .device
+            .create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size,
+                usage: wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+            .unwrap();
 
         let out_of_bounds = size.checked_add(wgpu::COPY_BUFFER_ALIGNMENT).unwrap();
 
@@ -359,12 +406,15 @@ static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default())
         .run_sync(|ctx| {
-            let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: 16, // unimportant for this test
-                usage: wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            }).unwrap();
+            let buffer = ctx
+                .device
+                .create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size: 16, // unimportant for this test
+                    usage: wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                })
+                .unwrap();
 
             let max_valid_offset = u64::MAX - (u64::MAX % wgpu::COPY_BUFFER_ALIGNMENT);
             let smallest_aligned_invalid_size = wgpu::COPY_BUFFER_ALIGNMENT;

@@ -41,27 +41,31 @@ impl Example {
             .create_view(&Default::default())
             .unwrap();
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Nearest Neighbor Sampler"),
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        }).unwrap();
+        let sampler = device
+            .create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("Nearest Neighbor Sampler"),
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            })
+            .unwrap();
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("upscale bind group"),
-            layout: bind_group_layout_upscale,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        }).unwrap();
+        let bind_group = device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("upscale bind group"),
+                layout: bind_group_layout_upscale,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                ],
+            })
+            .unwrap();
 
         (texture_view, bind_group)
     }
@@ -80,22 +84,25 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let pipeline_layout_empty =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let pipeline_layout_empty = device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
-            }).unwrap();
+            })
+            .unwrap();
 
-        let shader_triangle_and_lines = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                "triangle_and_lines.wgsl"
-            ))),
-        }).unwrap();
+        let shader_triangle_and_lines = device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                    "triangle_and_lines.wgsl"
+                ))),
+            })
+            .unwrap();
 
-        let pipeline_triangle_conservative =
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline_triangle_conservative = device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("Conservative Rasterization"),
                 layout: Some(&pipeline_layout_empty),
                 vertex: wgpu::VertexState {
@@ -117,10 +124,11 @@ impl crate::framework::Example for Example {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
-            }).unwrap();
+            })
+            .unwrap();
 
-        let pipeline_triangle_regular =
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline_triangle_regular = device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("Regular Rasterization"),
                 layout: Some(&pipeline_layout_empty),
                 vertex: wgpu::VertexState {
@@ -139,45 +147,48 @@ impl crate::framework::Example for Example {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
-            }).unwrap();
+            })
+            .unwrap();
 
         let pipeline_lines = if device
             .features()
             .contains(wgpu::Features::POLYGON_MODE_LINE)
         {
             Some(
-                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("Lines"),
-                    layout: Some(&pipeline_layout_empty),
-                    vertex: wgpu::VertexState {
-                        module: &shader_triangle_and_lines,
-                        entry_point: "vs_main",
-                        compilation_options: Default::default(),
-                        buffers: &[],
-                    },
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader_triangle_and_lines,
-                        entry_point: "fs_main_white",
-                        compilation_options: Default::default(),
-                        targets: &[Some(config.view_formats[0].into())],
-                    }),
-                    primitive: wgpu::PrimitiveState {
-                        polygon_mode: wgpu::PolygonMode::Line,
-                        topology: wgpu::PrimitiveTopology::LineStrip,
-                        ..Default::default()
-                    },
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
-                }).unwrap(),
+                device
+                    .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                        label: Some("Lines"),
+                        layout: Some(&pipeline_layout_empty),
+                        vertex: wgpu::VertexState {
+                            module: &shader_triangle_and_lines,
+                            entry_point: "vs_main",
+                            compilation_options: Default::default(),
+                            buffers: &[],
+                        },
+                        fragment: Some(wgpu::FragmentState {
+                            module: &shader_triangle_and_lines,
+                            entry_point: "fs_main_white",
+                            compilation_options: Default::default(),
+                            targets: &[Some(config.view_formats[0].into())],
+                        }),
+                        primitive: wgpu::PrimitiveState {
+                            polygon_mode: wgpu::PolygonMode::Line,
+                            topology: wgpu::PrimitiveTopology::LineStrip,
+                            ..Default::default()
+                        },
+                        depth_stencil: None,
+                        multisample: wgpu::MultisampleState::default(),
+                        multiview: None,
+                    })
+                    .unwrap(),
             )
         } else {
             None
         };
 
         let (pipeline_upscale, bind_group_layout_upscale) = {
-            let bind_group_layout =
-                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            let bind_group_layout = device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("upscale bindgroup"),
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
@@ -197,38 +208,45 @@ impl crate::framework::Example for Example {
                             count: None,
                         },
                     ],
-                }).unwrap();
+                })
+                .unwrap();
 
-            let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
-            }).unwrap();
-            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
-            }).unwrap();
+            let pipeline_layout = device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: None,
+                    bind_group_layouts: &[&bind_group_layout],
+                    push_constant_ranges: &[],
+                })
+                .unwrap();
+            let shader = device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: None,
+                    source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
+                })
+                .unwrap();
             (
-                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("Upscale"),
-                    layout: Some(&pipeline_layout),
-                    vertex: wgpu::VertexState {
-                        module: &shader,
-                        entry_point: "vs_main",
-                        compilation_options: Default::default(),
-                        buffers: &[],
-                    },
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader,
-                        entry_point: "fs_main",
-                        compilation_options: Default::default(),
-                        targets: &[Some(config.view_formats[0].into())],
-                    }),
-                    primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
-                }).unwrap(),
+                device
+                    .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                        label: Some("Upscale"),
+                        layout: Some(&pipeline_layout),
+                        vertex: wgpu::VertexState {
+                            module: &shader,
+                            entry_point: "vs_main",
+                            compilation_options: Default::default(),
+                            buffers: &[],
+                        },
+                        fragment: Some(wgpu::FragmentState {
+                            module: &shader,
+                            entry_point: "fs_main",
+                            compilation_options: Default::default(),
+                            targets: &[Some(config.view_formats[0].into())],
+                        }),
+                        primitive: wgpu::PrimitiveState::default(),
+                        depth_stencil: None,
+                        multisample: wgpu::MultisampleState::default(),
+                        multiview: None,
+                    })
+                    .unwrap(),
                 bind_group_layout,
             )
         };
@@ -253,7 +271,7 @@ impl crate::framework::Example for Example {
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    )  -> Result<(), CreateTextureError> {
+    ) -> Result<(), CreateTextureError> {
         let (low_res_target, bind_group_upscale) =
             Self::create_low_res_target(config, device, &self.bind_group_layout_upscale);
         self.low_res_target = low_res_target;
@@ -265,9 +283,11 @@ impl crate::framework::Example for Example {
     fn update(&mut self, _event: winit::event::WindowEvent) {}
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("primary"),
-        }).unwrap();
+        let mut encoder = device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("primary"),
+            })
+            .unwrap();
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

@@ -16,25 +16,31 @@ async fn scissor_test_impl(
     scissor_rect: Rect,
     expected_data: [u8; BUFFER_SIZE],
 ) {
-    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("Offscreen texture"),
-        size: wgpu::Extent3d {
-            width: TEXTURE_WIDTH,
-            height: TEXTURE_HEIGHT,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    }).unwrap();
-    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+    let texture = ctx
+        .device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: Some("Offscreen texture"),
+            size: wgpu::Extent3d {
+                width: TEXTURE_WIDTH,
+                height: TEXTURE_HEIGHT,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
+        .unwrap();
+    let texture_view = texture
+        .create_view(&wgpu::TextureViewDescriptor::default())
+        .unwrap();
 
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("solid_white.wgsl")).unwrap();
+        .create_shader_module(wgpu::include_wgsl!("solid_white.wgsl"))
+        .unwrap();
 
     let pipeline = ctx
         .device
@@ -61,13 +67,15 @@ async fn scissor_test_impl(
                 })],
             }),
             multiview: None,
-        }).unwrap();
+        })
+        .unwrap();
 
     let readback_buffer = image::ReadbackBuffers::new(&ctx.device, &texture);
     {
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Renderpass"),

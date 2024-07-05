@@ -45,61 +45,79 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
             })
             .unwrap();
 
-        let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            dimension: wgpu::TextureDimension::D2,
-            size,
-            format: wgpu::TextureFormat::NV12,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            mip_level_count: 1,
-            sample_count: 1,
-            view_formats: &[],
-        }).unwrap();
-        let y_view = tex.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(wgpu::TextureFormat::R8Unorm),
-            aspect: wgpu::TextureAspect::Plane0,
-            ..Default::default()
-        }).unwrap();
-        let uv_view = tex.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(wgpu::TextureFormat::Rg8Unorm),
-            aspect: wgpu::TextureAspect::Plane1,
-            ..Default::default()
-        }).unwrap();
-        let sampler = ctx.device.create_sampler(&wgpu::SamplerDescriptor {
-            min_filter: wgpu::FilterMode::Linear,
-            mag_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        }).unwrap();
-        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&y_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&uv_view),
-                },
-            ],
-        }).unwrap();
+        let tex = ctx
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                dimension: wgpu::TextureDimension::D2,
+                size,
+                format: wgpu::TextureFormat::NV12,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                mip_level_count: 1,
+                sample_count: 1,
+                view_formats: &[],
+            })
+            .unwrap();
+        let y_view = tex
+            .create_view(&wgpu::TextureViewDescriptor {
+                format: Some(wgpu::TextureFormat::R8Unorm),
+                aspect: wgpu::TextureAspect::Plane0,
+                ..Default::default()
+            })
+            .unwrap();
+        let uv_view = tex
+            .create_view(&wgpu::TextureViewDescriptor {
+                format: Some(wgpu::TextureFormat::Rg8Unorm),
+                aspect: wgpu::TextureAspect::Plane1,
+                ..Default::default()
+            })
+            .unwrap();
+        let sampler = ctx
+            .device
+            .create_sampler(&wgpu::SamplerDescriptor {
+                min_filter: wgpu::FilterMode::Linear,
+                mag_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            })
+            .unwrap();
+        let bind_group = ctx
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None,
+                layout: &pipeline.get_bind_group_layout(0),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&y_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&uv_view),
+                    },
+                ],
+            })
+            .unwrap();
 
-        let target_tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: target_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        }).unwrap();
-        let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+        let target_tex = ctx
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: target_format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
+            .unwrap();
+        let target_view = target_tex
+            .create_view(&wgpu::TextureViewDescriptor::default())
+            .unwrap();
 
         let mut encoder = ctx
             .device
@@ -133,16 +151,19 @@ static NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT: GpuTestConfiguration =
                 height: 256,
                 depth_or_array_layers: 1,
             };
-            let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                dimension: wgpu::TextureDimension::D2,
-                size,
-                format: wgpu::TextureFormat::R8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                mip_level_count: 1,
-                sample_count: 1,
-                view_formats: &[],
-            }).unwrap();
+            let tex = ctx
+                .device
+                .create_texture(&wgpu::TextureDescriptor {
+                    label: None,
+                    dimension: wgpu::TextureDimension::D2,
+                    size,
+                    format: wgpu::TextureFormat::R8Unorm,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    view_formats: &[],
+                })
+                .unwrap();
             fail(|| {
                 tex.create_view(&wgpu::TextureViewDescriptor {
                     aspect: wgpu::TextureAspect::Plane0,
@@ -160,16 +181,19 @@ static NV12_TEXTURE_VIEW_PLANE_OUT_OF_BOUNDS: GpuTestConfiguration = GpuTestConf
             height: 256,
             depth_or_array_layers: 1,
         };
-        let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            dimension: wgpu::TextureDimension::D2,
-            size,
-            format: wgpu::TextureFormat::NV12,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            mip_level_count: 1,
-            sample_count: 1,
-            view_formats: &[],
-        }).unwrap();
+        let tex = ctx
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                dimension: wgpu::TextureDimension::D2,
+                size,
+                format: wgpu::TextureFormat::NV12,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                mip_level_count: 1,
+                sample_count: 1,
+                view_formats: &[],
+            })
+            .unwrap();
         fail(|| {
             tex.create_view(&wgpu::TextureViewDescriptor {
                 format: Some(wgpu::TextureFormat::R8Unorm),
@@ -188,16 +212,19 @@ static NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE: GpuTestConfiguration = GpuTestConfigu
             height: 256,
             depth_or_array_layers: 1,
         };
-        let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            dimension: wgpu::TextureDimension::D2,
-            size,
-            format: wgpu::TextureFormat::NV12,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            mip_level_count: 1,
-            sample_count: 1,
-            view_formats: &[],
-        }).unwrap();
+        let tex = ctx
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                dimension: wgpu::TextureDimension::D2,
+                size,
+                format: wgpu::TextureFormat::NV12,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                mip_level_count: 1,
+                sample_count: 1,
+                view_formats: &[],
+            })
+            .unwrap();
         fail(|| {
             tex.create_view(&wgpu::TextureViewDescriptor {
                 format: Some(wgpu::TextureFormat::Rg8Unorm),

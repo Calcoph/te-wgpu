@@ -217,43 +217,56 @@ async fn shader_input_output_test(
                     count: None,
                 },
             ],
-        }).unwrap();
+        })
+        .unwrap();
 
-    let input_buffer = ctx.device.create_buffer(&BufferDescriptor {
-        label: Some("input buffer"),
-        size: MAX_BUFFER_SIZE,
-        usage: BufferUsages::COPY_DST | BufferUsages::UNIFORM | BufferUsages::STORAGE,
-        mapped_at_creation: false,
-    }).unwrap();
+    let input_buffer = ctx
+        .device
+        .create_buffer(&BufferDescriptor {
+            label: Some("input buffer"),
+            size: MAX_BUFFER_SIZE,
+            usage: BufferUsages::COPY_DST | BufferUsages::UNIFORM | BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
-    let output_buffer = ctx.device.create_buffer(&BufferDescriptor {
-        label: Some("output buffer"),
-        size: MAX_BUFFER_SIZE,
-        usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
-        mapped_at_creation: false,
-    }).unwrap();
+    let output_buffer = ctx
+        .device
+        .create_buffer(&BufferDescriptor {
+            label: Some("output buffer"),
+            size: MAX_BUFFER_SIZE,
+            usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
-    let mapping_buffer = ctx.device.create_buffer(&BufferDescriptor {
-        label: Some("mapping buffer"),
-        size: MAX_BUFFER_SIZE,
-        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    }).unwrap();
+    let mapping_buffer = ctx
+        .device
+        .create_buffer(&BufferDescriptor {
+            label: Some("mapping buffer"),
+            size: MAX_BUFFER_SIZE,
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
-    let bg = ctx.device.create_bind_group(&BindGroupDescriptor {
-        label: None,
-        layout: &bgl,
-        entries: &[
-            BindGroupEntry {
-                binding: 0,
-                resource: input_buffer.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: output_buffer.as_entire_binding(),
-            },
-        ],
-    }).unwrap();
+    let bg = ctx
+        .device
+        .create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bgl,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: input_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: output_buffer.as_entire_binding(),
+                },
+            ],
+        })
+        .unwrap();
 
     let pll = ctx
         .device
@@ -267,7 +280,8 @@ async fn shader_input_output_test(
                 }],
                 _ => &[],
             },
-        }).unwrap();
+        })
+        .unwrap();
 
     let mut fail = false;
     for test in tests {
@@ -295,10 +309,13 @@ async fn shader_input_output_test(
             processed.replace("{{input_bindings}}", "@group(0) @binding(0)")
         };
 
-        let sm = ctx.device.create_shader_module(ShaderModuleDescriptor {
-            label: Some(&format!("shader {test_name}")),
-            source: ShaderSource::Wgsl(Cow::Borrowed(&processed)),
-        }).unwrap();
+        let sm = ctx
+            .device
+            .create_shader_module(ShaderModuleDescriptor {
+                label: Some(&format!("shader {test_name}")),
+                source: ShaderSource::Wgsl(Cow::Borrowed(&processed)),
+            })
+            .unwrap();
 
         let pipeline = ctx
             .device
@@ -308,21 +325,25 @@ async fn shader_input_output_test(
                 module: &sm,
                 entry_point: "cs_main",
                 compilation_options: Default::default(),
-            }).unwrap();
+            })
+            .unwrap();
 
         // -- Initializing data --
 
         let output_pre_init_data = vec![test.output_initialization; MAX_BUFFER_SIZE as usize / 4];
-        ctx.queue.write_buffer(
-            &output_buffer,
-            0,
-            bytemuck::cast_slice(&output_pre_init_data),
-        ).unwrap();
+        ctx.queue
+            .write_buffer(
+                &output_buffer,
+                0,
+                bytemuck::cast_slice(&output_pre_init_data),
+            )
+            .unwrap();
 
         match storage_type {
             InputStorageType::Uniform | InputStorageType::Storage => {
                 ctx.queue
-                    .write_buffer(&input_buffer, 0, bytemuck::cast_slice(&test.input_values)).unwrap();
+                    .write_buffer(&input_buffer, 0, bytemuck::cast_slice(&test.input_values))
+                    .unwrap();
             }
             _ => {
                 // Init happens in the compute pass
@@ -333,7 +354,8 @@ async fn shader_input_output_test(
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None }).unwrap();
+            .create_command_encoder(&CommandEncoderDescriptor { label: None })
+            .unwrap();
 
         let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: Some(&format!("cpass {test_name}")),
@@ -351,11 +373,16 @@ async fn shader_input_output_test(
 
         // -- Pulldown data --
 
-        encoder.copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, MAX_BUFFER_SIZE).unwrap();
+        encoder
+            .copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, MAX_BUFFER_SIZE)
+            .unwrap();
 
         ctx.queue.submit(Some(encoder.finish().unwrap()));
 
-        mapping_buffer.slice(..).map_async(MapMode::Read, |_| ()).unwrap();
+        mapping_buffer
+            .slice(..)
+            .map_async(MapMode::Read, |_| ())
+            .unwrap();
         ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();

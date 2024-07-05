@@ -116,7 +116,8 @@ impl Test<'_> {
             None,
             Some(device_id),
             Some(device_id.into_queue_id())
-        )).unwrap();
+        ))
+        .unwrap();
 
         let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
         println!("\t\t\tRunning...");

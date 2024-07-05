@@ -223,34 +223,40 @@ async fn single_texture_clear_test(
         _ => wgpu::TextureUsages::empty(),
     };
 
-    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(&format!("texture {format:?}")),
-        size,
-        mip_level_count: if dimension == wgpu::TextureDimension::D1 {
-            1
-        } else {
-            // arbitrary value between 2 and max
-            3
-        },
-        sample_count: 1, // multisampling is not supported for clear
-        dimension,
-        format,
-        usage: wgpu::TextureUsages::COPY_SRC | extra_usages,
-        view_formats: &[],
-    }).unwrap();
+    let texture = ctx
+        .device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: Some(&format!("texture {format:?}")),
+            size,
+            mip_level_count: if dimension == wgpu::TextureDimension::D1 {
+                1
+            } else {
+                // arbitrary value between 2 and max
+                3
+            },
+            sample_count: 1, // multisampling is not supported for clear
+            dimension,
+            format,
+            usage: wgpu::TextureUsages::COPY_SRC | extra_usages,
+            view_formats: &[],
+        })
+        .unwrap();
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
-    encoder.clear_texture(
-        &texture,
-        &wgpu::ImageSubresourceRange {
-            aspect: wgpu::TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: None,
-        },
-    ).unwrap();
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
+    encoder
+        .clear_texture(
+            &texture,
+            &wgpu::ImageSubresourceRange {
+                aspect: wgpu::TextureAspect::All,
+                base_mip_level: 0,
+                mip_level_count: None,
+                base_array_layer: 0,
+                array_layer_count: None,
+            },
+        )
+        .unwrap();
 
     let readback_buffers = ReadbackBuffers::new(&ctx.device, &texture);
 

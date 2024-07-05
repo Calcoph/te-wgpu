@@ -43,14 +43,18 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("compute.wgsl"))),
-        }).unwrap();
-        let draw_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-        }).unwrap();
+        let compute_shader = device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("compute.wgsl"))),
+            })
+            .unwrap();
+        let draw_shader = device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
+            })
+            .unwrap();
 
         // buffer for simulation parameters uniform
 
@@ -64,16 +68,18 @@ impl crate::framework::Example for Example {
             0.005,   // rule3Scale
         ]
         .to_vec();
-        let sim_param_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Simulation Parameter Buffer"),
-            contents: bytemuck::cast_slice(&sim_param_data),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        }).unwrap();
+        let sim_param_buffer = device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Simulation Parameter Buffer"),
+                contents: bytemuck::cast_slice(&sim_param_data),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            })
+            .unwrap();
 
         // create compute bind layout group and compute pipeline layout
 
-        let compute_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let compute_bind_group_layout = device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
@@ -109,73 +115,82 @@ impl crate::framework::Example for Example {
                     },
                 ],
                 label: None,
-            }).unwrap();
-        let compute_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            })
+            .unwrap();
+        let compute_pipeline_layout = device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute"),
                 bind_group_layouts: &[&compute_bind_group_layout],
                 push_constant_ranges: &[],
-            }).unwrap();
+            })
+            .unwrap();
 
         // create render pipeline with empty bind group layout
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let render_pipeline_layout = device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render"),
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
-            }).unwrap();
+            })
+            .unwrap();
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &draw_shader,
-                entry_point: "main_vs",
-                compilation_options: Default::default(),
-                buffers: &[
-                    wgpu::VertexBufferLayout {
-                        array_stride: 4 * 4,
-                        step_mode: wgpu::VertexStepMode::Instance,
-                        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2],
-                    },
-                    wgpu::VertexBufferLayout {
-                        array_stride: 2 * 4,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![2 => Float32x2],
-                    },
-                ],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &draw_shader,
-                entry_point: "main_fs",
-                compilation_options: Default::default(),
-                targets: &[Some(config.view_formats[0].into())],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        }).unwrap();
+        let render_pipeline = device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: None,
+                layout: Some(&render_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &draw_shader,
+                    entry_point: "main_vs",
+                    compilation_options: Default::default(),
+                    buffers: &[
+                        wgpu::VertexBufferLayout {
+                            array_stride: 4 * 4,
+                            step_mode: wgpu::VertexStepMode::Instance,
+                            attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2],
+                        },
+                        wgpu::VertexBufferLayout {
+                            array_stride: 2 * 4,
+                            step_mode: wgpu::VertexStepMode::Vertex,
+                            attributes: &wgpu::vertex_attr_array![2 => Float32x2],
+                        },
+                    ],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &draw_shader,
+                    entry_point: "main_fs",
+                    compilation_options: Default::default(),
+                    targets: &[Some(config.view_formats[0].into())],
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+            })
+            .unwrap();
 
         // create compute pipeline
 
-        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Compute pipeline"),
-            layout: Some(&compute_pipeline_layout),
-            module: &compute_shader,
-            entry_point: "main",
-            compilation_options: Default::default(),
-        }).unwrap();
+        let compute_pipeline = device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Compute pipeline"),
+                layout: Some(&compute_pipeline_layout),
+                module: &compute_shader,
+                entry_point: "main",
+                compilation_options: Default::default(),
+            })
+            .unwrap();
 
         // buffer for the three 2d triangle vertices of each instance
 
         let vertex_buffer_data = [-0.01f32, -0.02, 0.01, -0.02, 0.00, 0.02];
-        let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::bytes_of(&vertex_buffer_data),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        }).unwrap();
+        let vertices_buffer = device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::bytes_of(&vertex_buffer_data),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            })
+            .unwrap();
 
         // buffer for all particles data of type [(posx,posy,velx,vely),...]
 
@@ -196,13 +211,15 @@ impl crate::framework::Example for Example {
         let mut particle_bind_groups = Vec::<wgpu::BindGroup>::new();
         for i in 0..2 {
             particle_buffers.push(
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some(&format!("Particle Buffer {i}")),
-                    contents: bytemuck::cast_slice(&initial_particle_data),
-                    usage: wgpu::BufferUsages::VERTEX
-                        | wgpu::BufferUsages::STORAGE
-                        | wgpu::BufferUsages::COPY_DST,
-                }).unwrap(),
+                device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some(&format!("Particle Buffer {i}")),
+                        contents: bytemuck::cast_slice(&initial_particle_data),
+                        usage: wgpu::BufferUsages::VERTEX
+                            | wgpu::BufferUsages::STORAGE
+                            | wgpu::BufferUsages::COPY_DST,
+                    })
+                    .unwrap(),
             );
         }
 
@@ -210,24 +227,28 @@ impl crate::framework::Example for Example {
         // where the alternate buffer is used as the dst
 
         for i in 0..2 {
-            particle_bind_groups.push(device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &compute_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: sim_param_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: particle_buffers[i].as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: particle_buffers[(i + 1) % 2].as_entire_binding(), // bind to opposite buffer
-                    },
-                ],
-                label: None,
-            }).unwrap());
+            particle_bind_groups.push(
+                device
+                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                        layout: &compute_bind_group_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: sim_param_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: particle_buffers[i].as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: particle_buffers[(i + 1) % 2].as_entire_binding(), // bind to opposite buffer
+                            },
+                        ],
+                        label: None,
+                    })
+                    .unwrap(),
+            );
         }
 
         // calculates number of work groups from PARTICLES_PER_GROUP constant
@@ -286,10 +307,13 @@ impl crate::framework::Example for Example {
         };
 
         // get command encoder
-        let mut command_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
+        let mut command_encoder = device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
 
-        command_encoder.push_debug_group("compute boid movement").unwrap();
+        command_encoder
+            .push_debug_group("compute boid movement")
+            .unwrap();
         {
             // compute pass
             let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {

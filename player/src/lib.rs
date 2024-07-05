@@ -153,7 +153,8 @@ impl GlobalPlay for wgc::global::Global {
             }
             Action::CreateBuffer(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.device_create_buffer::<A>(device, &desc, Some(id)).unwrap();
+                self.device_create_buffer::<A>(device, &desc, Some(id))
+                    .unwrap();
             }
             Action::FreeBuffer(id) => {
                 self.buffer_destroy::<A>(id).unwrap();
@@ -163,7 +164,8 @@ impl GlobalPlay for wgc::global::Global {
             }
             Action::CreateTexture(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.device_create_texture::<A>(device, &desc, Some(id)).unwrap();
+                self.device_create_texture::<A>(device, &desc, Some(id))
+                    .unwrap();
             }
             Action::FreeTexture(id) => {
                 self.texture_destroy::<A>(id).unwrap();
@@ -177,14 +179,16 @@ impl GlobalPlay for wgc::global::Global {
                 desc,
             } => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.texture_create_view::<A>(parent_id, &desc, Some(id)).unwrap();
+                self.texture_create_view::<A>(parent_id, &desc, Some(id))
+                    .unwrap();
             }
             Action::DestroyTextureView(id) => {
                 self.texture_view_drop::<A>(id, true).unwrap();
             }
             Action::CreateSampler(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.device_create_sampler::<A>(device, &desc, Some(id)).unwrap();
+                self.device_create_sampler::<A>(device, &desc, Some(id))
+                    .unwrap();
             }
             Action::DestroySampler(id) => {
                 self.sampler_drop::<A>(id);
@@ -230,8 +234,7 @@ impl GlobalPlay for wgc::global::Global {
                 } else {
                     panic!("Unknown shader {}", data);
                 };
-                let res =
-                    self.device_create_shader_module::<A>(device, &desc, source, Some(id));
+                let res = self.device_create_shader_module::<A>(device, &desc, source, Some(id));
                 if let Err(e) = res {
                     println!("shader compilation error:\n---{code}\n---\n{e}");
                 }
@@ -329,15 +332,17 @@ impl GlobalPlay for wgc::global::Global {
                 self.queue_submit::<A>(device.into_queue_id(), &[]).unwrap();
             }
             Action::Submit(_index, commands) => {
-                let encoder = self.device_create_command_encoder::<A>(
-                    device,
-                    &wgt::CommandEncoderDescriptor { label: None },
-                    Some(
-                        comb_manager
-                            .process(device.backend())
-                            .into_command_encoder_id(),
-                    ),
-                ).unwrap();
+                let encoder = self
+                    .device_create_command_encoder::<A>(
+                        device,
+                        &wgt::CommandEncoderDescriptor { label: None },
+                        Some(
+                            comb_manager
+                                .process(device.backend())
+                                .into_command_encoder_id(),
+                        ),
+                    )
+                    .unwrap();
                 let cmdbuf = self.encode_commands::<A>(encoder, commands);
                 self.queue_submit::<A>(device.into_queue_id(), &[cmdbuf])
                     .unwrap();

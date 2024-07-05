@@ -5,8 +5,7 @@ use crate::{
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
-    SurfaceStatus, TextureDescriptor, TextureViewDescriptor,
-    SurfaceTargetUnsafe,
+    SurfaceStatus, SurfaceTargetUnsafe, TextureDescriptor, TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -22,7 +21,15 @@ use std::{
     slice,
 };
 use wgc::{
-    binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError}, command::{bundle_ffi::*, compute_commands::*, render_commands::*, CommandEncoderError}, device::{queue::QueueWriteError, DeviceError, DeviceLostClosure}, id::{CommandEncoderId, TextureViewId}, pipeline::{CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError}, resource::{BufferAccessResult, CreateBufferError, CreateQuerySetError, CreateSamplerError, CreateTextureError, CreateTextureViewError}
+    binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError},
+    command::{bundle_ffi::*, compute_commands::*, render_commands::*, CommandEncoderError},
+    device::{queue::QueueWriteError, DeviceError, DeviceLostClosure},
+    id::{CommandEncoderId, TextureViewId},
+    pipeline::{CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError},
+    resource::{
+        BufferAccessResult, CreateBufferError, CreateQuerySetError, CreateSamplerError,
+        CreateTextureError, CreateTextureViewError,
+    },
 };
 use wgt::WasmNotSendSync;
 
@@ -110,9 +117,7 @@ impl ContextWgpuCore {
             id: device_id,
             features: desc.required_features,
         };
-        let queue = Queue {
-            id: queue_id,
-        };
+        let queue = Queue { id: queue_id };
         Ok((device, queue))
     }
 
@@ -127,9 +132,7 @@ impl ContextWgpuCore {
             self.0
                 .create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, None)
         }?;
-        Ok(Texture {
-            id,
-        })
+        Ok(Texture { id })
     }
 
     pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
@@ -540,9 +543,7 @@ impl crate::Context for ContextWgpuCore {
             id: device_id,
             features: desc.required_features,
         };
-        let queue = Queue {
-            id: queue_id,
-        };
+        let queue = Queue { id: queue_id };
         ready(Ok((device_id, device, device_id.into_queue_id(), queue)))
     }
 
@@ -821,7 +822,8 @@ impl crate::Context for ContextWgpuCore {
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
         desc: &BindGroupLayoutDescriptor<'_>,
-    ) -> Result<(Self::BindGroupLayoutId, Self::BindGroupLayoutData), CreateBindGroupLayoutError> {
+    ) -> Result<(Self::BindGroupLayoutId, Self::BindGroupLayoutData), CreateBindGroupLayoutError>
+    {
         let descriptor = wgc::binding_model::BindGroupLayoutDescriptor {
             label: desc.label.map(Borrowed),
             entries: Borrowed(desc.entries),
@@ -1051,7 +1053,8 @@ impl crate::Context for ContextWgpuCore {
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
         desc: &ComputePipelineDescriptor<'_>,
-    ) -> Result<(Self::ComputePipelineId, Self::ComputePipelineData), CreateComputePipelineError> {
+    ) -> Result<(Self::ComputePipelineId, Self::ComputePipelineData), CreateComputePipelineError>
+    {
         use wgc::pipeline as pipe;
 
         let implicit_pipeline_ids = match desc.layout {
@@ -1264,7 +1267,6 @@ impl crate::Context for ContextWgpuCore {
         };
 
         wgc::gfx_select!(buffer => self.0.buffer_map_async(*buffer, range.start, Some(range.end-range.start), operation))
-
     }
     fn buffer_get_mapped_range(
         &self,
@@ -1440,7 +1442,8 @@ impl crate::Context for ContextWgpuCore {
         _pipeline_data: &Self::ComputePipelineData,
         index: u32,
     ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
-        let id = match wgc::gfx_select!(*pipeline => self.0.compute_pipeline_get_bind_group_layout(*pipeline, index, None)) {
+        let id = match wgc::gfx_select!(*pipeline => self.0.compute_pipeline_get_bind_group_layout(*pipeline, index, None))
+        {
             Ok(id) => id,
             Err(err) => panic!("Error reflecting bind group {index}: {err}"),
         };
@@ -1453,7 +1456,8 @@ impl crate::Context for ContextWgpuCore {
         _pipeline_data: &Self::RenderPipelineData,
         index: u32,
     ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
-        let id = match wgc::gfx_select!(*pipeline => self.0.render_pipeline_get_bind_group_layout(*pipeline, index, None)) {
+        let id = match wgc::gfx_select!(*pipeline => self.0.render_pipeline_get_bind_group_layout(*pipeline, index, None))
+        {
             Ok(id) => id,
             Err(err) => panic!("Error reflecting bind group {index}: {err}"),
         };

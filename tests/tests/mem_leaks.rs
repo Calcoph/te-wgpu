@@ -40,7 +40,8 @@ async fn draw_test_with_reports(
                 visibility: wgpu::ShaderStages::VERTEX,
                 count: None,
             }],
-        }).unwrap();
+        })
+        .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report(ctx.adapter_info.backend);
@@ -48,25 +49,31 @@ async fn draw_test_with_reports(
     assert_eq!(report.bind_groups.num_allocated, 0);
     assert_eq!(report.bind_group_layouts.num_allocated, 1);
 
-    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: None,
-        size: 4 * expected.len() as u64,
-        usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
-        mapped_at_creation: false,
-    }).unwrap();
+    let buffer = ctx
+        .device
+        .create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 4 * expected.len() as u64,
+            usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report(ctx.adapter_info.backend);
     assert_eq!(report.buffers.num_allocated, 1);
 
-    let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
-        layout: &bgl,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: buffer.as_entire_binding(),
-        }],
-    }).unwrap();
+    let bg = ctx
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        })
+        .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report(ctx.adapter_info.backend);
@@ -80,7 +87,8 @@ async fn draw_test_with_reports(
             label: None,
             bind_group_layouts: &[&bgl],
             push_constant_ranges: &[],
-        }).unwrap();
+        })
+        .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report(ctx.adapter_info.backend);
@@ -136,26 +144,31 @@ async fn draw_test_with_reports(
     assert_eq!(report.textures.num_allocated, 0);
     assert_eq!(report.texture_views.num_allocated, 0);
 
-    let texture = ctx.device.create_texture_with_data(
-        &ctx.queue,
-        &wgpu::TextureDescriptor {
-            label: Some("dummy"),
-            size: wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
+    let texture = ctx
+        .device
+        .create_texture_with_data(
+            &ctx.queue,
+            &wgpu::TextureDescriptor {
+                label: Some("dummy"),
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
             },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        },
-        wgpu::util::TextureDataOrder::LayerMajor,
-        &[0, 0, 0, 1],
-    ).unwrap();
-    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+            wgpu::util::TextureDataOrder::LayerMajor,
+            &[0, 0, 0, 1],
+        )
+        .unwrap();
+    let texture_view = texture
+        .create_view(&wgpu::TextureViewDescriptor::default())
+        .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report(ctx.adapter_info.backend);

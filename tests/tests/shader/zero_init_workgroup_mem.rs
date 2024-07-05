@@ -39,34 +39,44 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                     },
                     count: None,
                 }],
-            }).unwrap();
+            })
+            .unwrap();
 
-        let output_buffer = ctx.device.create_buffer(&BufferDescriptor {
-            label: Some("output buffer"),
-            size: BUFFER_SIZE,
-            usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        }).unwrap();
+        let output_buffer = ctx
+            .device
+            .create_buffer(&BufferDescriptor {
+                label: Some("output buffer"),
+                size: BUFFER_SIZE,
+                usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            })
+            .unwrap();
 
-        let mapping_buffer = ctx.device.create_buffer(&BufferDescriptor {
-            label: Some("mapping buffer"),
-            size: BUFFER_SIZE,
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        }).unwrap();
+        let mapping_buffer = ctx
+            .device
+            .create_buffer(&BufferDescriptor {
+                label: Some("mapping buffer"),
+                size: BUFFER_SIZE,
+                usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            })
+            .unwrap();
 
-        let bg = ctx.device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &bgl,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &output_buffer,
-                    offset: 0,
-                    size: Some(NonZeroU64::new(BUFFER_BINDING_SIZE as u64).unwrap()),
-                }),
-            }],
-        }).unwrap();
+        let bg = ctx
+            .device
+            .create_bind_group(&BindGroupDescriptor {
+                label: None,
+                layout: &bgl,
+                entries: &[BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &output_buffer,
+                        offset: 0,
+                        size: Some(NonZeroU64::new(BUFFER_BINDING_SIZE as u64).unwrap()),
+                    }),
+                }],
+            })
+            .unwrap();
 
         let pll = ctx
             .device
@@ -74,11 +84,13 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 label: None,
                 bind_group_layouts: &[&bgl],
                 push_constant_ranges: &[],
-            }).unwrap();
+            })
+            .unwrap();
 
         let sm = ctx
             .device
-            .create_shader_module(include_wgsl!("zero_init_workgroup_mem.wgsl")).unwrap();
+            .create_shader_module(include_wgsl!("zero_init_workgroup_mem.wgsl"))
+            .unwrap();
 
         let pipeline_read = ctx
             .device
@@ -88,7 +100,8 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 module: &sm,
                 entry_point: "read",
                 compilation_options: Default::default(),
-            }).unwrap();
+            })
+            .unwrap();
 
         let pipeline_write = ctx
             .device
@@ -98,22 +111,26 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 module: &sm,
                 entry_point: "write",
                 compilation_options: Default::default(),
-            }).unwrap();
+            })
+            .unwrap();
 
         // -- Initializing data --
 
         let output_pre_init_data = vec![1; OUTPUT_ARRAY_SIZE as usize];
-        ctx.queue.write_buffer(
-            &output_buffer,
-            0,
-            bytemuck::cast_slice(&output_pre_init_data),
-        ).unwrap();
+        ctx.queue
+            .write_buffer(
+                &output_buffer,
+                0,
+                bytemuck::cast_slice(&output_pre_init_data),
+            )
+            .unwrap();
 
         // -- Run test --
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&CommandEncoderDescriptor::default()).unwrap();
+            .create_command_encoder(&CommandEncoderDescriptor::default())
+            .unwrap();
 
         let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
 
@@ -131,11 +148,16 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
 
         // -- Pulldown data --
 
-        encoder.copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, BUFFER_SIZE).unwrap();
+        encoder
+            .copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, BUFFER_SIZE)
+            .unwrap();
 
         ctx.queue.submit(Some(encoder.finish().unwrap()));
 
-        mapping_buffer.slice(..).map_async(MapMode::Read, |_| ()).unwrap();
+        mapping_buffer
+            .slice(..)
+            .map_async(MapMode::Read, |_| ())
+            .unwrap();
         ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();

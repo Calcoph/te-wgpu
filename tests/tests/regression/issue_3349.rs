@@ -39,11 +39,13 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
     // types for the uniform and push constant blocks between stages.
     let vs_sm = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("issue_3349.vs.wgsl")).unwrap();
+        .create_shader_module(wgpu::include_wgsl!("issue_3349.vs.wgsl"))
+        .unwrap();
 
     let fs_sm = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("issue_3349.fs.wgsl")).unwrap();
+        .create_shader_module(wgpu::include_wgsl!("issue_3349.fs.wgsl"))
+        .unwrap();
 
     // We start with u8s then convert to float, to make sure we don't have
     // cross-vendor rounding issues unorm.
@@ -56,7 +58,8 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
             label: Some("buffer"),
             contents: bytemuck::cast_slice(&input),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        }).unwrap();
+        })
+        .unwrap();
 
     let bgl = ctx
         .device
@@ -72,16 +75,20 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
                 },
                 count: None,
             }],
-        }).unwrap();
+        })
+        .unwrap();
 
-    let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("bg"),
-        layout: &bgl,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: buffer.as_entire_binding(),
-        }],
-    }).unwrap();
+    let bg = ctx
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("bg"),
+            layout: &bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        })
+        .unwrap();
 
     let pll = ctx
         .device
@@ -92,7 +99,8 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
                 stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 range: 0..16,
             }],
-        }).unwrap();
+        })
+        .unwrap();
 
     let pipeline = ctx
         .device
@@ -119,31 +127,38 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        }).unwrap();
+        })
+        .unwrap();
 
-    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("texture"),
-        size: wgpu::Extent3d {
-            width: 2,
-            height: 2,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        // Important: NOT srgb.
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    }).unwrap();
+    let texture = ctx
+        .device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: Some("texture"),
+            size: wgpu::Extent3d {
+                width: 2,
+                height: 2,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            // Important: NOT srgb.
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
+        .unwrap();
 
-    let view = texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+    let view = texture
+        .create_view(&wgpu::TextureViewDescriptor::default())
+        .unwrap();
 
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("encoder"),
-        }).unwrap();
+        })
+        .unwrap();
 
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

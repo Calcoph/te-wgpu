@@ -84,7 +84,9 @@ impl crate::framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let mut uniform_workaround = false;
-        let base_shader_module = device.create_shader_module(wgpu::include_wgsl!("indexing.wgsl")).unwrap();
+        let base_shader_module = device
+            .create_shader_module(wgpu::include_wgsl!("indexing.wgsl"))
+            .unwrap();
         let env_override = match std::env::var("WGPU_TEXTURE_ARRAY_STYLE") {
             Ok(value) => match &*value.to_lowercase() {
                 "nonuniform" | "non_uniform" => Some(true),
@@ -115,8 +117,9 @@ impl crate::framework::Example for Example {
         // TODO: Because naga's capabilities are evaluated on validate, not on write, we cannot make a shader module with unsupported
         // capabilities even if we don't use it. So for now put it in a separate module.
         let fragment_shader_module = if !uniform_workaround {
-            non_uniform_shader_module =
-                device.create_shader_module(wgpu::include_wgsl!("non_uniform_indexing.wgsl")).unwrap();
+            non_uniform_shader_module = device
+                .create_shader_module(wgpu::include_wgsl!("non_uniform_indexing.wgsl"))
+                .unwrap();
             &non_uniform_shader_module
         } else {
             &base_shader_module
@@ -126,27 +129,33 @@ impl crate::framework::Example for Example {
 
         let vertex_size = std::mem::size_of::<Vertex>();
         let vertex_data = create_vertices();
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertex_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        }).unwrap();
+        let vertex_buffer = device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(&vertex_data),
+                usage: wgpu::BufferUsages::VERTEX,
+            })
+            .unwrap();
 
         let index_data = create_indices();
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&index_data),
-            usage: wgpu::BufferUsages::INDEX,
-        }).unwrap();
+        let index_buffer = device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(&index_data),
+                usage: wgpu::BufferUsages::INDEX,
+            })
+            .unwrap();
 
         let mut texture_index_buffer_contents = vec![0u32; 128];
         texture_index_buffer_contents[0] = 0;
         texture_index_buffer_contents[64] = 1;
-        let texture_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&texture_index_buffer_contents),
-            usage: wgpu::BufferUsages::UNIFORM,
-        }).unwrap();
+        let texture_index_buffer = device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(&texture_index_buffer_contents),
+                usage: wgpu::BufferUsages::UNIFORM,
+            })
+            .unwrap();
 
         let red_texture_data = create_texture_data(Color::Red);
         let green_texture_data = create_texture_data(Color::Green);
@@ -163,155 +172,187 @@ impl crate::framework::Example for Example {
             label: None,
             view_formats: &[],
         };
-        let red_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("red"),
-            view_formats: &[],
-            ..texture_descriptor
-        }).unwrap();
-        let green_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("green"),
-            view_formats: &[],
-            ..texture_descriptor
-        }).unwrap();
-        let blue_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("blue"),
-            view_formats: &[],
-            ..texture_descriptor
-        }).unwrap();
-        let white_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("white"),
-            view_formats: &[],
-            ..texture_descriptor
-        }).unwrap();
+        let red_texture = device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("red"),
+                view_formats: &[],
+                ..texture_descriptor
+            })
+            .unwrap();
+        let green_texture = device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("green"),
+                view_formats: &[],
+                ..texture_descriptor
+            })
+            .unwrap();
+        let blue_texture = device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("blue"),
+                view_formats: &[],
+                ..texture_descriptor
+            })
+            .unwrap();
+        let white_texture = device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("white"),
+                view_formats: &[],
+                ..texture_descriptor
+            })
+            .unwrap();
 
-        let red_texture_view = red_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
-        let green_texture_view = green_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
-        let blue_texture_view = blue_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
-        let white_texture_view = white_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+        let red_texture_view = red_texture
+            .create_view(&wgpu::TextureViewDescriptor::default())
+            .unwrap();
+        let green_texture_view = green_texture
+            .create_view(&wgpu::TextureViewDescriptor::default())
+            .unwrap();
+        let blue_texture_view = blue_texture
+            .create_view(&wgpu::TextureViewDescriptor::default())
+            .unwrap();
+        let white_texture_view = white_texture
+            .create_view(&wgpu::TextureViewDescriptor::default())
+            .unwrap();
 
-        queue.write_texture(
-            red_texture.as_image_copy(),
-            &red_texture_data,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4),
-                rows_per_image: None,
-            },
-            wgpu::Extent3d::default(),
-        ).unwrap();
-        queue.write_texture(
-            green_texture.as_image_copy(),
-            &green_texture_data,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4),
-                rows_per_image: None,
-            },
-            wgpu::Extent3d::default(),
-        ).unwrap();
-        queue.write_texture(
-            blue_texture.as_image_copy(),
-            &blue_texture_data,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4),
-                rows_per_image: None,
-            },
-            wgpu::Extent3d::default(),
-        ).unwrap();
-        queue.write_texture(
-            white_texture.as_image_copy(),
-            &white_texture_data,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4),
-                rows_per_image: None,
-            },
-            wgpu::Extent3d::default(),
-        ).unwrap();
+        queue
+            .write_texture(
+                red_texture.as_image_copy(),
+                &red_texture_data,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: None,
+                },
+                wgpu::Extent3d::default(),
+            )
+            .unwrap();
+        queue
+            .write_texture(
+                green_texture.as_image_copy(),
+                &green_texture_data,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: None,
+                },
+                wgpu::Extent3d::default(),
+            )
+            .unwrap();
+        queue
+            .write_texture(
+                blue_texture.as_image_copy(),
+                &blue_texture_data,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: None,
+                },
+                wgpu::Extent3d::default(),
+            )
+            .unwrap();
+        queue
+            .write_texture(
+                white_texture.as_image_copy(),
+                &white_texture_data,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: None,
+                },
+                wgpu::Extent3d::default(),
+            )
+            .unwrap();
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default()).unwrap();
+        let sampler = device
+            .create_sampler(&wgpu::SamplerDescriptor::default())
+            .unwrap();
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("bind group layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+        let bind_group_layout = device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("bind group layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: NonZeroU32::new(2),
                     },
-                    count: NonZeroU32::new(2),
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: NonZeroU32::new(2),
                     },
-                    count: NonZeroU32::new(2),
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: NonZeroU32::new(2),
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(NonZeroU64::new(4).unwrap()),
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: NonZeroU32::new(2),
                     },
-                    count: None,
-                },
-            ],
-        }).unwrap();
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: true,
+                            min_binding_size: Some(NonZeroU64::new(4).unwrap()),
+                        },
+                        count: None,
+                    },
+                ],
+            })
+            .unwrap();
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureViewArray(&[
-                        &red_texture_view,
-                        &green_texture_view,
-                    ]),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureViewArray(&[
-                        &blue_texture_view,
-                        &white_texture_view,
-                    ]),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::SamplerArray(&[&sampler, &sampler]),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: &texture_index_buffer,
-                        offset: 0,
-                        size: Some(NonZeroU64::new(4).unwrap()),
-                    }),
-                },
-            ],
-            layout: &bind_group_layout,
-            label: Some("bind group"),
-        }).unwrap();
+        let bind_group = device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureViewArray(&[
+                            &red_texture_view,
+                            &green_texture_view,
+                        ]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureViewArray(&[
+                            &blue_texture_view,
+                            &white_texture_view,
+                        ]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::SamplerArray(&[&sampler, &sampler]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &texture_index_buffer,
+                            offset: 0,
+                            size: Some(NonZeroU64::new(4).unwrap()),
+                        }),
+                    },
+                ],
+                layout: &bind_group_layout,
+                label: Some("bind group"),
+            })
+            .unwrap();
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("main"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        }).unwrap();
+        let pipeline_layout = device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("main"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            })
+            .unwrap();
 
         let index_format = wgpu::IndexFormat::Uint16;
 
@@ -364,9 +405,11 @@ impl crate::framework::Example for Example {
         // noop
     }
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("primary"),
-        }).unwrap();
+        let mut encoder = device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("primary"),
+            })
+            .unwrap();
 
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,

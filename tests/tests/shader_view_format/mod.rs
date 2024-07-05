@@ -67,25 +67,30 @@ async fn reinterpret(
     src_data: &[[u8; 4]],
     expect_data: &[[u8; 4]],
 ) {
-    let tex = ctx.device.create_texture_with_data(
-        &ctx.queue,
-        &wgpu::TextureDescriptor {
-            label: None,
-            dimension: wgpu::TextureDimension::D2,
-            size,
-            format: src_format,
-            usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
-            mip_level_count: 1,
-            sample_count: 1,
-            view_formats: &[reinterpret_to],
-        },
-        wgpu::util::TextureDataOrder::LayerMajor,
-        bytemuck::cast_slice(src_data),
-    ).unwrap();
-    let tv = tex.create_view(&wgpu::TextureViewDescriptor {
-        format: Some(reinterpret_to),
-        ..Default::default()
-    }).unwrap();
+    let tex = ctx
+        .device
+        .create_texture_with_data(
+            &ctx.queue,
+            &wgpu::TextureDescriptor {
+                label: None,
+                dimension: wgpu::TextureDimension::D2,
+                size,
+                format: src_format,
+                usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+                mip_level_count: 1,
+                sample_count: 1,
+                view_formats: &[reinterpret_to],
+            },
+            wgpu::util::TextureDataOrder::LayerMajor,
+            bytemuck::cast_slice(src_data),
+        )
+        .unwrap();
+    let tv = tex
+        .create_view(&wgpu::TextureViewDescriptor {
+            format: Some(reinterpret_to),
+            ..Default::default()
+        })
+        .unwrap();
     let pipeline = ctx
         .device
         .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -110,31 +115,41 @@ async fn reinterpret(
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        }).unwrap();
-    let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &pipeline.get_bind_group_layout(0),
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: wgpu::BindingResource::TextureView(&tv),
-        }],
-        label: None,
-    }).unwrap();
+        })
+        .unwrap();
+    let bind_group = ctx
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&tv),
+            }],
+            label: None,
+        })
+        .unwrap();
 
-    let target_tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
-        size,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: src_format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-        view_formats: &[],
-    }).unwrap();
-    let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+    let target_tex = ctx
+        .device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: src_format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        })
+        .unwrap();
+    let target_view = target_tex
+        .create_view(&wgpu::TextureViewDescriptor::default())
+        .unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: None,
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -152,33 +167,39 @@ async fn reinterpret(
     drop(rpass);
     ctx.queue.submit(Some(encoder.finish().unwrap()));
 
-    let read_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: None,
-        size: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64 * 2,
-        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    }).unwrap();
+    let read_buffer = ctx
+        .device
+        .create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64 * 2,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
-    encoder.copy_texture_to_buffer(
-        wgpu::ImageCopyTexture {
-            texture: &target_tex,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        wgpu::ImageCopyBuffer {
-            buffer: &read_buffer,
-            layout: wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
-                rows_per_image: None,
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+        .unwrap();
+    encoder
+        .copy_texture_to_buffer(
+            wgpu::ImageCopyTexture {
+                texture: &target_tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
             },
-        },
-        size,
-    ).unwrap();
+            wgpu::ImageCopyBuffer {
+                buffer: &read_buffer,
+                layout: wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
+                    rows_per_image: None,
+                },
+            },
+            size,
+        )
+        .unwrap();
     ctx.queue.submit(Some(encoder.finish().unwrap()));
 
     let slice = read_buffer.slice(..);

@@ -49,7 +49,10 @@ pub fn valid<T, E: Debug>(callback: impl FnOnce() -> Result<T, E>) -> T {
 
 /// Run some code in an error scope and assert that validation succeeds or fails depending on the
 /// provided `should_fail` boolean.
-pub fn fail_if<T, E: Debug>(should_fail: bool, callback: impl FnOnce() -> Result<T, E>) -> Result<T, E> {
+pub fn fail_if<T, E: Debug>(
+    should_fail: bool,
+    callback: impl FnOnce() -> Result<T, E>,
+) -> Result<T, E> {
     if should_fail {
         Err(fail(callback))
     } else {

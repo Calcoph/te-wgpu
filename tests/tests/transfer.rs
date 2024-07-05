@@ -4,36 +4,43 @@ use wgpu_test::{fail, gpu_test, GpuTestConfiguration};
 static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
 
-    let t1 = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
-        dimension: wgpu::TextureDimension::D2,
-        size: wgpu::Extent3d {
-            width: 256,
-            height: 256,
-            depth_or_array_layers: 1,
-        },
-        format: wgpu::TextureFormat::Rgba8Uint,
-        usage: wgpu::TextureUsages::COPY_DST,
-        mip_level_count: 1,
-        sample_count: 1,
-        view_formats: &[],
-    }).unwrap();
-    let t2 = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
-        dimension: wgpu::TextureDimension::D2,
-        size: wgpu::Extent3d {
-            width: 256,
-            height: 256,
-            depth_or_array_layers: 1,
-        },
-        format: wgpu::TextureFormat::Rgba8Uint,
-        usage: wgpu::TextureUsages::COPY_DST,
-        mip_level_count: 1,
-        sample_count: 1,
-        view_formats: &[],
-    }).unwrap();
+    let t1 = ctx
+        .device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            dimension: wgpu::TextureDimension::D2,
+            size: wgpu::Extent3d {
+                width: 256,
+                height: 256,
+                depth_or_array_layers: 1,
+            },
+            format: wgpu::TextureFormat::Rgba8Uint,
+            usage: wgpu::TextureUsages::COPY_DST,
+            mip_level_count: 1,
+            sample_count: 1,
+            view_formats: &[],
+        })
+        .unwrap();
+    let t2 = ctx
+        .device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            dimension: wgpu::TextureDimension::D2,
+            size: wgpu::Extent3d {
+                width: 256,
+                height: 256,
+                depth_or_array_layers: 1,
+            },
+            format: wgpu::TextureFormat::Rgba8Uint,
+            usage: wgpu::TextureUsages::COPY_DST,
+            mip_level_count: 1,
+            sample_count: 1,
+            view_formats: &[],
+        })
+        .unwrap();
 
     fail(|| {
         // Validation should catch the silly selected z layer range without panicking.

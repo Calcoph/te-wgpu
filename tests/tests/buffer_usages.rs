@@ -87,8 +87,6 @@ async fn map_test(
     };
     let buffer_creation_validation_error = usage.is_empty();
 
-
-
     let buffer = fail_if(buffer_creation_validation_error, || {
         ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
@@ -96,7 +94,8 @@ async fn map_test(
             usage,
             mapped_at_creation: false,
         })
-    }).ok();
+    })
+    .ok();
 
     if buffer_creation_validation_error {
         return;

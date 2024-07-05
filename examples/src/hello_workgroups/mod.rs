@@ -38,85 +38,104 @@ async fn run() {
         .await
         .unwrap();
 
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
-    }).unwrap();
+    let shader = device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                "shader.wgsl"
+            ))),
+        })
+        .unwrap();
 
-    let storage_buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: None,
-        contents: bytemuck::cast_slice(&local_a[..]),
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-    }).unwrap();
-    let storage_buffer_b = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: None,
-        contents: bytemuck::cast_slice(&local_b[..]),
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-    }).unwrap();
-    let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: None,
-        size: std::mem::size_of_val(&local_a) as u64,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    }).unwrap();
+    let storage_buffer_a = device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&local_a[..]),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        })
+        .unwrap();
+    let storage_buffer_b = device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&local_b[..]),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        })
+        .unwrap();
+    let output_staging_buffer = device
+        .create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: std::mem::size_of_val(&local_a) as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
-    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+    let bind_group_layout = device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            },
-        ],
-    }).unwrap();
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
-        layout: &bind_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: storage_buffer_a.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: storage_buffer_b.as_entire_binding(),
-            },
-        ],
-    }).unwrap();
+            ],
+        })
+        .unwrap();
+    let bind_group = device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: storage_buffer_a.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: storage_buffer_b.as_entire_binding(),
+                },
+            ],
+        })
+        .unwrap();
 
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[&bind_group_layout],
-        push_constant_ranges: &[],
-    }).unwrap();
-    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: None,
-        layout: Some(&pipeline_layout),
-        module: &shader,
-        entry_point: "main",
-        compilation_options: Default::default(),
-    }).unwrap();
+    let pipeline_layout = device
+        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        })
+        .unwrap();
+    let pipeline = device
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: "main",
+            compilation_options: Default::default(),
+        })
+        .unwrap();
 
     //----------------------------------------------------------
 
-    let mut command_encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
+    let mut command_encoder = device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+        .unwrap();
     {
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
@@ -160,19 +179,24 @@ async fn get_data<T: bytemuck::Pod>(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
 ) {
-    let mut command_encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
-    command_encoder.copy_buffer_to_buffer(
-        storage_buffer,
-        0,
-        staging_buffer,
-        0,
-        std::mem::size_of_val(output) as u64,
-    ).unwrap();
+    let mut command_encoder = device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+        .unwrap();
+    command_encoder
+        .copy_buffer_to_buffer(
+            storage_buffer,
+            0,
+            staging_buffer,
+            0,
+            std::mem::size_of_val(output) as u64,
+        )
+        .unwrap();
     queue.submit(Some(command_encoder.finish().unwrap()));
     let buffer_slice = staging_buffer.slice(..);
     let (sender, receiver) = flume::bounded(1);
-    buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap()).unwrap();
+    buffer_slice
+        .map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap())
+        .unwrap();
     device.poll(wgpu::Maintain::wait()).panic_on_timeout();
     receiver.recv_async().await.unwrap().unwrap();
     output.copy_from_slice(bytemuck::cast_slice(&buffer_slice.get_mapped_range()[..]));

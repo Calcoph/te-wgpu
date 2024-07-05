@@ -280,73 +280,85 @@ fn copy_via_compute(
     buffer: &Buffer,
     aspect: TextureAspect,
 ) {
-    let bgl = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Texture {
-                    sample_type: match aspect {
-                        TextureAspect::DepthOnly => TextureSampleType::Float { filterable: false },
-                        TextureAspect::StencilOnly => TextureSampleType::Uint,
-                        _ => unreachable!(),
+    let bgl = device
+        .create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Texture {
+                        sample_type: match aspect {
+                            TextureAspect::DepthOnly => {
+                                TextureSampleType::Float { filterable: false }
+                            }
+                            TextureAspect::StencilOnly => TextureSampleType::Uint,
+                            _ => unreachable!(),
+                        },
+                        view_dimension: TextureViewDimension::D2Array,
+                        multisampled: false,
                     },
-                    view_dimension: TextureViewDimension::D2Array,
-                    multisampled: false,
+                    count: None,
                 },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 1,
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            },
-        ],
-    }).unwrap();
+            ],
+        })
+        .unwrap();
 
-    let view = texture.create_view(&TextureViewDescriptor {
-        aspect,
-        dimension: Some(TextureViewDimension::D2Array),
-        ..Default::default()
-    }).unwrap();
+    let view = texture
+        .create_view(&TextureViewDescriptor {
+            aspect,
+            dimension: Some(TextureViewDimension::D2Array),
+            ..Default::default()
+        })
+        .unwrap();
 
-    let output_buffer = device.create_buffer(&BufferDescriptor {
-        label: Some("output buffer"),
-        size: buffer.size(),
-        usage: BufferUsages::COPY_SRC | BufferUsages::STORAGE,
-        mapped_at_creation: false,
-    }).unwrap();
+    let output_buffer = device
+        .create_buffer(&BufferDescriptor {
+            label: Some("output buffer"),
+            size: buffer.size(),
+            usage: BufferUsages::COPY_SRC | BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        })
+        .unwrap();
 
-    let bg = device.create_bind_group(&BindGroupDescriptor {
-        label: None,
-        layout: &bgl,
-        entries: &[
-            BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::TextureView(&view),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &output_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-        ],
-    }).unwrap();
+    let bg = device
+        .create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bgl,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&view),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Buffer(BufferBinding {
+                        buffer: &output_buffer,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+            ],
+        })
+        .unwrap();
 
-    let pll = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[&bgl],
-        push_constant_ranges: &[],
-    }).unwrap();
+    let pll = device
+        .create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&bgl],
+            push_constant_ranges: &[],
+        })
+        .unwrap();
 
     let source = String::from(include_str!("copy_texture_to_buffer.wgsl"));
 
@@ -359,18 +371,22 @@ fn copy_via_compute(
         },
     );
 
-    let sm = device.create_shader_module(ShaderModuleDescriptor {
-        label: Some("shader copy_texture_to_buffer.wgsl"),
-        source: ShaderSource::Wgsl(Cow::Borrowed(&processed_source)),
-    }).unwrap();
+    let sm = device
+        .create_shader_module(ShaderModuleDescriptor {
+            label: Some("shader copy_texture_to_buffer.wgsl"),
+            source: ShaderSource::Wgsl(Cow::Borrowed(&processed_source)),
+        })
+        .unwrap();
 
-    let pipeline_copy = device.create_compute_pipeline(&ComputePipelineDescriptor {
-        label: Some("pipeline read"),
-        layout: Some(&pll),
-        module: &sm,
-        entry_point: "copy_texture_to_buffer",
-        compilation_options: Default::default(),
-    }).unwrap();
+    let pipeline_copy = device
+        .create_compute_pipeline(&ComputePipelineDescriptor {
+            label: Some("pipeline read"),
+            layout: Some(&pll),
+            module: &sm,
+            entry_point: "copy_texture_to_buffer",
+            compilation_options: Default::default(),
+        })
+        .unwrap();
 
     {
         let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
@@ -380,7 +396,9 @@ fn copy_via_compute(
         pass.dispatch_workgroups(1, 1, 1);
     }
 
-    encoder.copy_buffer_to_buffer(&output_buffer, 0, buffer, 0, buffer.size()).unwrap();
+    encoder
+        .copy_buffer_to_buffer(&output_buffer, 0, buffer, 0, buffer.size())
+        .unwrap();
 }
 
 fn copy_texture_to_buffer_with_aspect(
@@ -397,28 +415,30 @@ fn copy_texture_to_buffer_with_aspect(
         COPY_BYTES_PER_ROW_ALIGNMENT,
     );
     let mip_level = 0;
-    encoder.copy_texture_to_buffer(
-        ImageCopyTexture {
-            texture,
-            mip_level,
-            origin: Origin3d::ZERO,
-            aspect,
-        },
-        ImageCopyBuffer {
-            buffer: match aspect {
-                TextureAspect::StencilOnly => buffer_stencil.as_ref().unwrap(),
-                _ => buffer,
+    encoder
+        .copy_texture_to_buffer(
+            ImageCopyTexture {
+                texture,
+                mip_level,
+                origin: Origin3d::ZERO,
+                aspect,
             },
-            layout: ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(bytes_per_row),
-                rows_per_image: Some(texture.height() / block_height),
+            ImageCopyBuffer {
+                buffer: match aspect {
+                    TextureAspect::StencilOnly => buffer_stencil.as_ref().unwrap(),
+                    _ => buffer,
+                },
+                layout: ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(texture.height() / block_height),
+                },
             },
-        },
-        texture
-            .size()
-            .mip_level_size(mip_level, texture.dimension()),
-    ).unwrap();
+            texture
+                .size()
+                .mip_level_size(mip_level, texture.dimension()),
+        )
+        .unwrap();
 }
 
 fn copy_texture_to_buffer(
@@ -519,16 +539,20 @@ impl ReadbackBuffers {
                 * (texture.height() / block_height)
                 * texture.depth_or_array_layers();
 
-            let buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-                label: Some("Texture Readback"),
-                usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
-                contents: &vec![255; buffer_size as usize],
-            }).unwrap();
-            let buffer_stencil = device.create_buffer_init(&util::BufferInitDescriptor {
-                label: Some("Texture Stencil-Aspect Readback"),
-                usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
-                contents: &vec![255; buffer_stencil_size as usize],
-            }).unwrap();
+            let buffer = device
+                .create_buffer_init(&util::BufferInitDescriptor {
+                    label: Some("Texture Readback"),
+                    usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+                    contents: &vec![255; buffer_size as usize],
+                })
+                .unwrap();
+            let buffer_stencil = device
+                .create_buffer_init(&util::BufferInitDescriptor {
+                    label: Some("Texture Stencil-Aspect Readback"),
+                    usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+                    contents: &vec![255; buffer_stencil_size as usize],
+                })
+                .unwrap();
             ReadbackBuffers {
                 texture_format: texture.format(),
                 texture_width: texture.width(),
@@ -545,11 +569,13 @@ impl ReadbackBuffers {
             }
             let buffer_size =
                 bytes_per_row * (texture.height() / block_height) * texture.depth_or_array_layers();
-            let buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-                label: Some("Texture Readback"),
-                usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
-                contents: &vec![255; buffer_size as usize],
-            }).unwrap();
+            let buffer = device
+                .create_buffer_init(&util::BufferInitDescriptor {
+                    label: Some("Texture Readback"),
+                    usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+                    contents: &vec![255; buffer_size as usize],
+                })
+                .unwrap();
             ReadbackBuffers {
                 texture_format: texture.format(),
                 texture_width: texture.width(),

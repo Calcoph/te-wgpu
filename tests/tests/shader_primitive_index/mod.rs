@@ -91,7 +91,8 @@ async fn pulling_common(
 ) {
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("primitive_index.wgsl")).unwrap();
+        .create_shader_module(wgpu::include_wgsl!("primitive_index.wgsl"))
+        .unwrap();
 
     let two_triangles_xy: [f32; 12] = [
         -1.0, -1.0, 0.0, -1.0, -0.5, 0.0, // left triangle, negative x, negative y
@@ -103,7 +104,8 @@ async fn pulling_common(
             label: None,
             contents: bytemuck::cast_slice(&two_triangles_xy),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        }).unwrap();
+        })
+        .unwrap();
 
     let indices = [3u32, 4, 5, 0, 1, 2]; // index buffer flips triangle order
     let index_buffer = ctx
@@ -112,7 +114,8 @@ async fn pulling_common(
             label: None,
             contents: bytemuck::cast_slice(&indices),
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-        }).unwrap();
+        })
+        .unwrap();
 
     let pipeline = ctx
         .device
@@ -147,7 +150,8 @@ async fn pulling_common(
                 })],
             }),
             multiview: None,
-        }).unwrap();
+        })
+        .unwrap();
 
     let width = 2;
     let height = 2;
@@ -156,23 +160,29 @@ async fn pulling_common(
         height,
         depth_or_array_layers: 1,
     };
-    let color_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
-        size: texture_size,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-        view_formats: &[],
-    }).unwrap();
-    let color_view = color_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
+    let color_texture = ctx
+        .device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        })
+        .unwrap();
+    let color_view = color_texture
+        .create_view(&wgpu::TextureViewDescriptor::default())
+        .unwrap();
 
     let readback_buffer = wgpu_test::image::ReadbackBuffers::new(&ctx.device, &color_texture);
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,

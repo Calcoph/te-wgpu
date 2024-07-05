@@ -20,12 +20,12 @@ use wgt::{
 use crate::{
     AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    Data, DeviceDescriptor, ImageCopyBuffer, ImageCopyTexture, Maintain,
-    MaintainResult, MapMode, PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
+    Data, DeviceDescriptor, ImageCopyBuffer, ImageCopyTexture, Maintain, MaintainResult, MapMode,
+    PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
     ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, Texture, TextureDescriptor,
-    TextureViewDescriptor
+    TextureViewDescriptor,
 };
 
 /// Meta trait for an id tracked by a context.
