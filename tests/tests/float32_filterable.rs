@@ -1,8 +1,9 @@
 //! Tests for FLOAT32_FILTERABLE feature.
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu::core::binding_model::CreateBindGroupLayoutError;
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, fail};
 
-fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, filterable: bool) {
+fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, filterable: bool) -> Result<(), CreateBindGroupLayoutError>{
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
         size: wgpu::Extent3d {
@@ -32,7 +33,7 @@ fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, fi
             },
             count: None,
         }],
-    }).unwrap();
+    })?;
 
     let _bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
@@ -42,6 +43,8 @@ fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, fi
             resource: wgpu::BindingResource::TextureView(&view),
         }],
     });
+
+    Ok(())
 }
 
 #[gpu_test]
@@ -58,8 +61,8 @@ static FLOAT32_FILTERABLE_WITHOUT_FEATURE: GpuTestConfiguration = GpuTestConfigu
         // Float 32 textures can be used as non-filterable only
         create_texture_binding(device, wgpu::TextureFormat::R32Float, false);
         // This is supposed to fail, since we have not activated the feature
-        fail(&ctx.device, || {
-            create_texture_binding(device, wgpu::TextureFormat::R32Float, true);
+        fail(|| {
+            create_texture_binding(device, wgpu::TextureFormat::R32Float, true)
         });
     });
 

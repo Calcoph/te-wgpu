@@ -87,28 +87,29 @@ async fn map_test(
     };
     let buffer_creation_validation_error = usage.is_empty();
 
-    let mut buffer = None;
 
-    fail_if(&ctx.device, buffer_creation_validation_error, || {
-        buffer = Some(ctx.device.create_buffer(&wgpu::BufferDescriptor {
+
+    let buffer = fail_if(buffer_creation_validation_error, || {
+        ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size,
             usage,
             mapped_at_creation: false,
-        }));
-    });
+        })
+    }).ok();
+
     if buffer_creation_validation_error {
         return;
     }
 
-    let buffer = buffer.unwrap().unwrap();
+    let buffer = buffer.unwrap();
 
     let map_async_validation_error = buffer_creation_validation_error
         || (map_mode_type == Ma::Read && !usage.contains(Bu::MAP_READ))
         || (map_mode_type == Ma::Write && !usage.contains(Bu::MAP_WRITE));
 
-    fail_if(&ctx.device, map_async_validation_error, || {
-        buffer.slice(0..size).map_async(map_mode_type, |_| {});
+    fail_if(map_async_validation_error, || {
+        buffer.slice(0..size).map_async(map_mode_type, |_| {})
     });
 
     if map_async_validation_error {

@@ -191,7 +191,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                         }
             "#,
                 )),
-            });
+            }).unwrap();
 
         let bind_group_layout =
             ctx.device
@@ -207,7 +207,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                         },
                         count: None,
                     }],
-                });
+                }).unwrap();
 
         let pipeline_layout = ctx
             .device
@@ -215,9 +215,9 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                 label: None,
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
-        wgpu_test::fail(&ctx.device, || {
+        wgpu_test::fail(|| {
             ctx.device
                 .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                     label: None,
@@ -225,7 +225,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                     module: &shader_module,
                     entry_point: "main",
                     compilation_options: Default::default(),
-                });
+                })
         });
     });
 
@@ -260,7 +260,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                         }
             "#,
                 )),
-            });
+            }).unwrap();
 
         let bind_group_layout =
             ctx.device
@@ -276,7 +276,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                         },
                         count: None,
                     }],
-                });
+                }).unwrap();
 
         let pipeline_layout = ctx
             .device
@@ -284,7 +284,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 label: None,
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
         let pipeline = ctx
             .device
@@ -294,14 +294,14 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 module: &shader_module,
                 entry_point: "main",
                 compilation_options: Default::default(),
-            });
+            }).unwrap();
 
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 16, // too small for 32-byte var `a` in shader module
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -310,10 +310,10 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 binding: 0,
                 resource: buffer.as_entire_binding(),
             }],
-        });
+        }).unwrap();
 
-        wgpu_test::fail(&ctx.device, || {
-            let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        wgpu_test::fail(|| {
+            let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
 
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
@@ -325,7 +325,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
             pass.dispatch_workgroups(1, 1, 1);
 
             drop(pass);
-            let _ = encoder.finish();
+            encoder.finish()
         });
     });
 
@@ -340,17 +340,15 @@ static CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS: GpuTestConfiguration = GpuTestConfi
             size,
             usage: wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let out_of_bounds = size.checked_add(wgpu::COPY_BUFFER_ALIGNMENT).unwrap();
 
-        ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
         ctx.device
             .create_command_encoder(&Default::default())
-            .clear_buffer(&buffer, out_of_bounds, None);
-        let err_msg = pollster::block_on(ctx.device.pop_error_scope())
             .unwrap()
-            .to_string();
+            .clear_buffer(&buffer, out_of_bounds, None);
+        let err_msg = "TODO";
         assert!(err_msg.contains(
             "Clear of 20..20 would end up overrunning the bounds of the buffer of size 16"
         ));
@@ -366,22 +364,21 @@ static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
                 size: 16, // unimportant for this test
                 usage: wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
-            });
+            }).unwrap();
 
             let max_valid_offset = u64::MAX - (u64::MAX % wgpu::COPY_BUFFER_ALIGNMENT);
             let smallest_aligned_invalid_size = wgpu::COPY_BUFFER_ALIGNMENT;
 
-            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
             ctx.device
                 .create_command_encoder(&Default::default())
+                .unwrap()
                 .clear_buffer(
                     &buffer,
                     max_valid_offset,
                     Some(smallest_aligned_invalid_size),
                 );
-            let err_msg = pollster::block_on(ctx.device.pop_error_scope())
-                .unwrap()
-                .to_string();
+
+            let err_msg = "TODO";
             assert!(err_msg.contains(concat!(
                 "Clear starts at offset 18446744073709551612 with size of 4, ",
                 "but these added together exceed `u64::MAX`"

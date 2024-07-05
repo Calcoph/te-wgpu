@@ -25,7 +25,7 @@ static STENCIL_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::
                     | TextureUsages::COPY_SRC
                     | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
-            });
+            }).unwrap();
             let _view = texture.create_view(&TextureViewDescriptor {
                 aspect: TextureAspect::StencilOnly,
                 ..Default::default()
@@ -56,7 +56,7 @@ static DEPTH_ONLY_VIEW_CREATION: GpuTestConfiguration =
                     | TextureUsages::COPY_SRC
                     | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
-            });
+            }).unwrap();
             let _view = texture.create_view(&TextureViewDescriptor {
                 aspect: TextureAspect::DepthOnly,
                 ..Default::default()

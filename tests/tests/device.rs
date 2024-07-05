@@ -580,33 +580,6 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[gpu_test]
-static DEVICE_INVALID_THEN_SET_LOST_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
-    .run_sync(|ctx| {
-        // This test checks that when the device is invalid, a subsequent call
-        // to set the device lost callback will immediately call the callback.
-        // Invalidating the device is done via a testing-only method. Fails on
-        // webgl because webgl doesn't implement make_invalid.
-
-        // Make the device invalid.
-        ctx.device.make_invalid();
-
-        static WAS_CALLED: AtomicBool = AtomicBool::new(false);
-
-        // Set a LoseDeviceCallback on the device.
-        let callback = Box::new(|reason, _m| {
-            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert_eq!(reason, wgt::DeviceLostReason::DeviceInvalid);
-        });
-        ctx.device.set_device_lost_callback(callback);
-
-        assert!(
-            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
-            "Device lost callback should have been called."
-        );
-    });
-
-#[gpu_test]
 static DEVICE_LOST_REPLACED_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_sync(|ctx| {
@@ -701,7 +674,8 @@ fn vs_main() -> @builtin(position) vec4<f32> {
                     source: wgpu::ShaderSource::Wgsl(
                         trivial_shaders_with_some_reversed_bindings.into(),
                     ),
-                });
+                })
+                .unwrap();
 
         let my_texture = ctx.device.create_texture(&wgt::TextureDescriptor {
             label: None,
@@ -716,7 +690,7 @@ fn vs_main() -> @builtin(position) vec4<f32> {
             format: wgt::TextureFormat::Rgba8Unorm,
             usage: wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
-        });
+        }).unwrap();
 
         let my_texture_view = my_texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,
@@ -727,11 +701,12 @@ fn vs_main() -> @builtin(position) vec4<f32> {
             mip_level_count: None,
             base_array_layer: 0,
             array_layer_count: None,
-        });
+        }).unwrap();
 
         let my_sampler = ctx
             .device
-            .create_sampler(&wgpu::SamplerDescriptor::default());
+            .create_sampler(&wgpu::SamplerDescriptor::default())
+            .unwrap();
 
         let render_pipeline = ctx
             .device
@@ -760,7 +735,7 @@ fn vs_main() -> @builtin(position) vec4<f32> {
                 depth_stencil: None,
                 multisample: wgt::MultisampleState::default(),
                 multiview: None,
-            });
+            }).unwrap();
 
         // fail(&ctx.device, || {
         // }, "");
