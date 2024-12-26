@@ -116,8 +116,8 @@ async fn partial_update_test(ctx: TestingContext) {
             module: &sm,
             entry_point: "main",
             compilation_options: Default::default(),
-        })
-        .unwrap();
+            cache: None,
+        }).unwrap();
 
     let mut encoder = ctx
         .device

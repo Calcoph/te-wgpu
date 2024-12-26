@@ -74,15 +74,14 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
             })
             .unwrap();
 
-        let compute_pipeline = device
-            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                module: &cs_module,
-                entry_point: "main",
-                compilation_options: Default::default(),
-            })
-            .unwrap();
+        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            module: &cs_module,
+            entry_point: "main",
+            compilation_options: Default::default(),
+            cache: None,
+        }).unwrap();
 
         let bind_group = device
             .create_bind_group(&wgpu::BindGroupDescriptor {

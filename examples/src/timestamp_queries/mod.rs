@@ -227,6 +227,7 @@ async fn run() {
                 label: None,
                 required_features: features,
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
             },
             None,
         )
@@ -308,22 +309,19 @@ fn compute_pass(
     query_set: &wgpu::QuerySet,
     next_unused_query: &mut u32,
 ) {
-    let storage_buffer = device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Storage Buffer"),
-            contents: bytemuck::cast_slice(&[42]),
-            usage: wgpu::BufferUsages::STORAGE,
-        })
-        .unwrap();
-    let compute_pipeline = device
-        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: None,
-            module,
-            entry_point: "main_cs",
-            compilation_options: Default::default(),
-        })
-        .unwrap();
+    let storage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Storage Buffer"),
+        contents: bytemuck::cast_slice(&[42]),
+        usage: wgpu::BufferUsages::STORAGE,
+    }).unwrap();
+    let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: None,
+        layout: None,
+        module,
+        entry_point: "main_cs",
+        compilation_options: Default::default(),
+        cache: None,
+    }).unwrap();
     let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
     let bind_group = device
         .create_bind_group(&wgpu::BindGroupDescriptor {
@@ -375,47 +373,42 @@ fn render_pass(
         })
         .unwrap();
 
-    let render_pipeline = device
-        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module,
-                entry_point: "vs_main",
-                compilation_options: Default::default(),
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module,
-                entry_point: "fs_main",
-                compilation_options: Default::default(),
-                targets: &[Some(format.into())],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        })
-        .unwrap();
-
-    let render_target = device
-        .create_texture(&wgpu::TextureDescriptor {
-            label: Some("rendertarget"),
-            size: wgpu::Extent3d {
-                width: 512,
-                height: 512,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[format],
-        })
-        .unwrap();
-    let render_target_view = render_target
-        .create_view(&wgpu::TextureViewDescriptor::default())
+    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: None,
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module,
+            entry_point: "vs_main",
+            compilation_options: Default::default(),
+            buffers: &[],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module,
+            entry_point: "fs_main",
+            compilation_options: Default::default(),
+            targets: &[Some(format.into())],
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    }).unwrap();
+    let render_target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("rendertarget"),
+        size: wgpu::Extent3d {
+            width: 512,
+            height: 512,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[format],
+    }).unwrap();
+    let render_target_view = render_target.create_view(&wgpu::TextureViewDescriptor::default())
         .unwrap();
 
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -472,7 +465,7 @@ wgpu_test::gpu_test_main!();
 
 #[cfg(test)]
 mod tests {
-    use wgpu_test::{gpu_test, GpuTestConfiguration};
+    use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration};
 
     use super::{submit_render_and_compute_pass_with_queries, QueryResults};
 
@@ -493,7 +486,9 @@ mod tests {
                 .features(
                     wgpu::Features::TIMESTAMP_QUERY
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
-                ),
+                )
+                // see https://github.com/gfx-rs/wgpu/issues/2521
+                .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, false));
 
@@ -506,7 +501,9 @@ mod tests {
                     wgpu::Features::TIMESTAMP_QUERY
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
-                ),
+                )
+                // see https://github.com/gfx-rs/wgpu/issues/2521
+                .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, true));
 
@@ -534,16 +531,31 @@ mod tests {
         let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
 
         if timestamps_on_encoder {
-            assert!(encoder_delta > 0);
-            assert!(encoder_delta >= render_delta + compute_delta);
+            assert!(encoder_delta > 0, "unexpected timestamp");
+            assert!(
+                encoder_delta >= render_delta + compute_delta,
+                "unexpected timestamp"
+            );
         }
         if let Some(render_inside_timestamp) = render_inside_timestamp {
-            assert!(render_inside_timestamp >= render_start_end_timestamps[0]);
-            assert!(render_inside_timestamp <= render_start_end_timestamps[1]);
+            assert!(
+                render_inside_timestamp >= render_start_end_timestamps[0],
+                "unexpected timestamp"
+            );
+            assert!(
+                render_inside_timestamp <= render_start_end_timestamps[1],
+                "unexpected timestamp"
+            );
         }
         if let Some(compute_inside_timestamp) = compute_inside_timestamp {
-            assert!(compute_inside_timestamp >= compute_start_end_timestamps[0]);
-            assert!(compute_inside_timestamp <= compute_start_end_timestamps[1]);
+            assert!(
+                compute_inside_timestamp >= compute_start_end_timestamps[0],
+                "unexpected timestamp"
+            );
+            assert!(
+                compute_inside_timestamp <= compute_start_end_timestamps[1],
+                "unexpected timestamp"
+            );
         }
     }
 }

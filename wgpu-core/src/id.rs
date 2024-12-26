@@ -77,18 +77,6 @@ impl RawId {
     }
 }
 
-/// Coerce a slice of identifiers into a slice of optional raw identifiers.
-///
-/// There's two reasons why we know this is correct:
-/// * `Option<T>` is guaranteed to be niche-filled to 0's.
-/// * The `T` in `Option<T>` can inhabit any representation except 0's, since
-///   its underlying representation is `NonZero*`.
-pub fn as_option_slice<T: Marker>(ids: &[Id<T>]) -> &[Option<Id<T>>] {
-    // SAFETY: Any Id<T> is repr(transparent) over `Option<RawId>`, since both
-    // are backed by non-zero types.
-    unsafe { std::slice::from_raw_parts(ids.as_ptr().cast(), ids.len()) }
-}
-
 /// An identifier for a wgpu object.
 ///
 /// An `Id<T>` value identifies a value stored in a [`Global`]'s [`Hub`].
@@ -313,6 +301,7 @@ ids! {
     pub type ShaderModuleId ShaderModule;
     pub type RenderPipelineId RenderPipeline;
     pub type ComputePipelineId ComputePipeline;
+    pub type PipelineCacheId PipelineCache;
     pub type CommandEncoderId CommandEncoder;
     pub type CommandBufferId CommandBuffer;
     pub type RenderPassEncoderId RenderPassEncoder;
@@ -321,6 +310,9 @@ ids! {
     pub type RenderBundleId RenderBundle;
     pub type QuerySetId QuerySet;
 }
+
+// The CommandBuffer type serves both as encoder and
+// buffer, which is why the 2 functions below exist.
 
 impl CommandEncoderId {
     pub fn into_command_buffer_id(self) -> CommandBufferId {
@@ -349,7 +341,7 @@ fn test_id_backend() {
         Backend::Dx12,
         Backend::Gl,
     ] {
-        let id = crate::id::Id::<()>::zip(1, 0, b);
+        let id = Id::<()>::zip(1, 0, b);
         let (_id, _epoch, backend) = id.unzip();
         assert_eq!(id.backend(), b);
         assert_eq!(backend, b);
@@ -371,7 +363,7 @@ fn test_id() {
     for &i in &indexes {
         for &e in &epochs {
             for &b in &backends {
-                let id = crate::id::Id::<()>::zip(i, e, b);
+                let id = Id::<()>::zip(i, e, b);
                 let (index, epoch, backend) = id.unzip();
                 assert_eq!(index, i);
                 assert_eq!(epoch, e);

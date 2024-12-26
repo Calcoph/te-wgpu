@@ -19,6 +19,7 @@ async fn run() {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::Performance,
             },
             None,
         )
@@ -105,31 +106,27 @@ async fn execute(
         })
         .unwrap();
 
-    let pipeline_layout = device
-        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        })
-        .unwrap();
-    let patient_pipeline = device
-        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            module: &shaders_module,
-            entry_point: "patient_main",
-            compilation_options: Default::default(),
-        })
-        .unwrap();
-    let hasty_pipeline = device
-        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            module: &shaders_module,
-            entry_point: "hasty_main",
-            compilation_options: Default::default(),
-        })
-        .unwrap();
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[&bind_group_layout],
+        push_constant_ranges: &[],
+    }).unwrap();
+    let patient_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: None,
+        layout: Some(&pipeline_layout),
+        module: &shaders_module,
+        entry_point: "patient_main",
+        compilation_options: Default::default(),
+        cache: None,
+    }).unwrap();
+    let hasty_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: None,
+        layout: Some(&pipeline_layout),
+        module: &shaders_module,
+        entry_point: "hasty_main",
+        compilation_options: Default::default(),
+        cache: None,
+    }).unwrap();
 
     //----------------------------------------------------------
 

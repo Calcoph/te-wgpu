@@ -14,7 +14,7 @@ fn try_copy(
     let data = vec![255; size as usize];
     let _ = fail_if(should_fail, || {
         ctx.queue.write_buffer(&buffer, offset, &data)
-    });
+    }, None);
 }
 
 #[gpu_test]

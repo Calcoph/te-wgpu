@@ -88,6 +88,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                     })],
                 }),
                 multiview: None,
+                cache: None,
             })
             .unwrap();
 
@@ -120,6 +121,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                     })],
                 }),
                 multiview: None,
+                cache: None,
             })
             .unwrap();
 

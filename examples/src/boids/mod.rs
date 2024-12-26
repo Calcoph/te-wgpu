@@ -135,51 +135,49 @@ impl crate::framework::Example for Example {
             })
             .unwrap();
 
-        let render_pipeline = device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
-                layout: Some(&render_pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &draw_shader,
-                    entry_point: "main_vs",
-                    compilation_options: Default::default(),
-                    buffers: &[
-                        wgpu::VertexBufferLayout {
-                            array_stride: 4 * 4,
-                            step_mode: wgpu::VertexStepMode::Instance,
-                            attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2],
-                        },
-                        wgpu::VertexBufferLayout {
-                            array_stride: 2 * 4,
-                            step_mode: wgpu::VertexStepMode::Vertex,
-                            attributes: &wgpu::vertex_attr_array![2 => Float32x2],
-                        },
-                    ],
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &draw_shader,
-                    entry_point: "main_fs",
-                    compilation_options: Default::default(),
-                    targets: &[Some(config.view_formats[0].into())],
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-            })
-            .unwrap();
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &draw_shader,
+                entry_point: "main_vs",
+                compilation_options: Default::default(),
+                buffers: &[
+                    wgpu::VertexBufferLayout {
+                        array_stride: 4 * 4,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2],
+                    },
+                    wgpu::VertexBufferLayout {
+                        array_stride: 2 * 4,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &wgpu::vertex_attr_array![2 => Float32x2],
+                    },
+                ],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &draw_shader,
+                entry_point: "main_fs",
+                compilation_options: Default::default(),
+                targets: &[Some(config.view_formats[0].into())],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        }).unwrap();
 
         // create compute pipeline
 
-        let compute_pipeline = device
-            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("Compute pipeline"),
-                layout: Some(&compute_pipeline_layout),
-                module: &compute_shader,
-                entry_point: "main",
-                compilation_options: Default::default(),
-            })
-            .unwrap();
+        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Compute pipeline"),
+            layout: Some(&compute_pipeline_layout),
+            module: &compute_shader,
+            entry_point: "main",
+            compilation_options: Default::default(),
+            cache: None,
+        }).unwrap();
 
         // buffer for the three 2d triangle vertices of each instance
 

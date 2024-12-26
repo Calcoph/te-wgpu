@@ -30,7 +30,7 @@ fn create_texels(size: usize, cx: f32, cy: f32) -> Vec<u8> {
             iter::once(0xFF - (count * 2) as u8)
                 .chain(iter::once(0xFF - (count * 5) as u8))
                 .chain(iter::once(0xFF - (count * 13) as u8))
-                .chain(iter::once(std::u8::MAX))
+                .chain(iter::once(u8::MAX))
         })
         .collect()
 }
@@ -89,31 +89,30 @@ impl Example {
             })
             .unwrap();
 
-        let pipeline = device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("blit"),
-                layout: None,
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vs_main",
-                    compilation_options: Default::default(),
-                    buffers: &[],
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fs_main",
-                    compilation_options: Default::default(),
-                    targets: &[Some(TEXTURE_FORMAT.into())],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-            })
-            .unwrap();
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("blit"),
+            layout: None,
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                compilation_options: Default::default(),
+                targets: &[Some(TEXTURE_FORMAT.into())],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        }).unwrap();
 
         let bind_group_layout = pipeline.get_bind_group_layout(0);
 
@@ -315,33 +314,32 @@ impl crate::framework::Example for Example {
             })
             .unwrap();
 
-        let draw_pipeline = device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("draw"),
-                layout: None,
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vs_main",
-                    compilation_options: Default::default(),
-                    buffers: &[],
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fs_main",
-                    compilation_options: Default::default(),
-                    targets: &[Some(config.view_formats[0].into())],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleStrip,
-                    front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: Some(wgpu::Face::Back),
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-            })
-            .unwrap();
+        let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("draw"),
+            layout: None,
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                compilation_options: Default::default(),
+                targets: &[Some(config.view_formats[0].into())],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        }).unwrap();
 
         // Create bind group
         let bind_group_layout = draw_pipeline.get_bind_group_layout(0);

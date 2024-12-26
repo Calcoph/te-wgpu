@@ -360,9 +360,6 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
         return_features.push("shader-early-depth-test");
     }
-    if features.contains(wgpu_types::Features::SHADER_UNUSED_VERTEX_OUTPUT) {
-        return_features.push("shader-unused-vertex-output");
-    }
 
     return_features
 }
@@ -648,10 +645,6 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             wgpu_types::Features::SHADER_EARLY_DEPTH_TEST,
             required_features.0.contains("shader-early-depth-test"),
         );
-        features.set(
-            wgpu_types::Features::SHADER_UNUSED_VERTEX_OUTPUT,
-            required_features.0.contains("shader-unused-vertex-output"),
-        );
 
         features
     }
@@ -667,7 +660,7 @@ pub fn op_webgpu_request_device(
     #[serde] required_limits: Option<wgpu_types::Limits>,
 ) -> Result<GpuDeviceRes, AnyError> {
     let mut state = state.borrow_mut();
-    let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
+    let adapter_resource = state.resource_table.take::<WebGpuAdapter>(adapter_rid)?;
     let adapter = adapter_resource.1;
     let instance = state.borrow::<Instance>();
 
@@ -675,6 +668,7 @@ pub fn op_webgpu_request_device(
         label: Some(Cow::Owned(label)),
         required_features: required_features.into(),
         required_limits: required_limits.unwrap_or_default(),
+        memory_hints: wgpu_types::MemoryHints::default(),
     };
 
     let (device, queue) = gfx_select!(adapter => instance.adapter_request_device(
@@ -683,8 +677,8 @@ pub fn op_webgpu_request_device(
       std::env::var("DENO_WEBGPU_TRACE").ok().as_ref().map(std::path::Path::new),
       None,
       None
-    ))
-    .map_err(|err| DomExceptionOperationError::new(&err.to_string()))?;
+    )).map_err(|err| DomExceptionOperationError::new(&err.to_string()))?;
+    adapter_resource.close();
 
     let device_features = gfx_select!(device => instance.device_features(device))?;
     let features = deserialize_features(&device_features);
@@ -722,12 +716,13 @@ pub fn op_webgpu_request_adapter_info(
     state: Rc<RefCell<OpState>>,
     #[smi] adapter_rid: ResourceId,
 ) -> Result<GPUAdapterInfo, AnyError> {
-    let state = state.borrow_mut();
-    let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
+    let mut state = state.borrow_mut();
+    let adapter_resource = state.resource_table.take::<WebGpuAdapter>(adapter_rid)?;
     let adapter = adapter_resource.1;
     let instance = state.borrow::<Instance>();
 
     let info = gfx_select!(adapter => instance.adapter_get_info(adapter))?;
+    adapter_resource.close();
 
     Ok(GPUAdapterInfo {
         vendor: info.vendor.to_string(),

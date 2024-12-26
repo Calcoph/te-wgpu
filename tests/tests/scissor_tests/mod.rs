@@ -67,6 +67,7 @@ async fn scissor_test_impl(
                 })],
             }),
             multiview: None,
+            cache: None,
         })
         .unwrap();
 

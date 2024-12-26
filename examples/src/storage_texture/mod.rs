@@ -35,6 +35,7 @@ async fn run(_path: Option<String>) {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
             },
             None,
         )
@@ -104,22 +105,19 @@ async fn run(_path: Option<String>) {
         })
         .unwrap();
 
-    let pipeline_layout = device
-        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        })
-        .unwrap();
-    let pipeline = device
-        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: "main",
-            compilation_options: Default::default(),
-        })
-        .unwrap();
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[&bind_group_layout],
+        push_constant_ranges: &[],
+    }).unwrap();
+    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: None,
+        layout: Some(&pipeline_layout),
+        module: &shader,
+        entry_point: "main",
+        compilation_options: Default::default(),
+        cache: None,
+    }).unwrap();
 
     log::info!("Wgpu context set up.");
     //----------------------------------------

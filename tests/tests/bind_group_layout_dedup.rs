@@ -102,6 +102,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
             module: &module,
             entry_point: "no_resources",
             compilation_options: Default::default(),
+            cache: None,
         };
 
         let pipeline = ctx.device.create_compute_pipeline(&desc).unwrap();
@@ -245,6 +246,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
             module: &module,
             entry_point: "no_resources",
             compilation_options: Default::default(),
+            cache: None,
         })
         .unwrap();
 
@@ -299,6 +301,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
             module: &module,
             entry_point: "resources",
             compilation_options: Default::default(),
+            cache: None,
         })
         .unwrap();
 
@@ -359,7 +362,6 @@ static SEPARATE_PROGRAMS_HAVE_INCOMPATIBLE_DERIVED_BGLS: GpuTestConfiguration =
         .parameters(TestParameters::default().test_features_limits())
         .run_sync(separate_programs_have_incompatible_derived_bgls);
 
-#[should_panic]
 fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
     let buffer = ctx
         .device
@@ -385,6 +387,7 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
         module: &module,
         entry_point: "resources",
         compilation_options: Default::default(),
+        cache: None,
     };
     // Create two pipelines, creating a BG from the second.
     let pipeline1 = ctx.device.create_compute_pipeline(&desc).unwrap();
@@ -417,6 +420,14 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
     // We use the wrong bind group for this pipeline here. This should fail.
     pass.set_bind_group(0, &bg2, &[]);
     pass.dispatch_workgroups(1, 1, 1);
+
+    fail(
+        &ctx.device,
+        || {
+            pass.end()
+        },
+        None,
+    );
 }
 
 #[gpu_test]
@@ -425,7 +436,6 @@ static DERIVED_BGLS_INCOMPATIBLE_WITH_REGULAR_BGLS: GpuTestConfiguration =
         .parameters(TestParameters::default().test_features_limits())
         .run_sync(derived_bgls_incompatible_with_regular_bgls);
 
-#[should_panic]
 fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
     let buffer = ctx
         .device
@@ -454,6 +464,7 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
             module: &module,
             entry_point: "resources",
             compilation_options: Default::default(),
+            cache: None,
         })
         .unwrap();
 
@@ -493,4 +504,12 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
 
     pass.set_bind_group(0, &bg, &[]);
     pass.dispatch_workgroups(1, 1, 1);
+
+    fail(
+        &ctx.device,
+        || {
+            pass.end()
+        },
+        None,
+    )
 }

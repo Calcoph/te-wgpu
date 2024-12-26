@@ -378,15 +378,14 @@ fn copy_via_compute(
         })
         .unwrap();
 
-    let pipeline_copy = device
-        .create_compute_pipeline(&ComputePipelineDescriptor {
-            label: Some("pipeline read"),
-            layout: Some(&pll),
-            module: &sm,
-            entry_point: "copy_texture_to_buffer",
-            compilation_options: Default::default(),
-        })
-        .unwrap();
+    let pipeline_copy = device.create_compute_pipeline(&ComputePipelineDescriptor {
+        label: Some("pipeline read"),
+        layout: Some(&pll),
+        module: &sm,
+        entry_point: "copy_texture_to_buffer",
+        compilation_options: Default::default(),
+        cache: None,
+    }).unwrap();
 
     {
         let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default());

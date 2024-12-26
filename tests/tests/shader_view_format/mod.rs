@@ -115,19 +115,16 @@ async fn reinterpret(
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
-        })
-        .unwrap();
-    let bind_group = ctx
-        .device
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&tv),
-            }],
-            label: None,
-        })
-        .unwrap();
+            cache: None,
+        }).unwrap();
+    let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::TextureView(&tv),
+        }],
+        label: None,
+    }).unwrap();
 
     let target_tex = ctx
         .device

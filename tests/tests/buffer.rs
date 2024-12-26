@@ -256,8 +256,9 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                     module: &shader_module,
                     entry_point: "main",
                     compilation_options: Default::default(),
+                    cache: None
                 })
-        });
+        }, None);
     });
 
 /// The WebGPU algorithm [validating shader binding][vsb] requires
@@ -328,6 +329,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 module: &shader_module,
                 entry_point: "main",
                 compilation_options: Default::default(),
+                cache: None,
             })
             .unwrap();
 
@@ -354,23 +356,20 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
             .unwrap();
 
         wgpu_test::fail(|| {
-            let mut encoder = ctx
-                .device
-                .create_command_encoder(&Default::default())
-                .unwrap();
+            let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
 
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: None,
-                timestamp_writes: None,
-            });
+                let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: None,
+                    timestamp_writes: None,
+                });
 
-            pass.set_bind_group(0, &bind_group, &[]);
-            pass.set_pipeline(&pipeline);
-            pass.dispatch_workgroups(1, 1, 1);
+                pass.set_bind_group(0, &bind_group, &[]);
+                pass.set_pipeline(&pipeline);
+                pass.dispatch_workgroups(1, 1, 1);
 
             drop(pass);
             encoder.finish()
-        });
+        }, None);
     });
 
 #[gpu_test]
@@ -391,14 +390,15 @@ static CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS: GpuTestConfiguration = GpuTestConfi
 
         let out_of_bounds = size.checked_add(wgpu::COPY_BUFFER_ALIGNMENT).unwrap();
 
-        ctx.device
-            .create_command_encoder(&Default::default())
-            .unwrap()
-            .clear_buffer(&buffer, out_of_bounds, None);
-        let err_msg = "TODO";
-        assert!(err_msg.contains(
-            "Clear of 20..20 would end up overrunning the bounds of the buffer of size 16"
-        ));
+        wgpu_test::fail(
+            || {
+                ctx.device
+                    .create_command_encoder(&Default::default())
+                    .unwrap()
+                    .clear_buffer(&buffer, out_of_bounds, None)
+            },
+            Some("Clear of 20..20 would end up overrunning the bounds of the buffer of size 16"),
+        );
     });
 
 #[gpu_test]
@@ -419,18 +419,20 @@ static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
             let max_valid_offset = u64::MAX - (u64::MAX % wgpu::COPY_BUFFER_ALIGNMENT);
             let smallest_aligned_invalid_size = wgpu::COPY_BUFFER_ALIGNMENT;
 
-            ctx.device
-                .create_command_encoder(&Default::default())
-                .unwrap()
-                .clear_buffer(
-                    &buffer,
-                    max_valid_offset,
-                    Some(smallest_aligned_invalid_size),
-                );
-
-            let err_msg = "TODO";
-            assert!(err_msg.contains(concat!(
-                "Clear starts at offset 18446744073709551612 with size of 4, ",
-                "but these added together exceed `u64::MAX`"
-            )));
+            wgpu_test::fail(
+                &ctx.device,
+                || {
+                    ctx.device
+                        .create_command_encoder(&Default::default())
+                        .clear_buffer(
+                            &buffer,
+                            max_valid_offset,
+                            Some(smallest_aligned_invalid_size),
+                        )
+                },
+                Some(concat!(
+                    "Clear starts at offset 18446744073709551612 with size of 4, ",
+                    "but these added together exceed `u64::MAX`"
+                )),
+            );
         });

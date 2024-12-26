@@ -536,41 +536,40 @@ impl crate::framework::Example for Example {
                 .unwrap();
 
             // Create the render pipeline
-            let pipeline = device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("shadow"),
-                    layout: Some(&pipeline_layout),
-                    vertex: wgpu::VertexState {
-                        module: &shader,
-                        entry_point: "vs_bake",
-                        compilation_options: Default::default(),
-                        buffers: &[vb_desc.clone()],
+            let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("shadow"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "vs_bake",
+                    compilation_options: Default::default(),
+                    buffers: &[vb_desc.clone()],
+                },
+                fragment: None,
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    unclipped_depth: device
+                        .features()
+                        .contains(wgpu::Features::DEPTH_CLIP_CONTROL),
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: Self::SHADOW_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::LessEqual,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState {
+                        constant: 2, // corresponds to bilinear filtering
+                        slope_scale: 2.0,
+                        clamp: 0.0,
                     },
-                    fragment: None,
-                    primitive: wgpu::PrimitiveState {
-                        topology: wgpu::PrimitiveTopology::TriangleList,
-                        front_face: wgpu::FrontFace::Ccw,
-                        cull_mode: Some(wgpu::Face::Back),
-                        unclipped_depth: device
-                            .features()
-                            .contains(wgpu::Features::DEPTH_CLIP_CONTROL),
-                        ..Default::default()
-                    },
-                    depth_stencil: Some(wgpu::DepthStencilState {
-                        format: Self::SHADOW_FORMAT,
-                        depth_write_enabled: true,
-                        depth_compare: wgpu::CompareFunction::LessEqual,
-                        stencil: wgpu::StencilState::default(),
-                        bias: wgpu::DepthBiasState {
-                            constant: 2, // corresponds to bilinear filtering
-                            slope_scale: 2.0,
-                            clamp: 0.0,
-                        },
-                    }),
-                    multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
-                })
-                .unwrap();
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            }).unwrap();
 
             Pass {
                 pipeline,
@@ -678,42 +677,41 @@ impl crate::framework::Example for Example {
                 .unwrap();
 
             // Create the render pipeline
-            let pipeline = device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("main"),
-                    layout: Some(&pipeline_layout),
-                    vertex: wgpu::VertexState {
-                        module: &shader,
-                        entry_point: "vs_main",
-                        compilation_options: Default::default(),
-                        buffers: &[vb_desc],
+            let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("main"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    compilation_options: Default::default(),
+                    buffers: &[vb_desc],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: if supports_storage_resources {
+                        "fs_main"
+                    } else {
+                        "fs_main_without_storage"
                     },
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader,
-                        entry_point: if supports_storage_resources {
-                            "fs_main"
-                        } else {
-                            "fs_main_without_storage"
-                        },
-                        compilation_options: Default::default(),
-                        targets: &[Some(config.view_formats[0].into())],
-                    }),
-                    primitive: wgpu::PrimitiveState {
-                        front_face: wgpu::FrontFace::Ccw,
-                        cull_mode: Some(wgpu::Face::Back),
-                        ..Default::default()
-                    },
-                    depth_stencil: Some(wgpu::DepthStencilState {
-                        format: Self::DEPTH_FORMAT,
-                        depth_write_enabled: true,
-                        depth_compare: wgpu::CompareFunction::Less,
-                        stencil: wgpu::StencilState::default(),
-                        bias: wgpu::DepthBiasState::default(),
-                    }),
-                    multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
-                })
-                .unwrap();
+                    compilation_options: Default::default(),
+                    targets: &[Some(config.view_formats[0].into())],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: Self::DEPTH_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            }).unwrap();
 
             Pass {
                 pipeline,

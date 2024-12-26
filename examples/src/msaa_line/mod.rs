@@ -48,39 +48,38 @@ impl Example {
         vertex_count: u32,
     ) -> wgpu::RenderBundle {
         log::info!("sample_count: {}", sample_count);
-        let pipeline = device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
-                layout: Some(pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: shader,
-                    entry_point: "vs_main",
-                    compilation_options: Default::default(),
-                    buffers: &[wgpu::VertexBufferLayout {
-                        array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x4],
-                    }],
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: shader,
-                    entry_point: "fs_main",
-                    compilation_options: Default::default(),
-                    targets: &[Some(config.view_formats[0].into())],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::LineList,
-                    front_face: wgpu::FrontFace::Ccw,
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState {
-                    count: sample_count,
-                    ..Default::default()
-                },
-                multiview: None,
-            })
-            .unwrap();
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: shader,
+                entry_point: "vs_main",
+                compilation_options: Default::default(),
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x4],
+                }],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: shader,
+                entry_point: "fs_main",
+                compilation_options: Default::default(),
+                targets: &[Some(config.view_formats[0].into())],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList,
+                front_face: wgpu::FrontFace::Ccw,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: sample_count,
+                ..Default::default()
+            },
+            multiview: None,
+            cache: None,
+        }).unwrap();
         let mut encoder =
             device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                 label: None,

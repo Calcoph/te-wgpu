@@ -29,14 +29,25 @@ pub use run::{execute_test, TestingContext};
 pub use wgpu_macros::gpu_test;
 
 /// Run some code in an error scope and assert that validation fails.
-pub fn fail<T, E: Debug>(callback: impl FnOnce() -> Result<T, E>) -> E {
+pub fn fail<T, E: Debug + ToString>(callback: impl FnOnce() -> Result<T, E>, expected_msg_substring: Option<&'static str>,) -> E {
     let result = callback();
-    assert!(result.is_err());
-
-    match result {
-        Ok(_) => unreachable!(),
-        Err(e) => e,
+    let validation_error = result.err()
+        .expect("expected validation error in callback, but no validation error was emitted");
+    if let Some(expected_msg_substring) = expected_msg_substring {
+        let lowered_expected = expected_msg_substring.to_lowercase();
+        let lowered_actual = validation_error.to_string().to_lowercase();
+        assert!(
+            lowered_actual.contains(&lowered_expected),
+            concat!(
+                "expected validation error case-insensitively containing {:?}, ",
+                "but it was not present in actual error message:\n{:?}"
+            ),
+            expected_msg_substring,
+            validation_error
+        );
     }
+
+    validation_error
 }
 
 /// Run some code in an error scope and assert that validation succeeds.
@@ -49,12 +60,13 @@ pub fn valid<T, E: Debug>(callback: impl FnOnce() -> Result<T, E>) -> T {
 
 /// Run some code in an error scope and assert that validation succeeds or fails depending on the
 /// provided `should_fail` boolean.
-pub fn fail_if<T, E: Debug>(
+pub fn fail_if<T, E: Debug + ToString>(
     should_fail: bool,
     callback: impl FnOnce() -> Result<T, E>,
+    expected_msg_substring: Option<&'static str>,
 ) -> Result<T, E> {
     if should_fail {
-        Err(fail(callback))
+        Err(fail(callback, expected_msg_substring))
     } else {
         Ok(valid(callback))
     }

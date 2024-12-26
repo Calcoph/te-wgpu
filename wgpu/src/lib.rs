@@ -63,7 +63,7 @@ pub use wgt::{
     DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
     Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
     Gles3MinorVersion, ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
-    InstanceFlags, Limits, MaintainResult, MultisampleState, Origin2d, Origin3d,
+    InstanceFlags, Limits, MaintainResult, MemoryHints, MultisampleState, Origin2d, Origin3d,
     PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode,
     PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
     RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
@@ -79,32 +79,27 @@ pub use wgt::{
 /// Re-export of our `wgpu-core` dependency.
 ///
 #[cfg(wgpu_core)]
-#[doc(inline)]
 pub use ::wgc as core;
 
 /// Re-export of our `wgpu-hal` dependency.
 ///
 ///
 #[cfg(wgpu_core)]
-#[doc(inline)]
 pub use ::hal;
 
 /// Re-export of our `naga` dependency.
 ///
 #[cfg(wgpu_core)]
 #[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
-#[doc(inline)]
 // We re-export wgpu-core's re-export of naga, as we may not have direct access to it.
 pub use ::wgc::naga;
 /// Re-export of our `naga` dependency.
 ///
 #[cfg(all(not(wgpu_core), naga))]
 #[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
-#[doc(inline)]
 // If that's not available, we re-export our own.
 pub use naga;
 
-#[doc(inline)]
 /// Re-export of our `raw-window-handle` dependency.
 ///
 pub use raw_window_handle as rwh;
@@ -112,7 +107,6 @@ pub use raw_window_handle as rwh;
 /// Re-export of our `web-sys` dependency.
 ///
 #[cfg(any(webgl, webgpu))]
-#[doc(inline)]
 pub use web_sys;
 
 // wasm-only types, we try to keep as many types non-platform
@@ -190,7 +184,7 @@ static_assertions::assert_impl_all!(Device: Send, Sync);
 /// This type is unique to the Rust API of `wgpu`.
 /// There is no analogue in the WebGPU specification.
 #[derive(Debug, Clone)]
-pub struct SubmissionIndex(ObjectId, Arc<crate::Data>);
+pub struct SubmissionIndex(Arc<crate::Data>);
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
@@ -297,6 +291,14 @@ impl MapContext {
 ///
 /// Corresponds to [WebGPU `GPUBuffer`](https://gpuweb.github.io/gpuweb/#buffer-interface).
 ///
+/// A `Buffer`'s bytes have "interior mutability": functions like
+/// [`Queue::write_buffer`] or [mapping] a buffer for writing only require a
+/// `&Buffer`, not a `&mut Buffer`, even though they modify its contents. `wgpu`
+/// prevents simultaneous reads and writes of buffer contents using run-time
+/// checks.
+///
+/// [mapping]: Buffer#mapping-buffers
+///
 /// # Mapping buffers
 ///
 /// If a `Buffer` is created with the appropriate [`usage`], it can be *mapped*:
@@ -341,43 +343,83 @@ impl MapContext {
 /// attempt to access overlapping ranges, even for shared access only, these
 /// methods panic.
 ///
-/// For example:
-///
-/// ```no_run
-/// # let buffer: wgpu::Buffer = todo!();
-/// let slice = buffer.slice(10..20);
-/// slice.map_async(wgpu::MapMode::Read, |result| {
-///     match result {
-///         Ok(()) => {
-///             let view = slice.get_mapped_range();
-///             // read data from `view`, which dereferences to `&[u8]`
-///         }
-///         Err(e) => {
-///             // handle mapping error
-///         }
-///     }
-/// });
-/// ```
-///
-/// This example calls `Buffer::slice` to obtain a [`BufferSlice`] referring to
-/// the second ten bytes of `buffer`. (To obtain access to the entire buffer,
-/// you could call `buffer.slice(..)`.) The code then calls `map_async` to wait
-/// for the buffer to be available, and finally calls `get_mapped_range` on the
-/// slice to actually get at the bytes.
-///
-/// If using `map_async` directly is awkward, you may find it more convenient to
-/// use [`Queue::write_buffer`] and [`util::DownloadBuffer::read_buffer`].
-/// However, those each have their own tradeoffs; the asynchronous nature of GPU
-/// execution makes it hard to avoid friction altogether.
-///
-/// While a buffer is mapped, you must not submit any commands to the GPU that
-/// access it. You may record command buffers that use the buffer, but you must
-/// not submit such command buffers.
+/// While a buffer is mapped, you may not submit any commands to the GPU that
+/// access it. You may record command buffers that use the buffer, but if you
+/// submit them while the buffer is mapped, submission will panic.
 ///
 /// When you are done using the buffer on the CPU, you must call
 /// [`Buffer::unmap`] to make it available for use by the GPU again. All
 /// [`BufferView`] and [`BufferViewMut`] views referring to the buffer must be
 /// dropped before you unmap it; otherwise, [`Buffer::unmap`] will panic.
+///
+/// # Example
+///
+/// If `buffer` was created with [`BufferUsages::MAP_WRITE`], we could fill it
+/// with `f32` values like this:
+///
+/// ```no_run
+/// # mod bytemuck {
+/// #     pub fn cast_slice_mut(bytes: &mut [u8]) -> &mut [f32] { todo!() }
+/// # }
+/// # let device: wgpu::Device = todo!();
+/// # let buffer: wgpu::Buffer = todo!();
+/// let buffer = std::sync::Arc::new(buffer);
+/// let capturable = buffer.clone();
+/// buffer.slice(..).map_async(wgpu::MapMode::Write, move |result| {
+///     if result.is_ok() {
+///         let mut view = capturable.slice(..).get_mapped_range_mut();
+///         let floats: &mut [f32] = bytemuck::cast_slice_mut(&mut view);
+///         floats.fill(42.0);
+///         drop(view);
+///         capturable.unmap();
+///     }
+/// });
+/// ```
+///
+/// This code takes the following steps:
+///
+/// - First, it moves `buffer` into an [`Arc`], and makes a clone for capture by
+///   the callback passed to [`map_async`]. Since a [`map_async`] callback may be
+///   invoked from another thread, interaction between the callback and the
+///   thread calling [`map_async`] generally requires some sort of shared heap
+///   data like this. In real code, the [`Arc`] would probably own some larger
+///   structure that itself owns `buffer`.
+///
+/// - Then, it calls [`Buffer::slice`] to make a [`BufferSlice`] referring to
+///   the buffer's entire contents.
+///
+/// - Next, it calls [`BufferSlice::map_async`] to request that the bytes to
+///   which the slice refers be made accessible to the CPU ("mapped"). This may
+///   entail waiting for previously enqueued operations on `buffer` to finish.
+///   Although [`map_async`] itself always returns immediately, it saves the
+///   callback function to be invoked later.
+///
+/// - When some later call to [`Device::poll`] or [`Instance::poll_all`] (not
+///   shown in this example) determines that the buffer is mapped and ready for
+///   the CPU to use, it invokes the callback function.
+///
+/// - The callback function calls [`Buffer::slice`] and then
+///   [`BufferSlice::get_mapped_range_mut`] to obtain a [`BufferViewMut`], which
+///   dereferences to a `&mut [u8]` slice referring to the buffer's bytes.
+///
+/// - It then uses the [`bytemuck`] crate to turn the `&mut [u8]` into a `&mut
+///   [f32]`, and calls the slice [`fill`] method to fill the buffer with a
+///   useful value.
+///
+/// - Finally, the callback drops the view and calls [`Buffer::unmap`] to unmap
+///   the buffer. In real code, the callback would also need to do some sort of
+///   synchronization to let the rest of the program know that it has completed
+///   its work.
+///
+/// If using [`map_async`] directly is awkward, you may find it more convenient to
+/// use [`Queue::write_buffer`] and [`util::DownloadBuffer::read_buffer`].
+/// However, those each have their own tradeoffs; the asynchronous nature of GPU
+/// execution makes it hard to avoid friction altogether.
+///
+/// [`Arc`]: std::sync::Arc
+/// [`map_async`]: BufferSlice::map_async
+/// [`bytemuck`]: https://crates.io/crates/bytemuck
+/// [`fill`]: slice::fill
 ///
 /// ## Mapping buffers on the web
 ///
@@ -432,15 +474,22 @@ static_assertions::assert_impl_all!(Buffer: Send, Sync);
 /// let whole_buffer_slice = buffer.slice(..);
 /// ```
 ///
-/// A [`BufferSlice`] is nothing more than a reference to the `Buffer` and a
-/// starting and ending position. To access the slice's contents on the CPU, you
-/// must first [map] the buffer, and then call [`BufferSlice::get_mapped_range`]
-/// or [`BufferSlice::get_mapped_range_mut`] to obtain a view of the slice's
-/// contents, which dereferences to a `&[u8]` or `&mut [u8]`.
+/// You can pass buffer slices to methods like [`RenderPass::set_vertex_buffer`]
+/// and [`RenderPass::set_index_buffer`] to indicate which portion of the buffer
+/// a draw call should consult.
 ///
-/// You can also pass buffer slices to methods like
-/// [`RenderPass::set_vertex_buffer`] and [`RenderPass::set_index_buffer`] to
-/// indicate which data a draw call should consume.
+/// To access the slice's contents on the CPU, you must first [map] the buffer,
+/// and then call [`BufferSlice::get_mapped_range`] or
+/// [`BufferSlice::get_mapped_range_mut`] to obtain a view of the slice's
+/// contents. See the documentation on [mapping][map] for more details,
+/// including example code.
+///
+/// Unlike a Rust shared slice `&[T]`, whose existence guarantees that
+/// nobody else is modifying the `T` values to which it refers, a
+/// [`BufferSlice`] doesn't guarantee that the buffer's contents aren't
+/// changing. You can still record and submit commands operating on the
+/// buffer while holding a [`BufferSlice`]. A [`BufferSlice`] simply
+/// represents a certain range of the buffer's bytes.
 ///
 /// The `BufferSlice` type is unique to the Rust API of `wgpu`. In the WebGPU
 /// specification, an offset and size are specified as arguments to each call
@@ -810,6 +859,139 @@ impl Drop for ShaderModule {
     }
 }
 
+impl ShaderModule {
+    /// Get the compilation info for the shader module.
+    pub fn get_compilation_info(&self) -> impl Future<Output = CompilationInfo> + WasmNotSend {
+        self.context
+            .shader_get_compilation_info(&self.id, self.data.as_ref())
+    }
+}
+
+/// Compilation information for a shader module.
+///
+/// Corresponds to [WebGPU `GPUCompilationInfo`](https://gpuweb.github.io/gpuweb/#gpucompilationinfo).
+/// The source locations use bytes, and index a UTF-8 encoded string.
+#[derive(Debug, Clone)]
+pub struct CompilationInfo {
+    /// The messages from the shader compilation process.
+    pub messages: Vec<CompilationMessage>,
+}
+
+/// A single message from the shader compilation process.
+///
+/// Roughly corresponds to [`GPUCompilationMessage`](https://www.w3.org/TR/webgpu/#gpucompilationmessage),
+/// except that the location uses UTF-8 for all positions.
+#[derive(Debug, Clone)]
+pub struct CompilationMessage {
+    /// The text of the message.
+    pub message: String,
+    /// The type of the message.
+    pub message_type: CompilationMessageType,
+    /// Where in the source code the message points at.
+    pub location: Option<SourceLocation>,
+}
+
+/// The type of a compilation message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompilationMessageType {
+    /// An error message.
+    Error,
+    /// A warning message.
+    Warning,
+    /// An informational message.
+    Info,
+}
+
+/// A human-readable representation for a span, tailored for text source.
+///
+/// Roughly corresponds to the positional members of [`GPUCompilationMessage`][gcm] from
+/// the WebGPU specification, except
+/// - `offset` and `length` are in bytes (UTF-8 code units), instead of UTF-16 code units.
+/// - `line_position` is in bytes (UTF-8 code units), and is usually not directly intended for humans.
+///
+/// [gcm]: https://www.w3.org/TR/webgpu/#gpucompilationmessage
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct SourceLocation {
+    /// 1-based line number.
+    pub line_number: u32,
+    /// 1-based column in code units (in bytes) of the start of the span.
+    /// Remember to convert accordingly when displaying to the user.
+    pub line_position: u32,
+    /// 0-based Offset in code units (in bytes) of the start of the span.
+    pub offset: u32,
+    /// Length in code units (in bytes) of the span.
+    pub length: u32,
+}
+
+#[cfg(all(feature = "wgsl", wgpu_core))]
+impl From<naga::error::ShaderError<naga::front::wgsl::ParseError>> for CompilationInfo {
+    fn from(value: naga::error::ShaderError<naga::front::wgsl::ParseError>) -> Self {
+        CompilationInfo {
+            messages: vec![CompilationMessage {
+                message: value.to_string(),
+                message_type: CompilationMessageType::Error,
+                location: value.inner.location(&value.source).map(Into::into),
+            }],
+        }
+    }
+}
+#[cfg(feature = "glsl")]
+impl From<naga::error::ShaderError<naga::front::glsl::ParseErrors>> for CompilationInfo {
+    fn from(value: naga::error::ShaderError<naga::front::glsl::ParseErrors>) -> Self {
+        let messages = value
+            .inner
+            .errors
+            .into_iter()
+            .map(|err| CompilationMessage {
+                message: err.to_string(),
+                message_type: CompilationMessageType::Error,
+                location: err.location(&value.source).map(Into::into),
+            })
+            .collect();
+        CompilationInfo { messages }
+    }
+}
+
+#[cfg(feature = "spirv")]
+impl From<naga::error::ShaderError<naga::front::spv::Error>> for CompilationInfo {
+    fn from(value: naga::error::ShaderError<naga::front::spv::Error>) -> Self {
+        CompilationInfo {
+            messages: vec![CompilationMessage {
+                message: value.to_string(),
+                message_type: CompilationMessageType::Error,
+                location: None,
+            }],
+        }
+    }
+}
+
+#[cfg(any(wgpu_core, naga))]
+impl From<naga::error::ShaderError<naga::WithSpan<naga::valid::ValidationError>>>
+    for CompilationInfo
+{
+    fn from(value: naga::error::ShaderError<naga::WithSpan<naga::valid::ValidationError>>) -> Self {
+        CompilationInfo {
+            messages: vec![CompilationMessage {
+                message: value.to_string(),
+                message_type: CompilationMessageType::Error,
+                location: value.inner.location(&value.source).map(Into::into),
+            }],
+        }
+    }
+}
+
+#[cfg(any(wgpu_core, naga))]
+impl From<naga::SourceLocation> for SourceLocation {
+    fn from(value: naga::SourceLocation) -> Self {
+        SourceLocation {
+            length: value.length,
+            offset: value.offset,
+            line_number: value.line_number,
+            line_position: value.line_position,
+        }
+    }
+}
+
 /// Source of a shader module.
 ///
 /// The source will be parsed and validated.
@@ -976,6 +1158,100 @@ impl ComputePipeline {
     }
 }
 
+/// Handle to a pipeline cache, which is used to accelerate
+/// creating [`RenderPipeline`]s and [`ComputePipeline`]s
+/// in subsequent executions
+///
+/// This reuse is only applicable for the same or similar devices.
+/// See [`util::pipeline_cache_key`] for some details.
+///
+/// # Background
+///
+/// In most GPU drivers, shader code must be converted into a machine code
+/// which can be executed on the GPU.
+/// Generating this machine code can require a lot of computation.
+/// Pipeline caches allow this computation to be reused between executions
+/// of the program.
+/// This can be very useful for reducing program startup time.
+///
+/// Note that most desktop GPU drivers will manage their own caches,
+/// meaning that little advantage can be gained from this on those platforms.
+/// However, on some platforms, especially Android, drivers leave this to the
+/// application to implement.
+///
+/// Unfortunately, drivers do not expose whether they manage their own caches.
+/// Some reasonable policies for applications to use are:
+/// - Manage their own pipeline cache on all platforms
+/// - Only manage pipeline caches on Android
+///
+/// # Usage
+///
+/// It is valid to use this resource when creating multiple pipelines, in
+/// which case it will likely cache each of those pipelines.
+/// It is also valid to create a new cache for each pipeline.
+///
+/// This resource is most useful when the data produced from it (using
+/// [`PipelineCache::get_data`]) is persisted.
+/// Care should be taken that pipeline caches are only used for the same device,
+/// as pipeline caches from compatible devices are unlikely to provide any advantage.
+/// `util::pipeline_cache_key` can be used as a file/directory name to help ensure that.
+///
+/// It is recommended to store pipeline caches atomically. If persisting to disk,
+/// this can usually be achieved by creating a temporary file, then moving/[renaming]
+/// the temporary file over the existing cache
+///
+/// # Storage Usage
+///
+/// There is not currently an API available to reduce the size of a cache.
+/// This is due to limitations in the underlying graphics APIs used.
+/// This is especially impactful if your application is being updated, so
+/// previous caches are no longer being used.
+///
+/// One option to work around this is to regenerate the cache.
+/// That is, creating the pipelines which your program runs using
+/// with the stored cached data, then recreating the *same* pipelines
+/// using a new cache, which your application then store.
+///
+/// # Implementations
+///
+/// This resource currently only works on the following backends:
+///  - Vulkan
+///
+/// This type is unique to the Rust API of `wgpu`.
+///
+/// [renaming]: std::fs::rename
+#[derive(Debug)]
+pub struct PipelineCache {
+    context: Arc<C>,
+    id: ObjectId,
+    data: Box<Data>,
+}
+
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(PipelineCache: Send, Sync);
+
+impl PipelineCache {
+    /// Get the data associated with this pipeline cache.
+    /// The data format is an implementation detail of `wgpu`.
+    /// The only defined operation on this data setting it as the `data` field
+    /// on [`PipelineCacheDescriptor`], then to [`Device::create_pipeline_cache`].
+    ///
+    /// This function is unique to the Rust API of `wgpu`.
+    pub fn get_data(&self) -> Option<Vec<u8>> {
+        self.context
+            .pipeline_cache_get_data(&self.id, self.data.as_ref())
+    }
+}
+
+impl Drop for PipelineCache {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context
+                .pipeline_cache_drop(&self.id, self.data.as_ref());
+        }
+    }
+}
+
 /// Handle to a command buffer on the GPU.
 ///
 /// A `CommandBuffer` represents a complete sequence of commands that may be submitted to a command
@@ -1050,10 +1326,20 @@ impl Drop for CommandEncoder {
 /// Corresponds to [WebGPU `GPURenderPassEncoder`](
 /// https://gpuweb.github.io/gpuweb/#render-pass-encoder).
 #[derive(Debug)]
-pub struct RenderPass<'a> {
+pub struct RenderPass<'encoder> {
+    /// The inner data of the render pass, separated out so it's easy to replace the lifetime with 'static if desired.
+    inner: RenderPassInner,
+
+    /// This lifetime is used to protect the [`CommandEncoder`] from being used
+    /// while the pass is alive.
+    encoder_guard: PhantomData<&'encoder ()>,
+}
+
+#[derive(Debug)]
+struct RenderPassInner {
     id: ObjectId,
     data: Box<Data>,
-    parent: &'a mut CommandEncoder,
+    context: Arc<C>,
     encoded: bool,
 }
 
@@ -1064,10 +1350,20 @@ pub struct RenderPass<'a> {
 /// Corresponds to [WebGPU `GPUComputePassEncoder`](
 /// https://gpuweb.github.io/gpuweb/#compute-pass-encoder).
 #[derive(Debug)]
-pub struct ComputePass<'a> {
+pub struct ComputePass<'encoder> {
+    /// The inner data of the compute pass, separated out so it's easy to replace the lifetime with 'static if desired.
+    inner: ComputePassInner,
+
+    /// This lifetime is used to protect the [`CommandEncoder`] from being used
+    /// while the pass is alive.
+    encoder_guard: PhantomData<&'encoder ()>,
+}
+
+#[derive(Debug)]
+struct ComputePassInner {
     id: ObjectId,
     data: Box<Data>,
-    parent: &'a mut CommandEncoder,
+    context: Arc<C>,
 }
 
 /// Encodes a series of GPU operations into a reusable "render bundle".
@@ -1593,28 +1889,25 @@ static_assertions::assert_impl_all!(BindGroupDescriptor<'_>: Send, Sync);
 ///
 /// For use with [`CommandEncoder::begin_render_pass`].
 ///
-/// Note: separate lifetimes are needed because the texture views (`'tex`)
-/// have to live as long as the pass is recorded, while everything else (`'desc`) doesn't.
-///
 /// Corresponds to [WebGPU `GPURenderPassDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpassdescriptor).
 #[derive(Clone, Debug, Default)]
-pub struct RenderPassDescriptor<'tex, 'desc> {
+pub struct RenderPassDescriptor<'a> {
     /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'desc>,
+    pub label: Label<'a>,
     /// The color attachments of the render pass.
-    pub color_attachments: &'desc [Option<RenderPassColorAttachment<'tex>>],
+    pub color_attachments: &'a [Option<RenderPassColorAttachment<'a>>],
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'a>>,
     /// Defines which timestamp values will be written for this pass, and where to write them to.
     ///
     /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
-    pub timestamp_writes: Option<RenderPassTimestampWrites<'desc>>,
+    pub timestamp_writes: Option<RenderPassTimestampWrites<'a>>,
     /// Defines where the occlusion query results will be stored for this pass.
-    pub occlusion_query_set: Option<&'tex QuerySet>,
+    pub occlusion_query_set: Option<&'a QuerySet>,
 }
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(RenderPassDescriptor<'_, '_>: Send, Sync);
+static_assertions::assert_impl_all!(RenderPassDescriptor<'_>: Send, Sync);
 
 /// Describes how the vertex buffer is interpreted.
 ///
@@ -1704,6 +1997,8 @@ pub struct RenderPipelineDescriptor<'a> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<&'a PipelineCache>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);
@@ -1763,6 +2058,8 @@ pub struct PipelineCompilationOptions<'a> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// Should the pipeline attempt to transform vertex shaders to use vertex pulling.
+    pub vertex_pulling_transform: bool,
 }
 
 impl<'a> Default for PipelineCompilationOptions<'a> {
@@ -1776,6 +2073,7 @@ impl<'a> Default for PipelineCompilationOptions<'a> {
         Self {
             constants,
             zero_initialize_workgroup_memory: true,
+            vertex_pulling_transform: false,
         }
     }
 }
@@ -1801,9 +2099,37 @@ pub struct ComputePipelineDescriptor<'a> {
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`
     pub compilation_options: PipelineCompilationOptions<'a>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<&'a PipelineCache>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);
+
+/// Describes a pipeline cache, which allows reusing compilation work
+/// between program runs.
+///
+/// For use with [`Device::create_pipeline_cache`]
+///
+/// This type is unique to the Rust API of `wgpu`.
+#[derive(Clone, Debug)]
+pub struct PipelineCacheDescriptor<'a> {
+    /// Debug label of the pipeline cache. This might show up in some logs from `wgpu`
+    pub label: Label<'a>,
+    /// The data used to initialise the cache initialise
+    ///
+    /// # Safety
+    ///
+    /// This data must have been provided from a previous call to
+    /// [`PipelineCache::get_data`], if not `None`
+    pub data: Option<&'a [u8]>,
+    /// Whether to create a cache without data when the provided data
+    /// is invalid.
+    ///
+    /// Recommended to set to true
+    pub fallback: bool,
+}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(PipelineCacheDescriptor<'_>: Send, Sync);
 
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// View of a buffer which can be used to copy to/from a texture.
@@ -2097,13 +2423,10 @@ impl Instance {
 
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
-    /// Always returns an empty vector if the instance decided upon creation to
-    /// target WebGPU since adapter creation is always async on WebGPU.
-    ///
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(wgpu_core)]
+    #[cfg(native)]
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
         let context = Arc::clone(&self.context);
         self.context
@@ -2119,7 +2442,7 @@ impl Instance {
                     })
                     .collect()
             })
-            .unwrap_or_default()
+            .unwrap()
     }
 
     /// Retrieves an [`Adapter`] which matches the given [`RequestAdapterOptions`].
@@ -2127,6 +2450,8 @@ impl Instance {
     /// Some options are "soft", so treated as non-mandatory. Others are "hard".
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
+    ///
+    /// A `compatible_surface` is required when targeting WebGL2.
     pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions<'_, '_>,
@@ -2303,6 +2628,11 @@ impl Adapter {
     ///
     /// Returns the [`Device`] together with a [`Queue`] that executes command buffers.
     ///
+    /// [Per the WebGPU specification], an [`Adapter`] may only be used once to create a device.
+    /// If another device is wanted, call [`Instance::request_adapter()`] again to get a fresh
+    /// [`Adapter`].
+    /// However, `wgpu` does not currently enforce this restriction.
+    ///
     /// # Arguments
     ///
     /// - `desc` - Description of the features and limits requested from the given device.
@@ -2311,10 +2641,13 @@ impl Adapter {
     ///
     /// # Panics
     ///
+    /// - `request_device()` was already called on this `Adapter`.
     /// - Features specified by `desc` are not supported by this adapter.
     /// - Unsafe features were requested but not enabled when requesting the adapter.
     /// - Limits requested exceed the values provided by the adapter.
     /// - Adapter does not support all features wgpu requires to safely operate.
+    ///
+    /// [Per the WebGPU specification]: https://www.w3.org/TR/webgpu/#dom-gpuadapter-requestdevice
     pub fn request_device(
         &self,
         desc: &DeviceDescriptor<'_>,
@@ -2917,6 +3250,16 @@ impl Device {
         DynContext::device_stop_capture(&*self.context, &self.id, self.data.as_ref())
     }
 
+    /// Query internal counters from the native backend for debugging purposes.
+    ///
+    /// Some backends may not set all counters, or may not set any counter at all.
+    /// The `counters` cargo feature must be enabled for any counter to be set.
+    ///
+    /// If a counter is not set, its contains its default value (zero).
+    pub fn get_internal_counters(&self) -> wgt::InternalCounters {
+        DynContext::device_get_internal_counters(&*self.context, &self.id, self.data.as_ref())
+    }
+
     /// Apply a callback to this `Device`'s underlying backend device.
     ///
     /// If this `Device` is implemented by the backend API given by `A` (Vulkan,
@@ -2968,6 +3311,62 @@ impl Device {
             self.data.as_ref(),
             Box::new(callback),
         )
+    }
+
+    /// Create a [`PipelineCache`] with initial data
+    ///
+    /// This can be passed to [`Device::create_compute_pipeline`]
+    /// and [`Device::create_render_pipeline`] to either accelerate these
+    /// or add the cache results from those.
+    ///
+    /// # Safety
+    ///
+    /// If the `data` field of `desc` is set, it must have previously been returned from a call
+    /// to [`PipelineCache::get_data`][^saving]. This `data` will only be used if it came
+    /// from an adapter with the same [`util::pipeline_cache_key`].
+    /// This *is* compatible across wgpu versions, as any data format change will
+    /// be accounted for.
+    ///
+    /// It is *not* supported to bring caches from previous direct uses of backend APIs
+    /// into this method.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error value if:
+    ///  * the [`PIPELINE_CACHE`](wgt::Features::PIPELINE_CACHE) feature is not enabled
+    ///  * this device is invalid; or
+    ///  * the device is out of memory
+    ///
+    /// This method also returns an error value if:
+    ///  * The `fallback` field on `desc` is false; and
+    ///  * the `data` provided would not be used[^data_not_used]
+    ///
+    /// If an error value is used in subsequent calls, default caching will be used.
+    ///
+    /// [^saving]: We do recognise that saving this data to disk means this condition
+    /// is impossible to fully prove. Consider the risks for your own application in this case.
+    ///
+    /// [^data_not_used]: This data may be not used if: the data was produced by a prior
+    /// version of wgpu; or was created for an incompatible adapter, or there was a GPU driver
+    /// update. In some cases, the data might not be used and a real value is returned,
+    /// this is left to the discretion of GPU drivers.
+    pub unsafe fn create_pipeline_cache(
+        &self,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> PipelineCache {
+        let (id, data) = unsafe {
+            DynContext::device_create_pipeline_cache(
+                &*self.context,
+                &self.id,
+                self.data.as_ref(),
+                desc,
+            )
+        };
+        PipelineCache {
+            context: Arc::clone(&self.context),
+            id,
+            data,
+        }
     }
 }
 
@@ -3138,7 +3537,7 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
     (offset, size)
 }
 
-/// Read only view into a mapped buffer.
+/// A read-only view of a mapped buffer's bytes.
 ///
 /// To get a `BufferView`, first [map] the buffer, and then
 /// call `buffer.slice(range).get_mapped_range()`.
@@ -3147,17 +3546,20 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
 /// slice methods to access the buffer's contents. It also implements
 /// `AsRef<[u8]>`, if that's more convenient.
 ///
-/// If you try to create overlapping views of a buffer, mutable or
-/// otherwise, `get_mapped_range` will panic.
+/// Before the buffer can be unmapped, all `BufferView`s observing it
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] will panic.
+///
+/// For example code, see the documentation on [mapping buffers][map].
 ///
 /// [map]: Buffer#mapping-buffers
+/// [`map_async`]: BufferSlice::map_async
 #[derive(Debug)]
 pub struct BufferView<'a> {
     slice: BufferSlice<'a>,
     data: Box<dyn crate::context::BufferMappedRange>,
 }
 
-/// Write only view into mapped buffer.
+/// A write-only view of a mapped buffer's bytes.
 ///
 /// To get a `BufferViewMut`, first [map] the buffer, and then
 /// call `buffer.slice(range).get_mapped_range_mut()`.
@@ -3169,8 +3571,10 @@ pub struct BufferView<'a> {
 /// It is possible to read the buffer using this view, but doing so is not
 /// recommended, as it is likely to be slow.
 ///
-/// If you try to create overlapping views of a buffer, mutable or
-/// otherwise, `get_mapped_range_mut` will panic.
+/// Before the buffer can be unmapped, all `BufferViewMut`s observing it
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] will panic.
+///
+/// For example code, see the documentation on [mapping buffers][map].
 ///
 /// [map]: Buffer#mapping-buffers
 #[derive(Debug)]
@@ -3256,8 +3660,44 @@ impl Buffer {
         }
     }
 
-    /// Use only a portion of this Buffer for a given operation. Choosing a range with no end
-    /// will use the rest of the buffer. Using a totally unbounded range will use the entire buffer.
+    /// Returns the inner hal Buffer using a callback. The hal buffer will be `None` if the
+    /// backend type argument does not match with this wgpu Buffer
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Buffer must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Buffer>) -> R, R>(
+        &self,
+        hal_buffer_callback: F,
+    ) -> R {
+        let id = self.id;
+
+        if let Some(ctx) = self
+            .context
+            .as_any()
+            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        {
+            unsafe { ctx.buffer_as_hal::<A, F, R>(id.into(), hal_buffer_callback) }
+        } else {
+            hal_buffer_callback(None)
+        }
+    }
+
+    /// Return a slice of a [`Buffer`]'s bytes.
+    ///
+    /// Return a [`BufferSlice`] referring to the portion of `self`'s contents
+    /// indicated by `bounds`. Regardless of what sort of data `self` stores,
+    /// `bounds` start and end are given in bytes.
+    ///
+    /// A [`BufferSlice`] can be used to supply vertex and index data, or to map
+    /// buffer contents for access from the CPU. See the [`BufferSlice`]
+    /// documentation for details.
+    ///
+    /// The `range` argument can be half or fully unbounded: for example,
+    /// `buffer.slice(..)` refers to the entire buffer, and `buffer.slice(n..)`
+    /// refers to the portion starting at the `n`th byte and extending to the
+    /// end of the buffer.
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
         let (offset, size) = range_to_offset_size(bounds);
         BufferSlice {
@@ -3331,8 +3771,20 @@ impl<'a> BufferSlice<'a> {
         )
     }
 
-    /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
-    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
+    /// Gain read-only access to the bytes of a [mapped] [`Buffer`].
+    ///
+    /// Return a [`BufferView`] referring to the buffer range represented by
+    /// `self`. See the documentation for [`BufferView`] for details.
+    ///
+    /// # Panics
+    ///
+    /// - This panics if the buffer to which `self` refers is not currently
+    ///   [mapped].
+    ///
+    /// - If you try to create overlapping views of a buffer, mutable or
+    ///   otherwise, `get_mapped_range` will panic.
+    ///
+    /// [mapped]: Buffer#mapping-buffers
     pub fn get_mapped_range(&self) -> BufferView<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let data = DynContext::buffer_get_mapped_range(
@@ -3365,8 +3817,20 @@ impl<'a> BufferSlice<'a> {
             })
     }
 
-    /// Synchronously and immediately map a buffer for writing. If the buffer is not immediately mappable
-    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
+    /// Gain write access to the bytes of a [mapped] [`Buffer`].
+    ///
+    /// Return a [`BufferViewMut`] referring to the buffer range represented by
+    /// `self`. See the documentation for [`BufferViewMut`] for more details.
+    ///
+    /// # Panics
+    ///
+    /// - This panics if the buffer to which `self` refers is not currently
+    ///   [mapped].
+    ///
+    /// - If you try to create overlapping views of a buffer, mutable or
+    ///   otherwise, `get_mapped_range_mut` will panic.
+    ///
+    /// [mapped]: Buffer#mapping-buffers
     pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let data = DynContext::buffer_get_mapped_range(
@@ -3544,10 +4008,17 @@ impl CommandEncoder {
     /// Begins recording of a render pass.
     ///
     /// This function returns a [`RenderPass`] object which records a single render pass.
-    pub fn begin_render_pass<'pass>(
-        &'pass mut self,
-        desc: &RenderPassDescriptor<'pass, '_>,
-    ) -> RenderPass<'pass> {
+    ///
+    /// As long as the returned  [`RenderPass`] has not ended,
+    /// any mutating operation on this command encoder causes an error and invalidates it.
+    /// Note that the `'encoder` lifetime relationship protects against this,
+    /// but it is possible to opt out of it by calling [`RenderPass::forget_lifetime`].
+    /// This can be useful for runtime handling of the encoder->pass
+    /// dependency e.g. when pass and encoder are stored in the same data structure.
+    pub fn begin_render_pass<'encoder>(
+        &'encoder mut self,
+        desc: &RenderPassDescriptor<'_>,
+    ) -> RenderPass<'encoder> {
         let id = self.id.as_ref().unwrap();
         let (id, data) = DynContext::command_encoder_begin_render_pass(
             &*self.context,
@@ -3556,17 +4027,30 @@ impl CommandEncoder {
             desc,
         );
         RenderPass {
-            id,
-            data,
-            parent: self,
-            encoded: false,
+            inner: RenderPassInner {
+                id,
+                data,
+                context: self.context.clone(),
+                encoded: false,
+            },
+            encoder_guard: PhantomData,
         }
     }
 
     /// Begins recording of a compute pass.
     ///
     /// This function returns a [`ComputePass`] object which records a single compute pass.
-    pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<'_>) -> ComputePass<'_> {
+    ///
+    /// As long as the returned  [`ComputePass`] has not ended,
+    /// any mutating operation on this command encoder causes an error and invalidates it.
+    /// Note that the `'encoder` lifetime relationship protects against this,
+    /// but it is possible to opt out of it by calling [`ComputePass::forget_lifetime`].
+    /// This can be useful for runtime handling of the encoder->pass
+    /// dependency e.g. when pass and encoder are stored in the same data structure.
+    pub fn begin_compute_pass<'encoder>(
+        &'encoder mut self,
+        desc: &ComputePassDescriptor<'_>,
+    ) -> ComputePass<'encoder> {
         let id = self.id.as_ref().unwrap();
         let (id, data) = DynContext::command_encoder_begin_compute_pass(
             &*self.context,
@@ -3575,9 +4059,12 @@ impl CommandEncoder {
             desc,
         );
         ComputePass {
-            id,
-            data,
-            parent: self,
+            inner: ComputePassInner {
+                id,
+                data,
+                context: self.context.clone(),
+            },
+            encoder_guard: PhantomData,
         }
     }
 
@@ -3825,7 +4312,26 @@ impl CommandEncoder {
     }
 }
 
-impl<'a> RenderPass<'a> {
+impl<'encoder> RenderPass<'encoder> {
+    /// Drops the lifetime relationship to the parent command encoder, making usage of
+    /// the encoder while this pass is recorded a run-time error instead.
+    ///
+    /// Attention: As long as the render pass has not been ended, any mutating operation on the parent
+    /// command encoder will cause a run-time error and invalidate it!
+    /// By default, the lifetime constraint prevents this, but it can be useful
+    /// to handle this at run time, such as when storing the pass and encoder in the same
+    /// data structure.
+    ///
+    /// This operation has no effect on pass recording.
+    /// It's a safe operation, since [`CommandEncoder`] is in a locked state as long as the pass is active
+    /// regardless of the lifetime constraint or its absence.
+    pub fn forget_lifetime(self) -> RenderPass<'static> {
+        RenderPass {
+            inner: self.inner,
+            encoder_guard: PhantomData,
+        }
+    }
+
     /// Sets the active bind group for a given bind group index. The bind group layout
     /// in the active pipeline when any `draw_*()` method is called must match the layout of
     /// this bind group.
@@ -3838,13 +4344,13 @@ impl<'a> RenderPass<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &'a BindGroup,
+        bind_group: &BindGroup,
         offsets: &[DynamicOffset],
     ) {
         DynContext::render_pass_set_bind_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             index,
             &bind_group.id,
             bind_group.data.as_ref(),
@@ -3855,11 +4361,11 @@ impl<'a> RenderPass<'a> {
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
-    pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
         DynContext::render_pass_set_pipeline(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &pipeline.id,
             pipeline.data.as_ref(),
         )
@@ -3872,9 +4378,9 @@ impl<'a> RenderPass<'a> {
     /// (all components zero).
     pub fn set_blend_constant(&mut self, color: Color) {
         DynContext::render_pass_set_blend_constant(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             color,
         )
     }
@@ -3883,11 +4389,11 @@ impl<'a> RenderPass<'a> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
         DynContext::render_pass_set_index_buffer(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &buffer_slice.buffer.id,
             buffer_slice.buffer.data.as_ref(),
             index_format,
@@ -3906,11 +4412,11 @@ impl<'a> RenderPass<'a> {
     ///
     /// [`draw`]: RenderPass::draw
     /// [`draw_indexed`]: RenderPass::draw_indexed
-    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
+    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) {
         DynContext::render_pass_set_vertex_buffer(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             slot,
             &buffer_slice.buffer.id,
             buffer_slice.buffer.data.as_ref(),
@@ -3930,9 +4436,9 @@ impl<'a> RenderPass<'a> {
     /// but it does not affect the coordinate system, only which fragments are discarded.
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
         DynContext::render_pass_set_scissor_rect(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             x,
             y,
             width,
@@ -3948,9 +4454,9 @@ impl<'a> RenderPass<'a> {
     /// targets.
     pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
         DynContext::render_pass_set_viewport(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             x,
             y,
             w,
@@ -3966,9 +4472,9 @@ impl<'a> RenderPass<'a> {
     /// If this method has not been called, the stencil reference value defaults to `0`.
     pub fn set_stencil_reference(&mut self, reference: u32) {
         DynContext::render_pass_set_stencil_reference(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             reference,
         );
     }
@@ -3976,9 +4482,9 @@ impl<'a> RenderPass<'a> {
     /// Inserts debug marker.
     pub fn insert_debug_marker(&mut self, label: &str) {
         DynContext::render_pass_insert_debug_marker(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             label,
         );
     }
@@ -3986,9 +4492,9 @@ impl<'a> RenderPass<'a> {
     /// Start record commands and group it into debug marker group.
     pub fn push_debug_group(&mut self, label: &str) {
         DynContext::render_pass_push_debug_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             label,
         );
     }
@@ -3996,9 +4502,9 @@ impl<'a> RenderPass<'a> {
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
         DynContext::render_pass_pop_debug_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
         );
     }
 
@@ -4025,9 +4531,9 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_pass_draw(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             vertices,
             instances,
         )
@@ -4059,9 +4565,9 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_pass_draw_indexed(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             indices,
             base_vertex,
             instances,
@@ -4081,11 +4587,11 @@ impl<'a> RenderPass<'a> {
     ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
     /// See details on the individual flags for more information.
-    pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
+    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         DynContext::render_pass_draw_indirect(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
@@ -4108,13 +4614,13 @@ impl<'a> RenderPass<'a> {
     /// See details on the individual flags for more information.
     pub fn draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
     ) {
         DynContext::render_pass_draw_indexed_indirect(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
@@ -4126,22 +4632,25 @@ impl<'a> RenderPass<'a> {
     ///
     /// Commands in the bundle do not inherit this render pass's current render state, and after the
     /// bundle has executed, the state is **cleared** (reset to defaults, not the previous state).
-    pub fn execute_bundles<I: IntoIterator<Item = &'a RenderBundle>>(&mut self, render_bundles: I) {
+    pub fn execute_bundles<'a, I: IntoIterator<Item = &'a RenderBundle>>(
+        &mut self,
+        render_bundles: I,
+    ) {
         let mut render_bundles = render_bundles
             .into_iter()
             .map(|rb| (&rb.id, rb.data.as_ref()));
 
         DynContext::render_pass_execute_bundles(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &mut render_bundles,
         )
     }
 }
 
 /// [`Features::MULTI_DRAW_INDIRECT`] must be enabled on the device in order to call these functions.
-impl<'a> RenderPass<'a> {
+impl<'encoder> RenderPass<'encoder> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// `count` draw calls are issued.
     ///
@@ -4154,14 +4663,14 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
         count: u32,
     ) {
         DynContext::render_pass_multi_draw_indirect(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
@@ -4182,14 +4691,14 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
         count: u32,
     ) {
         DynContext::render_pass_multi_draw_indexed_indirect(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
@@ -4199,7 +4708,7 @@ impl<'a> RenderPass<'a> {
 }
 
 /// [`Features::MULTI_DRAW_INDIRECT_COUNT`] must be enabled on the device in order to call these functions.
-impl<'a> RenderPass<'a> {
+impl<'encoder> RenderPass<'encoder> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// The count buffer is read to determine how many draws to issue.
     ///
@@ -4224,16 +4733,16 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect_count(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
-        count_buffer: &'a Buffer,
+        count_buffer: &Buffer,
         count_offset: BufferAddress,
         max_count: u32,
     ) {
         DynContext::render_pass_multi_draw_indirect_count(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
@@ -4271,16 +4780,16 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect_count(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
-        count_buffer: &'a Buffer,
+        count_buffer: &Buffer,
         count_offset: BufferAddress,
         max_count: u32,
     ) {
         DynContext::render_pass_multi_draw_indexed_indirect_count(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
@@ -4293,7 +4802,7 @@ impl<'a> RenderPass<'a> {
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
-impl<'a> RenderPass<'a> {
+impl<'encoder> RenderPass<'encoder> {
     /// Set push constant data for subsequent draw calls.
     ///
     /// Write the bytes in `data` at offset `offset` within push constant
@@ -4336,9 +4845,9 @@ impl<'a> RenderPass<'a> {
     /// [`PushConstant`]: https://docs.rs/naga/latest/naga/enum.StorageClass.html#variant.PushConstant
     pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
         DynContext::render_pass_set_push_constants(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             stages,
             offset,
             data,
@@ -4347,7 +4856,7 @@ impl<'a> RenderPass<'a> {
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl<'a> RenderPass<'a> {
+impl<'encoder> RenderPass<'encoder> {
     /// Issue a timestamp command at this point in the queue. The
     /// timestamp will be written to the specified query set, at the specified index.
     ///
@@ -4357,9 +4866,9 @@ impl<'a> RenderPass<'a> {
     /// for a string of operations to complete.
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::render_pass_write_timestamp(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &query_set.id,
             query_set.data.as_ref(),
             query_index,
@@ -4367,14 +4876,14 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-impl<'a> RenderPass<'a> {
+impl<'encoder> RenderPass<'encoder> {
     /// Start a occlusion query on this render pass. It can be ended with
     /// `end_occlusion_query`. Occlusion queries may not be nested.
     pub fn begin_occlusion_query(&mut self, query_index: u32) {
         DynContext::render_pass_begin_occlusion_query(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             query_index,
         );
     }
@@ -4383,22 +4892,22 @@ impl<'a> RenderPass<'a> {
     /// `begin_occlusion_query`. Occlusion queries may not be nested.
     pub fn end_occlusion_query(&mut self) {
         DynContext::render_pass_end_occlusion_query(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
         );
     }
 }
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
-impl<'a> RenderPass<'a> {
+impl<'encoder> RenderPass<'encoder> {
     /// Start a pipeline statistics query on this render pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::render_pass_begin_pipeline_statistics_query(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &query_set.id,
             query_set.data.as_ref(),
             query_index,
@@ -4409,41 +4918,51 @@ impl<'a> RenderPass<'a> {
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) {
         DynContext::render_pass_end_pipeline_statistics_query(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
         );
     }
 }
 
-impl<'a> RenderPass<'a> {
-    /// This function does what drop() would do, but gives the caller the chance to error handle
-    pub fn encode(mut self) -> Result<(), core::command::RenderPassError> {
-        self.encoded = true;
-        self.encode_inner()
-    }
-
-    fn encode_inner(&mut self) -> Result<(), core::command::RenderPassError> {
-        let parent_id = self.parent.id.as_ref().unwrap();
-        self.parent.context.command_encoder_end_render_pass(
-            parent_id,
-            self.parent.data.as_ref(),
-            &mut self.id,
-            self.data.as_mut(),
-        )
-    }
-}
-
-impl<'a> Drop for RenderPass<'a> {
-    fn drop(&mut self) {
-        if !thread::panicking() && !self.encoded {
+impl RenderPassInner {
+    fn encode(&mut self) {
+        if !self.encoded {
             self.encoded = true;
-            self.encode_inner().expect("Error happening while dropping RenderPass. Use encode() to handle it instead of panicing")
+            self.context
+                .render_pass_end(&mut self.id, self.data.as_mut());
         }
     }
 }
 
-impl<'a> ComputePass<'a> {
+impl Drop for RenderPassInner {
+    fn drop(&mut self) {
+        if !thread::panicking() && !self.encoded {
+            self.encode().unwrap();
+        }
+    }
+}
+
+impl<'encoder> ComputePass<'encoder> {
+    /// Drops the lifetime relationship to the parent command encoder, making usage of
+    /// the encoder while this pass is recorded a run-time error instead.
+    ///
+    /// Attention: As long as the compute pass has not been ended, any mutating operation on the parent
+    /// command encoder will cause a run-time error and invalidate it!
+    /// By default, the lifetime constraint prevents this, but it can be useful
+    /// to handle this at run time, such as when storing the pass and encoder in the same
+    /// data structure.
+    ///
+    /// This operation has no effect on pass recording.
+    /// It's a safe operation, since [`CommandEncoder`] is in a locked state as long as the pass is active
+    /// regardless of the lifetime constraint or its absence.
+    pub fn forget_lifetime(self) -> ComputePass<'static> {
+        ComputePass {
+            inner: self.inner,
+            encoder_guard: PhantomData,
+        }
+    }
+
     /// Sets the active bind group for a given bind group index. The bind group layout
     /// in the active pipeline when the `dispatch()` function is called must match the layout of this bind group.
     ///
@@ -4453,13 +4972,13 @@ impl<'a> ComputePass<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &'a BindGroup,
+        bind_group: &BindGroup,
         offsets: &[DynamicOffset],
     ) {
         DynContext::compute_pass_set_bind_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             index,
             &bind_group.id,
             bind_group.data.as_ref(),
@@ -4468,11 +4987,11 @@ impl<'a> ComputePass<'a> {
     }
 
     /// Sets the active compute pipeline.
-    pub fn set_pipeline(&mut self, pipeline: &'a ComputePipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
         DynContext::compute_pass_set_pipeline(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &pipeline.id,
             pipeline.data.as_ref(),
         );
@@ -4481,9 +5000,9 @@ impl<'a> ComputePass<'a> {
     /// Inserts debug marker.
     pub fn insert_debug_marker(&mut self, label: &str) {
         DynContext::compute_pass_insert_debug_marker(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             label,
         );
     }
@@ -4491,9 +5010,9 @@ impl<'a> ComputePass<'a> {
     /// Start record commands and group it into debug marker group.
     pub fn push_debug_group(&mut self, label: &str) {
         DynContext::compute_pass_push_debug_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             label,
         );
     }
@@ -4501,9 +5020,9 @@ impl<'a> ComputePass<'a> {
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
         DynContext::compute_pass_pop_debug_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
         );
     }
 
@@ -4512,9 +5031,9 @@ impl<'a> ComputePass<'a> {
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
     pub fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
         DynContext::compute_pass_dispatch_workgroups(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             x,
             y,
             z,
@@ -4526,13 +5045,13 @@ impl<'a> ComputePass<'a> {
     /// The structure expected in `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
     pub fn dispatch_workgroups_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
     ) {
         DynContext::compute_pass_dispatch_workgroups_indirect(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
@@ -4541,7 +5060,7 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl<'encoder> ComputePass<'encoder> {
     /// Set push constant data for subsequent dispatch calls.
     ///
     /// Write the bytes in `data` at offset `offset` within push constant
@@ -4552,9 +5071,9 @@ impl<'a> ComputePass<'a> {
     /// call will write `data` to bytes `4..12` of push constant storage.
     pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
         DynContext::compute_pass_set_push_constants(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             offset,
             data,
         );
@@ -4562,7 +5081,7 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl<'encoder> ComputePass<'encoder> {
     /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
     ///
     /// Must be multiplied by [`Queue::get_timestamp_period`] to get
@@ -4571,9 +5090,9 @@ impl<'a> ComputePass<'a> {
     /// for a string of operations to complete.
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_write_timestamp(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &query_set.id,
             query_set.data.as_ref(),
             query_index,
@@ -4582,14 +5101,14 @@ impl<'a> ComputePass<'a> {
 }
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
-impl<'a> ComputePass<'a> {
+impl<'encoder> ComputePass<'encoder> {
     /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_begin_pipeline_statistics_query(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
             &query_set.id,
             query_set.data.as_ref(),
             query_index,
@@ -4600,26 +5119,27 @@ impl<'a> ComputePass<'a> {
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) {
         DynContext::compute_pass_end_pipeline_statistics_query(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
+            &*self.inner.context,
+            &mut self.inner.id,
+            self.inner.data.as_mut(),
         );
     }
 }
 
-impl<'a> Drop for ComputePass<'a> {
+impl ComputePassInner {
+    fn encode(&mut self) {
+        if !self.encoded {
+            self.encoded = true;
+            self.context
+                    .compute_pass_end(&mut self.id, self.data.as_mut());
+        }
+    }
+}
+
+impl Drop for ComputePassInner {
     fn drop(&mut self) {
         if !thread::panicking() {
-            let parent_id = self.parent.id.as_ref().unwrap();
-            self.parent
-                .context
-                .command_encoder_end_compute_pass(
-                    parent_id,
-                    self.parent.data.as_ref(),
-                    &mut self.id,
-                    self.data.as_mut(),
-                )
-                .unwrap()
+            self.encode().unwrap();
         }
     }
 }
@@ -4904,11 +5424,24 @@ impl<'a> Drop for QueueWriteBufferView<'a> {
 impl Queue {
     /// Schedule a data write into `buffer` starting at `offset`.
     ///
-    /// This method is intended to have low performance costs.
-    /// As such, the write is not immediately submitted, and instead enqueued
-    /// internally to happen at the start of the next `submit()` call.
-    ///
     /// This method fails if `data` overruns the size of `buffer` starting at `offset`.
+    ///
+    /// This does *not* submit the transfer to the GPU immediately. Calls to
+    /// `write_buffer` begin execution only on the next call to
+    /// [`Queue::submit`]. To get a set of scheduled transfers started
+    /// immediately, it's fine to call `submit` with no command buffers at all:
+    ///
+    /// ```no_run
+    /// # let queue: wgpu::Queue = todo!();
+    /// queue.submit([]);
+    /// ```
+    ///
+    /// However, `data` will be immediately copied into staging memory, so the
+    /// caller may discard it any time after this call completes.
+    ///
+    /// If possible, consider using [`Queue::write_buffer_with`] instead. That
+    /// method avoids an intermediate copy and is often able to transfer data
+    /// more efficiently than this one.
     pub fn write_buffer(
         &self,
         buffer: &Buffer,
@@ -4926,14 +5459,32 @@ impl Queue {
         )
     }
 
-    /// Schedule a data write into `buffer` starting at `offset` via the returned
-    /// [`QueueWriteBufferView`].
+    /// Write to a buffer via a directly mapped staging buffer.
     ///
-    /// Reading from this buffer is slow and will not yield the actual contents of the buffer.
+    /// Return a [`QueueWriteBufferView`] which, when dropped, schedules a copy
+    /// of its contents into `buffer` at `offset`. The returned view
+    /// dereferences to a `size`-byte long `&mut [u8]`, in which you should
+    /// store the data you would like written to `buffer`.
     ///
-    /// This method is intended to have low performance costs.
-    /// As such, the write is not immediately submitted, and instead enqueued
-    /// internally to happen at the start of the next `submit()` call.
+    /// This method may perform transfers faster than [`Queue::write_buffer`],
+    /// because the returned [`QueueWriteBufferView`] is actually the staging
+    /// buffer for the write, mapped into the caller's address space. Writing
+    /// your data directly into this staging buffer avoids the temporary
+    /// CPU-side buffer needed by `write_buffer`.
+    ///
+    /// Reading from the returned view is slow, and will not yield the current
+    /// contents of `buffer`.
+    ///
+    /// Note that dropping the [`QueueWriteBufferView`] does *not* submit the
+    /// transfer to the GPU immediately. The transfer begins only on the next
+    /// call to [`Queue::submit`] after the view is dropped. To get a set of
+    /// scheduled transfers started immediately, it's fine to call `submit` with
+    /// no command buffers at all:
+    ///
+    /// ```no_run
+    /// # let queue: wgpu::Queue = todo!();
+    /// queue.submit([]);
+    /// ```
     ///
     /// This method fails if `size` is greater than the size of `buffer` starting at `offset`.
     pub fn write_buffer_with<'a>(
@@ -4977,13 +5528,20 @@ impl Queue {
     ///   texture (coordinate offset, mip level) that will be overwritten.
     /// * `size` is the size, in texels, of the region to be written.
     ///
-    /// This method is intended to have low performance costs.
-    /// As such, the write is not immediately submitted, and instead enqueued
-    /// internally to happen at the start of the next `submit()` call.
-    /// However, `data` will be immediately copied into staging memory; so the caller may
-    /// discard it any time after this call completes.
-    ///
     /// This method fails if `size` overruns the size of `texture`, or if `data` is too short.
+    ///
+    /// This does *not* submit the transfer to the GPU immediately. Calls to
+    /// `write_texture` begin execution only on the next call to
+    /// [`Queue::submit`]. To get a set of scheduled transfers started
+    /// immediately, it's fine to call `submit` with no command buffers at all:
+    ///
+    /// ```no_run
+    /// # let queue: wgpu::Queue = todo!();
+    /// queue.submit([]);
+    /// ```
+    ///
+    /// However, `data` will be immediately copied into staging memory, so the
+    /// caller may discard it any time after this call completes.
     pub fn write_texture(
         &self,
         texture: ImageCopyTexture<'_>,
@@ -5029,14 +5587,14 @@ impl Queue {
             .into_iter()
             .map(|mut comb| (comb.id.take().unwrap(), comb.data.take().unwrap()));
 
-        let (raw, data) = DynContext::queue_submit(
+        let data = DynContext::queue_submit(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             &mut command_buffers,
         );
 
-        SubmissionIndex(raw, data)
+        SubmissionIndex(data)
     }
 
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.
@@ -5501,7 +6059,7 @@ pub enum Error {
         /// Lower level source of the error.
         #[cfg(send_sync)]
         #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + 'static>,
+        source: Box<dyn error::Error + Send + Sync + 'static>,
         /// Lower level source of the error.
         #[cfg(not(send_sync))]
         #[cfg_attr(docsrs, doc(cfg(all())))]
@@ -5512,7 +6070,7 @@ pub enum Error {
         /// Lower level source of the error.
         #[cfg(send_sync)]
         #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + 'static>,
+        source: Box<dyn error::Error + Send + Sync + 'static>,
         /// Lower level source of the error.
         #[cfg(not(send_sync))]
         #[cfg_attr(docsrs, doc(cfg(all())))]
@@ -5527,7 +6085,7 @@ pub enum Error {
         /// Lower level source of the error.
         #[cfg(send_sync)]
         #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + 'static>,
+        source: Box<dyn error::Error + Send + Sync + 'static>,
         /// Lower level source of the error.
         #[cfg(not(send_sync))]
         #[cfg_attr(docsrs, doc(cfg(all())))]
@@ -5537,7 +6095,7 @@ pub enum Error {
     },
 }
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(Error: Send);
+static_assertions::assert_impl_all!(Error: Send, Sync);
 
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {

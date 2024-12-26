@@ -548,79 +548,79 @@ impl crate::framework::Example for Example {
 
         // Create the render pipelines. These describe how the data will flow through the GPU, and what
         // constraints and modifiers it will have.
-        let water_pipeline = device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("water"),
-                // The "layout" is what uniforms will be needed.
-                layout: Some(&water_pipeline_layout),
-                // Vertex shader and input buffers
-                vertex: wgpu::VertexState {
-                    module: &water_module,
-                    entry_point: "vs_main",
-                    compilation_options: Default::default(),
-                    // Layout of our vertices. This should match the structs
-                    // which are uploaded to the GPU. This should also be
-                    // ensured by tagging on either a `#[repr(C)]` onto a
-                    // struct, or a `#[repr(transparent)]` if it only contains
-                    // one item, which is itself `repr(C)`.
-                    buffers: &[wgpu::VertexBufferLayout {
-                        array_stride: water_vertex_size as wgpu::BufferAddress,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![0 => Sint16x2, 1 => Sint8x4],
-                    }],
-                },
-                // Fragment shader and output targets
-                fragment: Some(wgpu::FragmentState {
-                    module: &water_module,
-                    entry_point: "fs_main",
-                    compilation_options: Default::default(),
-                    // Describes how the colour will be interpolated
-                    // and assigned to the output attachment.
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: config.view_formats[0],
-                        blend: Some(wgpu::BlendState {
-                            color: wgpu::BlendComponent {
-                                src_factor: wgpu::BlendFactor::SrcAlpha,
-                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                                operation: wgpu::BlendOperation::Add,
-                            },
-                            alpha: wgpu::BlendComponent {
-                                src_factor: wgpu::BlendFactor::One,
-                                dst_factor: wgpu::BlendFactor::One,
-                                operation: wgpu::BlendOperation::Max,
-                            },
-                        }),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                // How the triangles will be rasterized. This is more important
-                // for the terrain because of the beneath-the water shot.
-                // This is also dependent on how the triangles are being generated.
-                primitive: wgpu::PrimitiveState {
-                    // What kind of data are we passing in?
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    front_face: wgpu::FrontFace::Cw,
-                    ..Default::default()
-                },
-                // Describes how us writing to the depth/stencil buffer
-                // will work. Since this is water, we need to read from the
-                // depth buffer both as a texture in the shader, and as an
-                // input attachment to do depth-testing. We don't write, so
-                // depth_write_enabled is set to false. This is called
-                // RODS or read-only depth stencil.
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    // We don't use stencil.
-                    format: wgpu::TextureFormat::Depth32Float,
-                    depth_write_enabled: false,
-                    depth_compare: wgpu::CompareFunction::Less,
-                    stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState::default(),
-                }),
-                // No multisampling is used.
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-            })
-            .unwrap();
+        let water_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("water"),
+            // The "layout" is what uniforms will be needed.
+            layout: Some(&water_pipeline_layout),
+            // Vertex shader and input buffers
+            vertex: wgpu::VertexState {
+                module: &water_module,
+                entry_point: "vs_main",
+                compilation_options: Default::default(),
+                // Layout of our vertices. This should match the structs
+                // which are uploaded to the GPU. This should also be
+                // ensured by tagging on either a `#[repr(C)]` onto a
+                // struct, or a `#[repr(transparent)]` if it only contains
+                // one item, which is itself `repr(C)`.
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: water_vertex_size as wgpu::BufferAddress,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0 => Sint16x2, 1 => Sint8x4],
+                }],
+            },
+            // Fragment shader and output targets
+            fragment: Some(wgpu::FragmentState {
+                module: &water_module,
+                entry_point: "fs_main",
+                compilation_options: Default::default(),
+                // Describes how the colour will be interpolated
+                // and assigned to the output attachment.
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.view_formats[0],
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::One,
+                            operation: wgpu::BlendOperation::Max,
+                        },
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            // How the triangles will be rasterized. This is more important
+            // for the terrain because of the beneath-the water shot.
+            // This is also dependent on how the triangles are being generated.
+            primitive: wgpu::PrimitiveState {
+                // What kind of data are we passing in?
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                front_face: wgpu::FrontFace::Cw,
+                ..Default::default()
+            },
+            // Describes how us writing to the depth/stencil buffer
+            // will work. Since this is water, we need to read from the
+            // depth buffer both as a texture in the shader, and as an
+            // input attachment to do depth-testing. We don't write, so
+            // depth_write_enabled is set to false. This is called
+            // RODS or read-only depth stencil.
+            depth_stencil: Some(wgpu::DepthStencilState {
+                // We don't use stencil.
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            // No multisampling is used.
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            // No pipeline caching is used
+            cache: None,
+        }).unwrap();
 
         // Same idea as the water pipeline.
         let terrain_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -656,6 +656,7 @@ impl crate::framework::Example for Example {
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None
         }).unwrap();
 
         // A render bundle to draw the terrain.

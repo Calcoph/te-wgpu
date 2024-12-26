@@ -122,8 +122,8 @@ async fn draw_test_with_reports(
                 })],
             }),
             multiview: None,
-        })
-        .unwrap();
+            cache: None,
+        }).unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report(ctx.adapter_info.backend);

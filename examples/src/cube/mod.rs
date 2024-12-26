@@ -258,8 +258,36 @@ impl crate::framework::Example for Example {
             ],
         }];
 
-        let pipeline = device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                compilation_options: Default::default(),
+                buffers: &vertex_buffers,
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                compilation_options: Default::default(),
+                targets: &[Some(config.view_formats[0].into())],
+            }),
+            primitive: wgpu::PrimitiveState {
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        }).unwrap();
+
+        let pipeline_wire = if device
+            .features()
+            .contains(wgpu::Features::POLYGON_MODE_LINE)
+        {
+            let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
@@ -270,62 +298,32 @@ impl crate::framework::Example for Example {
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: "fs_main",
+                    entry_point: "fs_wire",
                     compilation_options: Default::default(),
-                    targets: &[Some(config.view_formats[0].into())],
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: config.view_formats[0],
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                operation: wgpu::BlendOperation::Add,
+                                src_factor: wgpu::BlendFactor::SrcAlpha,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            },
+                            alpha: wgpu::BlendComponent::REPLACE,
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
                 }),
                 primitive: wgpu::PrimitiveState {
+                    front_face: wgpu::FrontFace::Ccw,
                     cull_mode: Some(wgpu::Face::Back),
+                    polygon_mode: wgpu::PolygonMode::Line,
                     ..Default::default()
                 },
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
-            })
-            .unwrap();
-
-        let pipeline_wire = if device
-            .features()
-            .contains(wgpu::Features::POLYGON_MODE_LINE)
-        {
-            let pipeline_wire = device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: None,
-                    layout: Some(&pipeline_layout),
-                    vertex: wgpu::VertexState {
-                        module: &shader,
-                        entry_point: "vs_main",
-                        compilation_options: Default::default(),
-                        buffers: &vertex_buffers,
-                    },
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader,
-                        entry_point: "fs_wire",
-                        compilation_options: Default::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format: config.view_formats[0],
-                            blend: Some(wgpu::BlendState {
-                                color: wgpu::BlendComponent {
-                                    operation: wgpu::BlendOperation::Add,
-                                    src_factor: wgpu::BlendFactor::SrcAlpha,
-                                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                                },
-                                alpha: wgpu::BlendComponent::REPLACE,
-                            }),
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
-                    }),
-                    primitive: wgpu::PrimitiveState {
-                        front_face: wgpu::FrontFace::Ccw,
-                        cull_mode: Some(wgpu::Face::Back),
-                        polygon_mode: wgpu::PolygonMode::Line,
-                        ..Default::default()
-                    },
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
-                })
-                .unwrap();
+                cache: None,
+        }).unwrap();
             Some(pipeline_wire)
         } else {
             None

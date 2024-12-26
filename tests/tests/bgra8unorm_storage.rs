@@ -107,15 +107,14 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             })
             .unwrap();
 
-        let pipeline = device
-            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: None,
-                layout: Some(&pl),
-                entry_point: "main",
-                compilation_options: Default::default(),
-                module: &module,
-            })
-            .unwrap();
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&pl),
+            entry_point: "main",
+            compilation_options: Default::default(),
+            module: &module,
+            cache: None,
+        }).unwrap();
 
         let mut encoder = device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })

@@ -38,7 +38,7 @@ fn try_create(ctx: TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {
                 usage,
                 mapped_at_creation: false,
             })
-        });
+        }, None);
     }
 }
 
@@ -94,7 +94,7 @@ async fn map_test(
             usage,
             mapped_at_creation: false,
         })
-    })
+    }, None)
     .ok();
 
     if buffer_creation_validation_error {
@@ -109,7 +109,7 @@ async fn map_test(
 
     let _ = fail_if(map_async_validation_error, || {
         buffer.slice(0..size).map_async(map_mode_type, |_| {})
-    });
+    }, None);
 
     if map_async_validation_error {
         return;

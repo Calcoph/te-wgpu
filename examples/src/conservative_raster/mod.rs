@@ -124,8 +124,8 @@ impl crate::framework::Example for Example {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
-            })
-            .unwrap();
+                cache: None,
+            }).unwrap();
 
         let pipeline_triangle_regular = device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -147,40 +147,39 @@ impl crate::framework::Example for Example {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
-            })
-            .unwrap();
+                cache: None,
+            }).unwrap();
 
         let pipeline_lines = if device
             .features()
             .contains(wgpu::Features::POLYGON_MODE_LINE)
         {
             Some(
-                device
-                    .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                        label: Some("Lines"),
-                        layout: Some(&pipeline_layout_empty),
-                        vertex: wgpu::VertexState {
-                            module: &shader_triangle_and_lines,
-                            entry_point: "vs_main",
-                            compilation_options: Default::default(),
-                            buffers: &[],
-                        },
-                        fragment: Some(wgpu::FragmentState {
-                            module: &shader_triangle_and_lines,
-                            entry_point: "fs_main_white",
-                            compilation_options: Default::default(),
-                            targets: &[Some(config.view_formats[0].into())],
-                        }),
-                        primitive: wgpu::PrimitiveState {
-                            polygon_mode: wgpu::PolygonMode::Line,
-                            topology: wgpu::PrimitiveTopology::LineStrip,
-                            ..Default::default()
-                        },
-                        depth_stencil: None,
-                        multisample: wgpu::MultisampleState::default(),
-                        multiview: None,
-                    })
-                    .unwrap(),
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("Lines"),
+                    layout: Some(&pipeline_layout_empty),
+                    vertex: wgpu::VertexState {
+                        module: &shader_triangle_and_lines,
+                        entry_point: "vs_main",
+                        compilation_options: Default::default(),
+                        buffers: &[],
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader_triangle_and_lines,
+                        entry_point: "fs_main_white",
+                        compilation_options: Default::default(),
+                        targets: &[Some(config.view_formats[0].into())],
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        polygon_mode: wgpu::PolygonMode::Line,
+                        topology: wgpu::PrimitiveTopology::LineStrip,
+                        ..Default::default()
+                    },
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview: None,
+                    cache: None,
+            }).unwrap(),
             )
         } else {
             None
@@ -225,28 +224,27 @@ impl crate::framework::Example for Example {
                 })
                 .unwrap();
             (
-                device
-                    .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                        label: Some("Upscale"),
-                        layout: Some(&pipeline_layout),
-                        vertex: wgpu::VertexState {
-                            module: &shader,
-                            entry_point: "vs_main",
-                            compilation_options: Default::default(),
-                            buffers: &[],
-                        },
-                        fragment: Some(wgpu::FragmentState {
-                            module: &shader,
-                            entry_point: "fs_main",
-                            compilation_options: Default::default(),
-                            targets: &[Some(config.view_formats[0].into())],
-                        }),
-                        primitive: wgpu::PrimitiveState::default(),
-                        depth_stencil: None,
-                        multisample: wgpu::MultisampleState::default(),
-                        multiview: None,
-                    })
-                    .unwrap(),
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("Upscale"),
+                    layout: Some(&pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: "vs_main",
+                        compilation_options: Default::default(),
+                        buffers: &[],
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader,
+                        entry_point: "fs_main",
+                        compilation_options: Default::default(),
+                        targets: &[Some(config.view_formats[0].into())],
+                    }),
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview: None,
+                    cache: None,
+            }).unwrap(),
                 bind_group_layout,
             )
         };
