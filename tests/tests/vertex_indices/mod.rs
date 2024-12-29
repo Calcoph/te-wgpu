@@ -23,9 +23,9 @@ impl Draw {
     /// Directly execute the draw call
     fn execute(&self, rpass: &mut dyn RenderEncoder<'_>) {
         if let Some(base_vertex) = self.base_vertex {
-            rpass.draw_indexed(self.vertex.clone(), base_vertex, self.instance.clone());
+            rpass.draw_indexed(self.vertex.clone(), base_vertex, self.instance.clone()).unwrap();
         } else {
-            rpass.draw(self.vertex.clone(), self.instance.clone());
+            rpass.draw(self.vertex.clone(), self.instance.clone()).unwrap();
         }
     }
 
@@ -71,10 +71,10 @@ impl Draw {
         offset: &mut u64,
     ) {
         if self.base_vertex.is_some() {
-            rpass.draw_indexed_indirect(indirect, *offset);
+            rpass.draw_indexed_indirect(indirect, *offset).unwrap();
             *offset += 20;
         } else {
-            rpass.draw_indirect(indirect, *offset);
+            rpass.draw_indirect(indirect, *offset).unwrap();
             *offset += 16;
         }
     }
@@ -433,7 +433,7 @@ async fn vertex_index_common(ctx: TestingContext) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        });
+        }).unwrap();
 
         {
             // Need to scope render_bundle_encoder since it's not Send and would otherwise
@@ -457,11 +457,11 @@ async fn vertex_index_common(ctx: TestingContext) {
                 .map(|r| r as &mut dyn RenderEncoder)
                 .unwrap_or(&mut rpass);
 
-            render_encoder.set_vertex_buffer(0, identity_buffer.slice(..));
-            render_encoder.set_vertex_buffer(1, identity_buffer.slice(..));
-            render_encoder.set_index_buffer(identity_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            render_encoder.set_pipeline(pipeline);
-            render_encoder.set_bind_group(0, &bg, &[]);
+            render_encoder.set_vertex_buffer(0, identity_buffer.slice(..)).unwrap();
+            render_encoder.set_vertex_buffer(1, identity_buffer.slice(..)).unwrap();
+            render_encoder.set_index_buffer(identity_buffer.slice(..), wgpu::IndexFormat::Uint32).unwrap();
+            render_encoder.set_pipeline(pipeline).unwrap();
+            render_encoder.set_bind_group(0, &bg, &[]).unwrap();
 
             let draws = test.case.draws();
 
@@ -495,7 +495,7 @@ async fn vertex_index_common(ctx: TestingContext) {
                 render_bundle = render_bundle_encoder.finish(&RenderBundleDescriptor {
                     label: Some("test renderbundle"),
                 });
-                rpass.execute_bundles([&render_bundle]);
+                rpass.execute_bundles([&render_bundle]).unwrap();
             }
         }
 
@@ -506,7 +506,7 @@ async fn vertex_index_common(ctx: TestingContext) {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
             .unwrap();
 
-        encoder2.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
+        encoder2.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size).unwrap();
 
         // See https://github.com/gfx-rs/wgpu/issues/4732 for why this is split between two submissions
         // with a hard wait in between.
@@ -516,7 +516,7 @@ async fn vertex_index_common(ctx: TestingContext) {
             .panic_on_timeout();
         ctx.queue.submit([encoder2.finish().unwrap()]);
         let slice = cpu_buffer.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| ());
+        slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
         ctx.async_poll(wgpu::Maintain::wait())
             .await
             .panic_on_timeout();

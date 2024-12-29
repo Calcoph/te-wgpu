@@ -320,7 +320,9 @@ impl crate::framework::Example for Example {
                     timestamp_writes: None,
                     occlusion_query_set: None,
                 })
-                .execute_bundles(iter::once(&self.bundle));
+                .unwrap()
+                .execute_bundles(iter::once(&self.bundle))
+                .unwrap();
         }
 
         queue.submit(iter::once(encoder.finish().unwrap()));

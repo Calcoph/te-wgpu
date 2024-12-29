@@ -1,5 +1,5 @@
-use wgpu::util::DeviceExt;
-use wgpu::CommandEncoder;
+use wgpu::{util::DeviceExt, ComputePass};
+use wgpu::{CommandEncoder, RenderPass};
 use wgpu_test::{
     fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
 };
@@ -65,12 +65,12 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        });
+        }).unwrap();
 
         // Set a bad viewport on renderpass, triggering an error.
         fail(
             || {
-                renderpass.set_viewport(0.0, 0.0, -1.0, -1.0, 0.0, 1.0);
+                renderpass.set_viewport(0.0, 0.0, -1.0, -1.0, 0.0, 1.0).unwrap();
                 renderpass.end()
             },
             None,
@@ -98,14 +98,14 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
             label: None,
             contents: &[0u8; 4],
             usage: wgpu::BufferUsages::COPY_SRC,
-        });
+        }).unwrap();
     let buffer_dest = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: &[0u8; 4],
             usage: wgpu::BufferUsages::COPY_DST,
-        });
+        }).unwrap();
 
     let texture_desc = wgpu::TextureDescriptor {
         label: None,
@@ -121,16 +121,16 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
         usage: wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     };
-    let texture_dst = ctx.device.create_texture(&texture_desc);
+    let texture_dst = ctx.device.create_texture(&texture_desc).unwrap();
     let texture_src = ctx.device.create_texture(&wgpu::TextureDescriptor {
         usage: wgpu::TextureUsages::COPY_SRC,
         ..texture_desc
-    });
+    }).unwrap();
     let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
         count: 1,
         ty: wgpu::QueryType::Timestamp,
         label: None,
-    });
+    }).unwrap();
 
     let target_desc = wgpu::TextureDescriptor {
         label: Some("target_tex"),
@@ -146,27 +146,27 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[wgpu::TextureFormat::Bgra8UnormSrgb],
     };
-    let target_tex = ctx.device.create_texture(&target_desc);
-    let color_attachment_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
+    let target_tex = ctx.device.create_texture(&target_desc).unwrap();
+    let color_attachment_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     #[allow(clippy::type_complexity)]
-    let recording_ops: Vec<(_, Box<dyn Fn(&mut CommandEncoder)>)> = vec![
+    let recording_ops: Vec<(_, Box<dyn Fn(&mut CommandEncoder) -> Result<(), String>>)> = vec![
         (
             "begin_compute_pass",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
-                encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+                encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()).map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
             "begin_render_pass",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
-                encoder.begin_render_pass(&wgpu::RenderPassDescriptor::default());
+                encoder.begin_render_pass(&wgpu::RenderPassDescriptor::default()).map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
             "copy_buffer_to_buffer",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
-                encoder.copy_buffer_to_buffer(&buffer_source, 0, &buffer_dest, 0, 4);
+                encoder.copy_buffer_to_buffer(&buffer_source, 0, &buffer_dest, 0, 4).map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
@@ -183,7 +183,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
                     },
                     texture_dst.as_image_copy(),
                     texture_dst.size(),
-                );
+                ).map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
@@ -205,7 +205,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
                         },
                     },
                     texture_dst.size(),
-                );
+                ).map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
@@ -225,49 +225,49 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
                         aspect: wgpu::TextureAspect::All,
                     },
                     texture_dst.size(),
-                );
+                ).map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
             "clear_texture",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
-                encoder.clear_texture(&texture_dst, &wgpu::ImageSubresourceRange::default());
+                encoder.clear_texture(&texture_dst, &wgpu::ImageSubresourceRange::default()).map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
             "clear_buffer",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
-                encoder.clear_buffer(&buffer_dest, 0, None);
+                encoder.clear_buffer(&buffer_dest, 0, None).map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
             "insert_debug_marker",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
-                encoder.insert_debug_marker("marker");
+                encoder.insert_debug_marker("marker").map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
             "push_debug_group",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
-                encoder.push_debug_group("marker");
+                encoder.push_debug_group("marker").map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
             "pop_debug_group",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
-                encoder.pop_debug_group();
+                encoder.pop_debug_group().map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
             "resolve_query_set",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
-                encoder.resolve_query_set(&query_set, 0..1, &buffer_dest, 0);
+                encoder.resolve_query_set(&query_set, 0..1, &buffer_dest, 0).map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
         (
             "write_timestamp",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
-                encoder.write_timestamp(&query_set, 0);
+                encoder.write_timestamp(&query_set, 0).map_err(|e| e.to_string()).map(|_| ())
             }),
         ),
     ];
@@ -283,6 +283,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
             PassType::Compute => Box::new(
                 encoder
                     .begin_compute_pass(&wgpu::ComputePassDescriptor::default())
+                    .unwrap()
                     .forget_lifetime(),
             ),
             PassType::Render => Box::new(
@@ -295,6 +296,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
                         })],
                         ..Default::default()
                     })
+                    .unwrap()
                     .forget_lifetime(),
             ),
         }
@@ -304,28 +306,33 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
         for (op_name, op) in recording_ops.iter() {
             let mut encoder = ctx
                 .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+                .unwrap();
 
             let pass = create_pass(&mut encoder, pass_type);
 
-            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
-
             log::info!("Testing operation {op_name:?} on a locked command encoder while a {pass_type:?} pass is active");
             fail(
-                &ctx.device,
                 || op(&mut encoder),
                 Some("Command encoder is locked"),
             );
 
             // Drop the pass - this also fails now since the encoder is invalid:
             fail(
-                &ctx.device,
-                || drop(pass),
+                || match pass_type {
+                    PassType::Compute => {
+                        let pass: Box<ComputePass> = pass.downcast().unwrap();
+                        pass.end().map_err(|e| e.to_string())
+                    },
+                    PassType::Render => {
+                        let pass: Box<RenderPass> = pass.downcast().unwrap();
+                        pass.end().map_err(|e| e.to_string())
+                    },
+                },
                 Some("Command encoder is invalid"),
             );
             // Also, it's not possible to create a new pass on the encoder:
             fail(
-                &ctx.device,
                 || encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()),
                 Some("Command encoder is invalid"),
             );
@@ -335,16 +342,24 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
         {
             let mut encoder = ctx
                 .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+                .unwrap();
             let pass = create_pass(&mut encoder, pass_type);
             fail(
-                &ctx.device,
                 || encoder.finish(),
                 Some("Command encoder is locked"),
             );
             fail(
-                &ctx.device,
-                || drop(pass),
+                || match pass_type {
+                    PassType::Compute => {
+                        let pass: Box<ComputePass> = pass.downcast().unwrap();
+                        pass.end().map_err(|e| e.to_string())
+                    },
+                    PassType::Render => {
+                        let pass: Box<RenderPass> = pass.downcast().unwrap();
+                        pass.end().map_err(|e| e.to_string())
+                    }
+                },
                 Some("Command encoder is invalid"),
             );
         }

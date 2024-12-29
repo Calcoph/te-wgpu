@@ -180,20 +180,20 @@ impl Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
             if let Some(ref query_sets) = query_sets {
-                rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base);
+                rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base).unwrap();
                 rpass.begin_pipeline_statistics_query(
                     &query_sets.pipeline_statistics,
                     pipeline_query_index_base,
-                );
+                ).unwrap();
             }
-            rpass.set_pipeline(&pipeline);
-            rpass.set_bind_group(0, &bind_group, &[]);
-            rpass.draw(0..3, 0..1);
+            rpass.set_pipeline(&pipeline).unwrap();
+            rpass.set_bind_group(0, &bind_group, &[]).unwrap();
+            rpass.draw(0..3, 0..1).unwrap();
             if let Some(ref query_sets) = query_sets {
-                rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base + 1);
-                rpass.end_pipeline_statistics_query();
+                rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base + 1).unwrap();
+                rpass.end_pipeline_statistics_query().unwrap();
             }
         }
 
@@ -541,10 +541,10 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
-            rpass.set_pipeline(&self.draw_pipeline);
-            rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.draw(0..4, 0..1);
+            }).unwrap();
+            rpass.set_pipeline(&self.draw_pipeline).unwrap();
+            rpass.set_bind_group(0, &self.bind_group, &[]).unwrap();
+            rpass.draw(0..4, 0..1).unwrap();
         }
 
         queue.submit(Some(encoder.finish().unwrap()));

@@ -388,11 +388,11 @@ fn copy_via_compute(
     }).unwrap();
 
     {
-        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
+        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default()).unwrap();
 
-        pass.set_pipeline(&pipeline_copy);
-        pass.set_bind_group(0, &bg, &[]);
-        pass.dispatch_workgroups(1, 1, 1);
+        pass.set_pipeline(&pipeline_copy).unwrap();
+        pass.set_bind_group(0, &bg, &[]).unwrap();
+        pass.dispatch_workgroups(1, 1, 1).unwrap();
     }
 
     encoder

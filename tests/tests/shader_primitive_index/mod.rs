@@ -55,7 +55,7 @@ static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
             255, 255, 255, 255, 0, 0, 255, 255, 255, 0, 0, 255, 255, 255, 255, 255,
         ];
         pulling_common(ctx, &expected, |rpass| {
-            rpass.draw(0..6, 0..1);
+            rpass.draw(0..6, 0..1).unwrap();
         })
         .await;
     });
@@ -79,7 +79,7 @@ static DRAW_INDEXED: GpuTestConfiguration = GpuTestConfiguration::new()
             255, 255, 255, 255, 255, 0, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
         ];
         pulling_common(ctx, &expected, |rpass| {
-            rpass.draw_indexed(0..6, 0, 0..1);
+            rpass.draw_indexed(0..6, 0, 0..1).unwrap();
         })
         .await;
     });
@@ -198,11 +198,11 @@ async fn pulling_common(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        });
+        }).unwrap();
 
-        rpass.set_pipeline(&pipeline);
-        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.set_pipeline(&pipeline).unwrap();
+        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32).unwrap();
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..)).unwrap();
         draw_command(&mut rpass);
     }
     readback_buffer.copy_from(&ctx.device, &mut encoder, &color_texture);

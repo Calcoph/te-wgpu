@@ -104,10 +104,10 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
                 timestamp_writes: None,
-            });
-            cpass.set_pipeline(&compute_pipeline);
-            cpass.set_bind_group(0, &bind_group, &[]);
-            cpass.dispatch_workgroups(1, 1, 1);
+            }).unwrap();
+            cpass.set_pipeline(&compute_pipeline).unwrap();
+            cpass.set_bind_group(0, &bind_group, &[]).unwrap();
+            cpass.dispatch_workgroups(1, 1, 1).unwrap();
         }
         ctx.queue.submit(Some(encoder.finish().unwrap()));
 

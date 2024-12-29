@@ -170,7 +170,7 @@ impl<'ctx> TestCase<'ctx> {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
             ctx.queue.submit([encoder.finish().unwrap()]);
         } else {
             let block_size = format.block_copy_size(None).unwrap();
@@ -264,7 +264,7 @@ impl<'ctx> TestCase<'ctx> {
                 ),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
     }
 
     pub fn discard_depth(&mut self) {
@@ -292,7 +292,7 @@ impl<'ctx> TestCase<'ctx> {
                 ),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
     }
 
     pub fn discard_stencil(&mut self) {
@@ -320,7 +320,7 @@ impl<'ctx> TestCase<'ctx> {
                 ),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
     }
 
     pub fn copy_texture_to_buffer(&mut self) {

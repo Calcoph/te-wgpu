@@ -323,17 +323,15 @@ impl GlobalPlay for wgc::global::Global {
                 self.queue_submit::<A>(device.into_queue_id(), &[]).unwrap();
             }
             Action::Submit(_index, commands) => {
-                let encoder = self
-                    .device_create_command_encoder::<A>(
-                        device,
-                        &wgt::CommandEncoderDescriptor { label: None },
-                        Some(
-                            comb_manager
-                                .process(device.backend())
-                                .into_command_encoder_id(),
-                        ),
-                    )
-                    .unwrap();
+                let encoder = self.device_create_command_encoder::<A>(
+                    device,
+                    &wgt::CommandEncoderDescriptor { label: None },
+                    Some(
+                        comb_manager
+                            .process(device.backend())
+                            .into_command_encoder_id(),
+                    ),
+                ).unwrap();
                 let cmdbuf = self.encode_commands::<A>(encoder, commands);
                 self.queue_submit::<A>(device.into_queue_id(), &[cmdbuf])
                     .unwrap();

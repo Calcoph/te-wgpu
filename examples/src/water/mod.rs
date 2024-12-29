@@ -805,9 +805,9 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
 
-            rpass.execute_bundles([&self.terrain_bundle]);
+            rpass.execute_bundles([&self.terrain_bundle]).unwrap();
         }
         // Terrain right side up. This time we need to use the
         // depth values, so we must use StoreOp::Store.
@@ -832,11 +832,11 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
-            rpass.set_pipeline(&self.terrain_pipeline);
-            rpass.set_bind_group(0, &self.terrain_normal_bind_group, &[]);
-            rpass.set_vertex_buffer(0, self.terrain_vertex_buf.slice(..));
-            rpass.draw(0..self.terrain_vertex_count as u32, 0..1);
+            }).unwrap();
+            rpass.set_pipeline(&self.terrain_pipeline).unwrap();
+            rpass.set_bind_group(0, &self.terrain_normal_bind_group, &[]).unwrap();
+            rpass.set_vertex_buffer(0, self.terrain_vertex_buf.slice(..)).unwrap();
+            rpass.draw(0..self.terrain_vertex_count as u32, 0..1).unwrap();
         }
         // Render the water. This reads from the depth buffer, but does not write
         // to it, so it cannot be in the same render pass.
@@ -858,12 +858,12 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
 
-            rpass.set_pipeline(&self.water_pipeline);
-            rpass.set_bind_group(0, &self.water_bind_group, &[]);
-            rpass.set_vertex_buffer(0, self.water_vertex_buf.slice(..));
-            rpass.draw(0..self.water_vertex_count as u32, 0..1);
+            rpass.set_pipeline(&self.water_pipeline).unwrap();
+            rpass.set_bind_group(0, &self.water_bind_group, &[]).unwrap();
+            rpass.set_vertex_buffer(0, self.water_vertex_buf.slice(..)).unwrap();
+            rpass.draw(0..self.water_vertex_count as u32, 0..1).unwrap();
         }
 
         queue.submit(iter::once(encoder.finish().unwrap()));

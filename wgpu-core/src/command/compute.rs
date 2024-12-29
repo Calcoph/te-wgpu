@@ -293,7 +293,7 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &ComputePassDescriptor<'_>,
-    ) -> (ComputePass<A>, Option<CommandEncoderError>) {
+    ) -> Result<ComputePass<A>, CommandEncoderError> {
         let hub = A::hub(self);
 
         let mut arc_desc = ArcComputePassDescriptor {
@@ -301,24 +301,19 @@ impl Global {
             timestamp_writes: None, // Handle only once we resolved the encoder.
         };
 
-        let make_err = |e, arc_desc| (ComputePass::new(None, arc_desc), Some(e));
-
         let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
             Ok(cmd_buf) => cmd_buf,
-            Err(_) => return make_err(CommandEncoderError::Invalid, arc_desc),
+            Err(_) => return Err(CommandEncoderError::Invalid),
         };
 
         match cmd_buf.lock_encoder() {
             Ok(_) => {}
-            Err(e) => return make_err(e, arc_desc),
+            Err(e) => return Err(e),
         };
 
         arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
             let Ok(query_set) = hub.query_sets.get(tw.query_set) else {
-                return make_err(
-                    CommandEncoderError::InvalidTimestampWritesQuerySetId(tw.query_set),
-                    arc_desc,
-                );
+                return Err(CommandEncoderError::InvalidTimestampWritesQuerySetId(tw.query_set));
             };
 
             Some(ArcPassTimestampWrites {
@@ -330,7 +325,7 @@ impl Global {
             None
         };
 
-        (ComputePass::new(Some(cmd_buf), arc_desc), None)
+        Ok(ComputePass::new(Some(cmd_buf), arc_desc))
     }
 
     /// Creates a type erased compute pass.
@@ -341,9 +336,9 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &ComputePassDescriptor,
-    ) -> (Box<dyn DynComputePass>, Option<CommandEncoderError>) {
-        let (pass, err) = self.command_encoder_create_compute_pass::<A>(encoder_id, desc);
-        (Box::new(pass), err)
+    ) -> Result<Box<dyn DynComputePass>, CommandEncoderError> {
+        let pass = self.command_encoder_create_compute_pass::<A>(encoder_id, desc)?;
+        Ok(Box::new(pass))
     }
 
     pub fn compute_pass_end<A: HalApi>(

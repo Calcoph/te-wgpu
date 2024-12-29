@@ -43,18 +43,14 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let compute_shader = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("compute.wgsl"))),
-            })
-            .unwrap();
-        let draw_shader = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-            })
-            .unwrap();
+        let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("compute.wgsl"))),
+        }).unwrap();
+        let draw_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
+        }).unwrap();
 
         // buffer for simulation parameters uniform
 
@@ -68,13 +64,11 @@ impl crate::framework::Example for Example {
             0.005,   // rule3Scale
         ]
         .to_vec();
-        let sim_param_buffer = device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Simulation Parameter Buffer"),
-                contents: bytemuck::cast_slice(&sim_param_data),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            })
-            .unwrap();
+        let sim_param_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Simulation Parameter Buffer"),
+            contents: bytemuck::cast_slice(&sim_param_data),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        }).unwrap();
 
         // create compute bind layout group and compute pipeline layout
 
@@ -115,15 +109,13 @@ impl crate::framework::Example for Example {
                     },
                 ],
                 label: None,
-            })
-            .unwrap();
+            }).unwrap();
         let compute_pipeline_layout = device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute"),
                 bind_group_layouts: &[&compute_bind_group_layout],
                 push_constant_ranges: &[],
-            })
-            .unwrap();
+            }).unwrap();
 
         // create render pipeline with empty bind group layout
 
@@ -132,8 +124,7 @@ impl crate::framework::Example for Example {
                 label: Some("render"),
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
-            })
-            .unwrap();
+            }).unwrap();
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -182,13 +173,11 @@ impl crate::framework::Example for Example {
         // buffer for the three 2d triangle vertices of each instance
 
         let vertex_buffer_data = [-0.01f32, -0.02, 0.01, -0.02, 0.00, 0.02];
-        let vertices_buffer = device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::bytes_of(&vertex_buffer_data),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            })
-            .unwrap();
+        let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::bytes_of(&vertex_buffer_data),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        }).unwrap();
 
         // buffer for all particles data of type [(posx,posy,velx,vely),...]
 
@@ -209,15 +198,13 @@ impl crate::framework::Example for Example {
         let mut particle_bind_groups = Vec::<wgpu::BindGroup>::new();
         for i in 0..2 {
             particle_buffers.push(
-                device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some(&format!("Particle Buffer {i}")),
-                        contents: bytemuck::cast_slice(&initial_particle_data),
-                        usage: wgpu::BufferUsages::VERTEX
-                            | wgpu::BufferUsages::STORAGE
-                            | wgpu::BufferUsages::COPY_DST,
-                    })
-                    .unwrap(),
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some(&format!("Particle Buffer {i}")),
+                    contents: bytemuck::cast_slice(&initial_particle_data),
+                    usage: wgpu::BufferUsages::VERTEX
+                        | wgpu::BufferUsages::STORAGE
+                        | wgpu::BufferUsages::COPY_DST,
+                }).unwrap(),
             );
         }
 
@@ -225,28 +212,24 @@ impl crate::framework::Example for Example {
         // where the alternate buffer is used as the dst
 
         for i in 0..2 {
-            particle_bind_groups.push(
-                device
-                    .create_bind_group(&wgpu::BindGroupDescriptor {
-                        layout: &compute_bind_group_layout,
-                        entries: &[
-                            wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: sim_param_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 1,
-                                resource: particle_buffers[i].as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 2,
-                                resource: particle_buffers[(i + 1) % 2].as_entire_binding(), // bind to opposite buffer
-                            },
-                        ],
-                        label: None,
-                    })
-                    .unwrap(),
-            );
+            particle_bind_groups.push(device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &compute_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: sim_param_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: particle_buffers[i].as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: particle_buffers[(i + 1) % 2].as_entire_binding(), // bind to opposite buffer
+                    },
+                ],
+                label: None,
+            }).unwrap());
         }
 
         // calculates number of work groups from PARTICLES_PER_GROUP constant
@@ -317,23 +300,23 @@ impl crate::framework::Example for Example {
             let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
                 timestamp_writes: None,
-            });
-            cpass.set_pipeline(&self.compute_pipeline);
-            cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]);
-            cpass.dispatch_workgroups(self.work_group_count, 1, 1);
+            }).unwrap();
+            cpass.set_pipeline(&self.compute_pipeline).unwrap();
+            cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]).unwrap();
+            cpass.dispatch_workgroups(self.work_group_count, 1, 1).unwrap();
         }
         command_encoder.pop_debug_group().unwrap();
 
         command_encoder.push_debug_group("render boids").unwrap();
         {
             // render pass
-            let mut rpass = command_encoder.begin_render_pass(&render_pass_descriptor);
-            rpass.set_pipeline(&self.render_pipeline);
+            let mut rpass = command_encoder.begin_render_pass(&render_pass_descriptor).unwrap();
+            rpass.set_pipeline(&self.render_pipeline).unwrap();
             // render dst particles
-            rpass.set_vertex_buffer(0, self.particle_buffers[(self.frame_num + 1) % 2].slice(..));
+            rpass.set_vertex_buffer(0, self.particle_buffers[(self.frame_num + 1) % 2].slice(..)).unwrap();
             // the three instance-local vertices
-            rpass.set_vertex_buffer(1, self.vertices_buffer.slice(..));
-            rpass.draw(0..3, 0..NUM_PARTICLES);
+            rpass.set_vertex_buffer(1, self.vertices_buffer.slice(..)).unwrap();
+            rpass.draw(0..3, 0..NUM_PARTICLES).unwrap();
         }
         command_encoder.pop_debug_group().unwrap();
 

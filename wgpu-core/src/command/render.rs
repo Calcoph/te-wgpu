@@ -1337,7 +1337,7 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &RenderPassDescriptor<'_>,
-    ) -> (RenderPass<A>, Option<CommandEncoderError>) {
+    ) -> Result<RenderPass<A>, CommandEncoderError> {
         fn fill_arc_desc<A: HalApi>(
             hub: &crate::hub::Hub<A>,
             desc: &RenderPassDescriptor<'_>,
@@ -1435,21 +1435,19 @@ impl Global {
             occlusion_query_set: None,
         };
 
-        let make_err = |e, arc_desc| (RenderPass::new(None, arc_desc), Some(e));
-
         let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
             Ok(cmd_buf) => cmd_buf,
-            Err(_) => return make_err(CommandEncoderError::Invalid, arc_desc),
+            Err(_) => return Err(CommandEncoderError::Invalid),
         };
 
         match cmd_buf.lock_encoder() {
             Ok(_) => {}
-            Err(e) => return make_err(e, arc_desc),
+            Err(e) => return Err(e),
         };
 
-        let err = fill_arc_desc(hub, desc, &mut arc_desc).err();
+        fill_arc_desc(hub, desc, &mut arc_desc)?;
 
-        (RenderPass::new(Some(cmd_buf), arc_desc), err)
+        Ok(RenderPass::new(Some(cmd_buf), arc_desc))
     }
 
     /// Creates a type erased render pass.
@@ -1460,9 +1458,9 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &RenderPassDescriptor<'_>,
-    ) -> (Box<dyn DynRenderPass>, Option<CommandEncoderError>) {
-        let (pass, err) = self.command_encoder_create_render_pass::<A>(encoder_id, desc);
-        (Box::new(pass), err)
+    ) -> Result<Box<dyn DynRenderPass>, CommandEncoderError> {
+        let pass = self.command_encoder_create_render_pass::<A>(encoder_id, desc)?;
+        Ok(Box::new(pass))
     }
 
     #[doc(hidden)]
@@ -1515,7 +1513,7 @@ impl Global {
             push_constant_data,
         } = base;
 
-        let (mut render_pass, encoder_error) = self.command_encoder_create_render_pass::<A>(
+        let render_pass = self.command_encoder_create_render_pass::<A>(
             encoder_id,
             &RenderPassDescriptor {
                 label: label.as_deref().map(Cow::Borrowed),
@@ -1525,12 +1523,13 @@ impl Global {
                 occlusion_query_set,
             },
         );
-        if let Some(err) = encoder_error {
+        if let Err(err) = render_pass {
             return Err(RenderPassError {
                 scope: pass_scope,
                 inner: err.into(),
             });
         };
+        let mut render_pass = render_pass.unwrap();
 
         let hub = A::hub(self);
         render_pass.base = Some(BasePass {
@@ -1541,14 +1540,7 @@ impl Global {
             push_constant_data,
         });
 
-        if let Some(err) = encoder_error {
-            Err(RenderPassError {
-                scope: pass_scope,
-                inner: err.into(),
-            })
-        } else {
-            self.render_pass_end(&mut render_pass)
-        }
+        self.render_pass_end(&mut render_pass)
     }
 
     #[doc(hidden)]

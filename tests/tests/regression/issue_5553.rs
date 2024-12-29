@@ -14,7 +14,8 @@ static ALLOW_INPUT_NOT_CONSUMED: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         let module = ctx
             .device
-            .create_shader_module(include_wgsl!("issue_5553.wgsl"));
+            .create_shader_module(include_wgsl!("issue_5553.wgsl"))
+            .unwrap();
 
         let pipeline_layout = ctx
             .device
@@ -22,7 +23,7 @@ static ALLOW_INPUT_NOT_CONSUMED: GpuTestConfiguration =
                 label: Some("Pipeline Layout"),
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
         ctx.device
             .create_render_pipeline(&RenderPipelineDescriptor {
@@ -49,5 +50,5 @@ static ALLOW_INPUT_NOT_CONSUMED: GpuTestConfiguration =
                 }),
                 multiview: None,
                 cache: None,
-            });
+            }).unwrap();
     });

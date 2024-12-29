@@ -1,6 +1,6 @@
 use std::num::NonZeroU64;
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 const SHADER_SRC: &str = "
 @group(0) @binding(0)
@@ -115,14 +115,14 @@ async fn bgl_dedupe(ctx: TestingContext) {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        });
+        }).unwrap();
 
-        pass.set_bind_group(0, &bg_1b, &[]);
-        pass.set_pipeline(&pipeline);
-        pass.dispatch_workgroups(1, 1, 1);
+        pass.set_bind_group(0, &bg_1b, &[]).unwrap();
+        pass.set_pipeline(&pipeline).unwrap();
+        pass.dispatch_workgroups(1, 1, 1).unwrap();
 
-        pass.set_bind_group(0, &bg_1a, &[]);
-        pass.dispatch_workgroups(1, 1, 1);
+        pass.set_bind_group(0, &bg_1a, &[]).unwrap();
+        pass.dispatch_workgroups(1, 1, 1).unwrap();
 
         drop(pass);
 
@@ -258,11 +258,11 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    });
+    }).unwrap();
 
-    pass.set_bind_group(0, &bg, &[]);
-    pass.set_pipeline(&pipeline);
-    pass.dispatch_workgroups(1, 1, 1);
+    pass.set_bind_group(0, &bg, &[]).unwrap();
+    pass.set_pipeline(&pipeline).unwrap();
+    pass.dispatch_workgroups(1, 1, 1).unwrap();
 
     drop(pass);
 
@@ -341,15 +341,15 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    });
+    }).unwrap();
 
-    pass.set_pipeline(&pipeline);
+    pass.set_pipeline(&pipeline).unwrap();
 
-    pass.set_bind_group(0, &bg1, &[]);
-    pass.dispatch_workgroups(1, 1, 1);
+    pass.set_bind_group(0, &bg1, &[]).unwrap();
+    pass.dispatch_workgroups(1, 1, 1).unwrap();
 
-    pass.set_bind_group(0, &bg2, &[]);
-    pass.dispatch_workgroups(1, 1, 1);
+    pass.set_bind_group(0, &bg2, &[]).unwrap();
+    pass.dispatch_workgroups(1, 1, 1).unwrap();
 
     drop(pass);
 
@@ -413,16 +413,15 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    });
+    }).unwrap();
 
-    pass.set_pipeline(&pipeline1);
+    pass.set_pipeline(&pipeline1).unwrap();
 
     // We use the wrong bind group for this pipeline here. This should fail.
-    pass.set_bind_group(0, &bg2, &[]);
-    pass.dispatch_workgroups(1, 1, 1);
+    pass.set_bind_group(0, &bg2, &[]).unwrap();
+    pass.dispatch_workgroups(1, 1, 1).unwrap();
 
     fail(
-        &ctx.device,
         || {
             pass.end()
         },
@@ -498,18 +497,17 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    });
+    }).unwrap();
 
-    pass.set_pipeline(&pipeline);
+    pass.set_pipeline(&pipeline).unwrap();
 
-    pass.set_bind_group(0, &bg, &[]);
-    pass.dispatch_workgroups(1, 1, 1);
+    pass.set_bind_group(0, &bg, &[]).unwrap();
+    pass.dispatch_workgroups(1, 1, 1).unwrap();
 
     fail(
-        &ctx.device,
         || {
             pass.end()
         },
         None,
-    )
+    );
 }

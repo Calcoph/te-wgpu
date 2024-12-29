@@ -210,14 +210,14 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
         occlusion_query_set: occlusion_query_set_resource,
     };
 
-    let (render_pass, error) = gfx_select!(command_encoder => instance.command_encoder_create_render_pass_dyn(*command_encoder, &descriptor));
+    let render_pass = gfx_select!(command_encoder => instance.command_encoder_create_render_pass_dyn(*command_encoder, &descriptor))?;
     let rid = state
         .resource_table
         .add(super::render_pass::WebGpuRenderPass(RefCell::new(
             render_pass,
         )));
 
-    Ok(WebGpuResult::rid_err(rid, error))
+    Ok(WebGpuResult::rid(rid))
 }
 
 #[derive(Deserialize)]
@@ -262,14 +262,14 @@ pub fn op_webgpu_command_encoder_begin_compute_pass(
         timestamp_writes: timestamp_writes.as_ref(),
     };
 
-    let (compute_pass, error) = gfx_select!(command_encoder => instance.command_encoder_create_compute_pass_dyn(*command_encoder, &descriptor));
+    let compute_pass = gfx_select!(command_encoder => instance.command_encoder_create_compute_pass_dyn(*command_encoder, &descriptor))?;
     let rid = state
         .resource_table
         .add(super::compute_pass::WebGpuComputePass(RefCell::new(
             compute_pass,
         )));
 
-    Ok(WebGpuResult::rid_err(rid, error))
+    Ok(WebGpuResult::rid(rid))
 }
 
 #[op2]

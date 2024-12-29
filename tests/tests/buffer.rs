@@ -361,11 +361,11 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                     label: None,
                     timestamp_writes: None,
-                });
+                }).unwrap();
 
-                pass.set_bind_group(0, &bind_group, &[]);
-                pass.set_pipeline(&pipeline);
-                pass.dispatch_workgroups(1, 1, 1);
+                pass.set_bind_group(0, &bind_group, &[]).unwrap();
+                pass.set_pipeline(&pipeline).unwrap();
+                pass.dispatch_workgroups(1, 1, 1).unwrap();
 
             drop(pass);
             encoder.finish()
@@ -420,10 +420,10 @@ static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
             let smallest_aligned_invalid_size = wgpu::COPY_BUFFER_ALIGNMENT;
 
             wgpu_test::fail(
-                &ctx.device,
                 || {
                     ctx.device
                         .create_command_encoder(&Default::default())
+                        .unwrap()
                         .clear_buffer(
                             &buffer,
                             max_valid_offset,

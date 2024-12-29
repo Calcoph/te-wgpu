@@ -41,31 +41,27 @@ impl Example {
             .create_view(&Default::default())
             .unwrap();
 
-        let sampler = device
-            .create_sampler(&wgpu::SamplerDescriptor {
-                label: Some("Nearest Neighbor Sampler"),
-                mag_filter: wgpu::FilterMode::Nearest,
-                min_filter: wgpu::FilterMode::Nearest,
-                ..Default::default()
-            })
-            .unwrap();
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Nearest Neighbor Sampler"),
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        }).unwrap();
 
-        let bind_group = device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("upscale bind group"),
-                layout: bind_group_layout_upscale,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&texture_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
-                    },
-                ],
-            })
-            .unwrap();
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("upscale bind group"),
+            layout: bind_group_layout_upscale,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+        }).unwrap();
 
         (texture_view, bind_group)
     }
@@ -92,14 +88,12 @@ impl crate::framework::Example for Example {
             })
             .unwrap();
 
-        let shader_triangle_and_lines = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                    "triangle_and_lines.wgsl"
-                ))),
-            })
-            .unwrap();
+        let shader_triangle_and_lines = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                "triangle_and_lines.wgsl"
+            ))),
+        }).unwrap();
 
         let pipeline_triangle_conservative = device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -207,22 +201,17 @@ impl crate::framework::Example for Example {
                             count: None,
                         },
                     ],
-                })
-                .unwrap();
+                }).unwrap();
 
-            let pipeline_layout = device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: None,
-                    bind_group_layouts: &[&bind_group_layout],
-                    push_constant_ranges: &[],
-                })
-                .unwrap();
-            let shader = device
-                .create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: None,
-                    source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
-                })
-                .unwrap();
+            let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            }).unwrap();
+            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
+            }).unwrap();
             (
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("Upscale"),
@@ -281,11 +270,9 @@ impl crate::framework::Example for Example {
     fn update(&mut self, _event: winit::event::WindowEvent) {}
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mut encoder = device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("primary"),
-            })
-            .unwrap();
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("primary"),
+        }).unwrap();
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -301,12 +288,12 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
 
-            rpass.set_pipeline(&self.pipeline_triangle_conservative);
-            rpass.draw(0..3, 0..1);
-            rpass.set_pipeline(&self.pipeline_triangle_regular);
-            rpass.draw(0..3, 0..1);
+            rpass.set_pipeline(&self.pipeline_triangle_conservative).unwrap();
+            rpass.draw(0..3, 0..1).unwrap();
+            rpass.set_pipeline(&self.pipeline_triangle_regular).unwrap();
+            rpass.draw(0..3, 0..1).unwrap();
         }
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -322,15 +309,15 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
 
-            rpass.set_pipeline(&self.pipeline_upscale);
-            rpass.set_bind_group(0, &self.bind_group_upscale, &[]);
-            rpass.draw(0..3, 0..1);
+            rpass.set_pipeline(&self.pipeline_upscale).unwrap();
+            rpass.set_bind_group(0, &self.bind_group_upscale, &[]).unwrap();
+            rpass.draw(0..3, 0..1).unwrap();
 
             if let Some(pipeline_lines) = &self.pipeline_lines {
-                rpass.set_pipeline(pipeline_lines);
-                rpass.draw(0..4, 0..1);
+                rpass.set_pipeline(pipeline_lines).unwrap();
+                rpass.draw(0..4, 0..1).unwrap();
             }
         }
 

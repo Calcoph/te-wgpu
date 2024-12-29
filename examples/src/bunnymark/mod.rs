@@ -88,14 +88,12 @@ impl Example {
         }
 
         let uniform_alignment = device.limits().min_uniform_buffer_offset_alignment;
-        queue
-            .write_buffer(&self.local_buffer, 0, unsafe {
-                std::slice::from_raw_parts(
-                    self.bunnies.as_ptr() as *const u8,
-                    self.bunnies.len() * uniform_alignment as usize,
-                )
-            })
-            .unwrap();
+        queue.write_buffer(&self.local_buffer, 0, unsafe {
+            std::slice::from_raw_parts(
+                self.bunnies.as_ptr() as *const u8,
+                self.bunnies.len() * uniform_alignment as usize,
+            )
+        }).unwrap();
 
         let mut encoder = device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
@@ -120,14 +118,14 @@ impl Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
-            rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.global_group, &[]);
+            }).unwrap();
+            rpass.set_pipeline(&self.pipeline).unwrap();
+            rpass.set_bind_group(0, &self.global_group, &[]).unwrap();
             for i in 0..self.bunnies.len() {
                 let offset =
                     (i as wgpu::DynamicOffset) * (uniform_alignment as wgpu::DynamicOffset);
-                rpass.set_bind_group(1, &self.local_group, &[offset]);
-                rpass.draw(0..4, 0..1);
+                rpass.set_bind_group(1, &self.local_group, &[offset]).unwrap();
+                rpass.draw(0..4, 0..1).unwrap();
             }
         }
 
@@ -142,14 +140,12 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let shader = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                    "../../../wgpu-hal/examples/halmark/shader.wgsl"
-                ))),
-            })
-            .unwrap();
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                "../../../wgpu-hal/examples/halmark/shader.wgsl"
+            ))),
+        }).unwrap();
 
         let global_bind_group_layout = device
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -199,13 +195,11 @@ impl crate::framework::Example for Example {
                 label: None,
             })
             .unwrap();
-        let pipeline_layout = device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &[&global_bind_group_layout, &local_bind_group_layout],
-                push_constant_ranges: &[],
-            })
-            .unwrap();
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&global_bind_group_layout, &local_bind_group_layout],
+            push_constant_ranges: &[],
+        }).unwrap();
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -249,45 +243,39 @@ impl crate::framework::Example for Example {
                 height: info.height,
                 depth_or_array_layers: 1,
             };
-            let texture = device
-                .create_texture(&wgpu::TextureDescriptor {
-                    label: None,
-                    size,
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                    usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
-                    view_formats: &[],
-                })
-                .unwrap();
-            queue
-                .write_texture(
-                    texture.as_image_copy(),
-                    &buf,
-                    wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(info.width * 4),
-                        rows_per_image: None,
-                    },
-                    size,
-                )
-                .unwrap();
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            }).unwrap();
+            queue.write_texture(
+                texture.as_image_copy(),
+                &buf,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(info.width * 4),
+                    rows_per_image: None,
+                },
+                size,
+            ).unwrap();
             texture
         };
 
-        let sampler = device
-            .create_sampler(&wgpu::SamplerDescriptor {
-                label: None,
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Nearest,
-                mipmap_filter: wgpu::FilterMode::Nearest,
-                ..Default::default()
-            })
-            .unwrap();
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: None,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        }).unwrap();
 
         let globals = Globals {
             mvp: glam::Mat4::orthographic_rh(
@@ -302,61 +290,53 @@ impl crate::framework::Example for Example {
             size: [BUNNY_SIZE; 2],
             pad: [0.0; 2],
         };
-        let global_buffer = device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("global"),
-                contents: bytemuck::bytes_of(&globals),
-                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-            })
-            .unwrap();
+        let global_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("global"),
+            contents: bytemuck::bytes_of(&globals),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+        }).unwrap();
         let uniform_alignment =
             device.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
-        let local_buffer = device
-            .create_buffer(&wgpu::BufferDescriptor {
-                label: Some("local"),
-                size: (MAX_BUNNIES as wgpu::BufferAddress) * uniform_alignment,
-                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-                mapped_at_creation: false,
-            })
-            .unwrap();
+        let local_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("local"),
+            size: (MAX_BUNNIES as wgpu::BufferAddress) * uniform_alignment,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+            mapped_at_creation: false,
+        }).unwrap();
 
         let view = texture
             .create_view(&wgpu::TextureViewDescriptor::default())
             .unwrap();
-        let global_group = device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &global_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: global_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
-                    },
-                ],
-                label: None,
-            })
-            .unwrap();
-        let local_group = device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &local_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
+        let global_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &global_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: &local_buffer,
-                        offset: 0,
-                        size: wgpu::BufferSize::new(mem::size_of::<Bunny>() as _),
-                    }),
-                }],
-                label: None,
-            })
-            .unwrap();
+                    resource: global_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: None,
+        }).unwrap();
+        let local_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &local_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &local_buffer,
+                    offset: 0,
+                    size: wgpu::BufferSize::new(mem::size_of::<Bunny>() as _),
+                }),
+            }],
+            label: None,
+        }).unwrap();
 
         let rng = WyRand::new_seed(42);
 

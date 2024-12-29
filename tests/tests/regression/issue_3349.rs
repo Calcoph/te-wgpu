@@ -175,16 +175,16 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        });
+        }).unwrap();
 
-        rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, &bg, &[]);
+        rpass.set_pipeline(&pipeline).unwrap();
+        rpass.set_bind_group(0, &bg, &[]).unwrap();
         rpass.set_push_constants(
             wgpu::ShaderStages::VERTEX_FRAGMENT,
             0,
             bytemuck::cast_slice(&input),
-        );
-        rpass.draw(0..3, 0..1);
+        ).unwrap();
+        rpass.draw(0..3, 0..1).unwrap();
     }
 
     let buffers = ReadbackBuffers::new(&ctx.device, &texture);

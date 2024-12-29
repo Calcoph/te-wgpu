@@ -130,25 +130,25 @@ async fn partial_update_test(ctx: TestingContext) {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("compute_pass"),
             timestamp_writes: None,
-        });
-        cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
+        }).unwrap();
+        cpass.set_pipeline(&pipeline).unwrap();
+        cpass.set_bind_group(0, &bind_group, &[]).unwrap();
 
         // -- Dispatch 0 --
 
         // Dispatch number
-        cpass.set_push_constants(0, bytemuck::bytes_of(&[0_u32]));
+        cpass.set_push_constants(0, bytemuck::bytes_of(&[0_u32])).unwrap();
         // Update the whole vector.
-        cpass.set_push_constants(16, bytemuck::bytes_of(&[1.0_f32, 2.0, 3.0, 4.0]));
-        cpass.dispatch_workgroups(1, 1, 1);
+        cpass.set_push_constants(16, bytemuck::bytes_of(&[1.0_f32, 2.0, 3.0, 4.0])).unwrap();
+        cpass.dispatch_workgroups(1, 1, 1).unwrap();
 
         // -- Dispatch 1 --
 
         // Dispatch number
-        cpass.set_push_constants(0, bytemuck::bytes_of(&[1_u32]));
+        cpass.set_push_constants(0, bytemuck::bytes_of(&[1_u32])).unwrap();
         // Update just the y component of the vector.
-        cpass.set_push_constants(20, bytemuck::bytes_of(&[5.0_f32]));
-        cpass.dispatch_workgroups(1, 1, 1);
+        cpass.set_push_constants(20, bytemuck::bytes_of(&[5.0_f32])).unwrap();
+        cpass.dispatch_workgroups(1, 1, 1).unwrap();
     }
 
     encoder

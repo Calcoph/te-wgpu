@@ -408,7 +408,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     &buffer_dest,
                     0,
                     256,
-                );
+                )
             },
             None,
         );
@@ -427,7 +427,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     },
                     texture_for_write.as_image_copy(),
                     texture_extent,
-                );
+                )
             },
             None,
         );
@@ -446,7 +446,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                         },
                     },
                     texture_extent,
-                );
+                )
             },
             None,
         );
@@ -458,7 +458,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     texture_for_read.as_image_copy(),
                     texture_for_write.as_image_copy(),
                     texture_extent,
-                );
+                )
             },
             None,
         );
@@ -524,14 +524,13 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     .create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
                         label: None,
                         source: std::borrow::Cow::Borrowed(&[]),
-                    });
+                    })
             },
             None,
         );
 
         // Creating a render pipeline should fail.
         fail(
-            &ctx.device,
             || {
                 ctx.device
                     .create_render_pipeline(&wgpu::RenderPipelineDescriptor {

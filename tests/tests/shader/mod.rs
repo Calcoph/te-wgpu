@@ -369,15 +369,15 @@ async fn shader_input_output_test(
         let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: Some(&format!("cpass {test_name}")),
             timestamp_writes: None,
-        });
-        cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bg, &[]);
+        }).unwrap();
+        cpass.set_pipeline(&pipeline).unwrap();
+        cpass.set_bind_group(0, &bg, &[]).unwrap();
 
         if let InputStorageType::PushConstant = storage_type {
-            cpass.set_push_constants(0, bytemuck::cast_slice(&test.input_values))
+            cpass.set_push_constants(0, bytemuck::cast_slice(&test.input_values)).unwrap()
         }
 
-        cpass.dispatch_workgroups(1, 1, 1);
+        cpass.dispatch_workgroups(1, 1, 1).unwrap();
         drop(cpass);
 
         // -- Pulldown data --

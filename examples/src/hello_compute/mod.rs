@@ -66,12 +66,10 @@ async fn execute_gpu_inner(
     numbers: &[u32],
 ) -> Option<Vec<u32>> {
     // Loads the shader from WGSL
-    let cs_module = device
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        })
-        .unwrap();
+    let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+    }).unwrap();
 
     // Gets the size in bytes of the buffer.
     let size = std::mem::size_of_val(numbers) as wgpu::BufferAddress;
@@ -80,29 +78,25 @@ async fn execute_gpu_inner(
     // `usage` of buffer specifies how it can be used:
     //   `BufferUsages::MAP_READ` allows it to be read (outside the shader).
     //   `BufferUsages::COPY_DST` allows it to be the destination of the copy.
-    let staging_buffer = device
-        .create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        })
-        .unwrap();
+    let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size,
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    }).unwrap();
 
     // Instantiates buffer with data (`numbers`).
     // Usage allowing the buffer to be:
     //   A storage buffer (can be bound within a bind group and thus available to a shader).
     //   The destination of a copy.
     //   The source of a copy.
-    let storage_buffer = device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Storage Buffer"),
-            contents: bytemuck::cast_slice(numbers),
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC,
-        })
-        .unwrap();
+    let storage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Storage Buffer"),
+        contents: bytemuck::cast_slice(numbers),
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
+    }).unwrap();
 
     // A bind group defines how buffers are accessed by shaders.
     // It is to WebGPU what a descriptor set is to Vulkan.
@@ -122,16 +116,14 @@ async fn execute_gpu_inner(
 
     // Instantiates the bind group, once again specifying the binding of buffers.
     let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
-    let bind_group = device
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: storage_buffer.as_entire_binding(),
-            }],
-        })
-        .unwrap();
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: storage_buffer.as_entire_binding(),
+        }],
+    }).unwrap();
 
     // A command encoder executes one or many pipelines.
     // It is to WebGPU what a command buffer is to Vulkan.
@@ -142,11 +134,11 @@ async fn execute_gpu_inner(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        });
-        cpass.set_pipeline(&compute_pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.insert_debug_marker("compute collatz iterations");
-        cpass.dispatch_workgroups(numbers.len() as u32, 1, 1); // Number of cells to run, the (x,y,z) size of item being processed
+        }).unwrap();
+        cpass.set_pipeline(&compute_pipeline).unwrap();
+        cpass.set_bind_group(0, &bind_group, &[]).unwrap();
+        cpass.insert_debug_marker("compute collatz iterations").unwrap();
+        cpass.dispatch_workgroups(numbers.len() as u32, 1, 1).unwrap(); // Number of cells to run, the (x,y,z) size of item being processed
     }
     // Sets adds copy operation to command encoder.
     // Will copy data from storage buffer on GPU to staging buffer on CPU.

@@ -4,7 +4,7 @@ use wgpu_test::{fail, gpu_test, GpuTestConfiguration};
 static BAD_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
     // Create a buffer with bad parameters and call a few methods.
     // Validation should fail but there should be not panic.
-    let buffer = fail(
+    fail(
         || {
             ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
@@ -15,19 +15,11 @@ static BAD_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|
         },
         None,
     );
-
-    fail(
-        || buffer.slice(..).map_async(wgpu::MapMode::Write, |_| {}),
-        None,
-    );
-    fail(&ctx.device, || buffer.unmap(), None);
-    valid(&ctx.device, || buffer.destroy());
-    valid(&ctx.device, || buffer.destroy());
 });
 
 #[gpu_test]
 static BAD_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    let texture = fail(
+    fail(
         || {
             ctx.device.create_texture(&wgpu::TextureDescriptor {
                 label: None,
@@ -46,13 +38,4 @@ static BAD_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(
         },
         None,
     );
-
-    fail(
-        || {
-            texture.create_view(&wgpu::TextureViewDescriptor::default())
-        },
-        None,
-    );
-    valid(&ctx.device, || texture.destroy());
-    valid(&ctx.device, || texture.destroy());
 });

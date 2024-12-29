@@ -2,9 +2,9 @@ use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin
 
 use wgc::{
     binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError},
-    command::CommandEncoderError,
+    command::{CommandEncoderError, ComputePassError, RenderPassError},
     device::{queue::QueueWriteError, DeviceError},
-    pipeline::{CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError},
+    pipeline::{CreateComputePipelineError, CreatePipelineCacheError, CreateRenderPipelineError, CreateShaderModuleError},
     resource::{
         BufferAccessResult, CreateBufferError, CreateQuerySetError, CreateSamplerError,
         CreateTextureError, CreateTextureViewError,
@@ -20,7 +20,7 @@ use wgt::{
 use crate::{
     AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, ComputePassDescriptor,
-    ComputePipelineDescriptor, DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer,
+    ComputePipelineDescriptor, DeviceDescriptor, ImageCopyBuffer,
     ImageCopyTexture, Maintain, MaintainResult, MapMode, PipelineCacheDescriptor,
     PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
@@ -248,7 +248,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &PipelineCacheDescriptor<'_>,
-    ) -> (Self::PipelineCacheId, Self::PipelineCacheData);
+    ) -> Result<(Self::PipelineCacheId, Self::PipelineCacheData), CreatePipelineCacheError>;
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
@@ -457,13 +457,13 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         desc: &ComputePassDescriptor<'_>,
-    ) -> (Self::ComputePassId, Self::ComputePassData);
+    ) -> Result<(Self::ComputePassId, Self::ComputePassData), CommandEncoderError>;
     fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         desc: &RenderPassDescriptor<'_>,
-    ) -> (Self::RenderPassId, Self::RenderPassData);
+    ) -> Result<(Self::RenderPassId, Self::RenderPassData), CommandEncoderError>;
     fn command_encoder_finish(
         &self,
         encoder: Self::CommandEncoderId,
@@ -622,7 +622,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         pass_data: &mut Self::ComputePassData,
         pipeline: &Self::ComputePipelineId,
         pipeline_data: &Self::ComputePipelineData,
-    );
+    ) -> Result<(), ComputePassError>;
     fn compute_pass_set_bind_group(
         &self,
         pass: &mut Self::ComputePassId,
@@ -631,31 +631,31 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         bind_group: &Self::BindGroupId,
         bind_group_data: &Self::BindGroupData,
         offsets: &[DynamicOffset],
-    );
+    ) -> Result<(), ComputePassError>;
     fn compute_pass_set_push_constants(
         &self,
         pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
         offset: u32,
         data: &[u8],
-    );
+    ) -> Result<(), ComputePassError>;
     fn compute_pass_insert_debug_marker(
         &self,
         pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
         label: &str,
-    );
+    ) -> Result<(), ComputePassError>;
     fn compute_pass_push_debug_group(
         &self,
         pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
         group_label: &str,
-    );
+    ) -> Result<(), ComputePassError>;
     fn compute_pass_pop_debug_group(
         &self,
         pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
-    );
+    ) -> Result<(), ComputePassError>;
     fn compute_pass_write_timestamp(
         &self,
         pass: &mut Self::ComputePassId,
@@ -663,7 +663,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         query_set: &Self::QuerySetId,
         query_set_data: &Self::QuerySetData,
         query_index: u32,
-    );
+    ) -> Result<(), ComputePassError>;
     fn compute_pass_begin_pipeline_statistics_query(
         &self,
         pass: &mut Self::ComputePassId,
@@ -671,12 +671,12 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         query_set: &Self::QuerySetId,
         query_set_data: &Self::QuerySetData,
         query_index: u32,
-    );
+    ) -> Result<(), ComputePassError>;
     fn compute_pass_end_pipeline_statistics_query(
         &self,
         pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
-    );
+    ) -> Result<(), ComputePassError>;
     fn compute_pass_dispatch_workgroups(
         &self,
         pass: &mut Self::ComputePassId,
@@ -684,7 +684,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         x: u32,
         y: u32,
         z: u32,
-    );
+    ) -> Result<(), ComputePassError>;
     fn compute_pass_dispatch_workgroups_indirect(
         &self,
         pass: &mut Self::ComputePassId,
@@ -692,12 +692,12 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         indirect_buffer: &Self::BufferId,
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: BufferAddress,
-    );
+    ) -> Result<(), ComputePassError>;
     fn compute_pass_end(
         &self,
         pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
-    );
+    ) -> Result<(), ComputePassError>;
 
     fn render_bundle_encoder_set_pipeline(
         &self,
@@ -827,7 +827,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         pass_data: &mut Self::RenderPassData,
         pipeline: &Self::RenderPipelineId,
         pipeline_data: &Self::RenderPipelineData,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_set_bind_group(
         &self,
         pass: &mut Self::RenderPassId,
@@ -836,7 +836,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         bind_group: &Self::BindGroupId,
         bind_group_data: &Self::BindGroupData,
         offsets: &[DynamicOffset],
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     #[allow(clippy::too_many_arguments)]
     fn render_pass_set_index_buffer(
         &self,
@@ -847,7 +847,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         index_format: IndexFormat,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     #[allow(clippy::too_many_arguments)]
     fn render_pass_set_vertex_buffer(
         &self,
@@ -858,7 +858,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         buffer_data: &Self::BufferData,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_set_push_constants(
         &self,
         pass: &mut Self::RenderPassId,
@@ -866,14 +866,14 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         stages: ShaderStages,
         offset: u32,
         data: &[u8],
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_draw(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         vertices: Range<u32>,
         instances: Range<u32>,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_draw_indexed(
         &self,
         pass: &mut Self::RenderPassId,
@@ -881,7 +881,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         indices: Range<u32>,
         base_vertex: i32,
         instances: Range<u32>,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_draw_indirect(
         &self,
         pass: &mut Self::RenderPassId,
@@ -889,7 +889,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         indirect_buffer: &Self::BufferId,
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: BufferAddress,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_draw_indexed_indirect(
         &self,
         pass: &mut Self::RenderPassId,
@@ -897,7 +897,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         indirect_buffer: &Self::BufferId,
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: BufferAddress,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_multi_draw_indirect(
         &self,
         pass: &mut Self::RenderPassId,
@@ -906,7 +906,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: BufferAddress,
         count: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_multi_draw_indexed_indirect(
         &self,
         pass: &mut Self::RenderPassId,
@@ -915,7 +915,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: BufferAddress,
         count: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     #[allow(clippy::too_many_arguments)]
     fn render_pass_multi_draw_indirect_count(
         &self,
@@ -928,7 +928,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         count_buffer_data: &Self::BufferData,
         count_buffer_offset: BufferAddress,
         max_count: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     #[allow(clippy::too_many_arguments)]
     fn render_pass_multi_draw_indexed_indirect_count(
         &self,
@@ -941,13 +941,13 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         count_buffer_data: &Self::BufferData,
         count_buffer_offset: BufferAddress,
         max_count: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_set_blend_constant(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         color: Color,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_set_scissor_rect(
         &self,
         pass: &mut Self::RenderPassId,
@@ -956,7 +956,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         y: u32,
         width: u32,
         height: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     #[allow(clippy::too_many_arguments)]
     fn render_pass_set_viewport(
         &self,
@@ -968,30 +968,30 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         height: f32,
         min_depth: f32,
         max_depth: f32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_set_stencil_reference(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         reference: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_insert_debug_marker(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         label: &str,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_push_debug_group(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         group_label: &str,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_pop_debug_group(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_write_timestamp(
         &self,
         pass: &mut Self::RenderPassId,
@@ -999,18 +999,18 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         query_set: &Self::QuerySetId,
         query_set_data: &Self::QuerySetData,
         query_index: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_begin_occlusion_query(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         query_index: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_end_occlusion_query(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_begin_pipeline_statistics_query(
         &self,
         pass: &mut Self::RenderPassId,
@@ -1018,19 +1018,19 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         query_set: &Self::QuerySetId,
         query_set_data: &Self::QuerySetData,
         query_index: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_end_pipeline_statistics_query(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_execute_bundles(
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
-    );
-    fn render_pass_end(&self, pass: &mut Self::RenderPassId, pass_data: &mut Self::RenderPassData);
+    ) -> Result<(), wgc::command::RenderPassError>;
+    fn render_pass_end(&self, pass: &mut Self::RenderPassId, pass_data: &mut Self::RenderPassData) -> Result<(), wgc::command::RenderPassError>;
 }
 
 /// Object id.
@@ -1280,7 +1280,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &PipelineCacheDescriptor<'_>,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CreatePipelineCacheError>;
     fn device_create_buffer(
         &self,
         device: &ObjectId,
@@ -1444,13 +1444,13 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         desc: &ComputePassDescriptor<'_>,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CommandEncoderError>;
     fn command_encoder_begin_render_pass(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         desc: &RenderPassDescriptor<'_>,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> Result<(ObjectId, Box<crate::Data>), CommandEncoderError>;
     fn command_encoder_finish(
         &self,
         encoder: ObjectId,
@@ -1605,7 +1605,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         pass_data: &mut crate::Data,
         pipeline: &ObjectId,
         pipeline_data: &crate::Data,
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_set_bind_group(
         &self,
         pass: &mut ObjectId,
@@ -1614,27 +1614,27 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         bind_group: &ObjectId,
         bind_group_data: &crate::Data,
         offsets: &[DynamicOffset],
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_set_push_constants(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         offset: u32,
         data: &[u8],
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_insert_debug_marker(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         label: &str,
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_push_debug_group(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         group_label: &str,
-    );
-    fn compute_pass_pop_debug_group(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
+    ) -> Result<(), wgc::command::ComputePassError>;
+    fn compute_pass_pop_debug_group(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_write_timestamp(
         &self,
         pass: &mut ObjectId,
@@ -1642,7 +1642,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         query_set: &ObjectId,
         query_set_data: &crate::Data,
         query_index: u32,
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_begin_pipeline_statistics_query(
         &self,
         pass: &mut ObjectId,
@@ -1650,12 +1650,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         query_set: &ObjectId,
         query_set_data: &crate::Data,
         query_index: u32,
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_end_pipeline_statistics_query(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_dispatch_workgroups(
         &self,
         pass: &mut ObjectId,
@@ -1663,7 +1663,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         x: u32,
         y: u32,
         z: u32,
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_dispatch_workgroups_indirect(
         &self,
         pass: &mut ObjectId,
@@ -1671,8 +1671,8 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         indirect_buffer: &ObjectId,
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
-    );
-    fn compute_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
+    ) -> Result<(), wgc::command::ComputePassError>;
+    fn compute_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) -> Result<(), wgc::command::ComputePassError>;
 
     fn render_bundle_encoder_set_pipeline(
         &self,
@@ -1802,7 +1802,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         pass_data: &mut crate::Data,
         pipeline: &ObjectId,
         pipeline_data: &crate::Data,
-    );
+    ) -> Result<(), RenderPassError>;
     fn render_pass_set_bind_group(
         &self,
         pass: &mut ObjectId,
@@ -1811,7 +1811,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         bind_group: &ObjectId,
         bind_group_data: &crate::Data,
         offsets: &[DynamicOffset],
-    );
+    ) -> Result<(), RenderPassError>;
     #[allow(clippy::too_many_arguments)]
     fn render_pass_set_index_buffer(
         &self,
@@ -1822,7 +1822,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         index_format: IndexFormat,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    );
+    ) -> Result<(), RenderPassError>;
     #[allow(clippy::too_many_arguments)]
     fn render_pass_set_vertex_buffer(
         &self,
@@ -1833,7 +1833,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         buffer_data: &crate::Data,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_set_push_constants(
         &self,
         pass: &mut ObjectId,
@@ -1841,14 +1841,14 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         stages: ShaderStages,
         offset: u32,
         data: &[u8],
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_draw(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         vertices: Range<u32>,
         instances: Range<u32>,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_draw_indexed(
         &self,
         pass: &mut ObjectId,
@@ -1856,7 +1856,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         indices: Range<u32>,
         base_vertex: i32,
         instances: Range<u32>,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_draw_indirect(
         &self,
         pass: &mut ObjectId,
@@ -1864,7 +1864,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         indirect_buffer: &ObjectId,
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_draw_indexed_indirect(
         &self,
         pass: &mut ObjectId,
@@ -1872,7 +1872,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         indirect_buffer: &ObjectId,
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_multi_draw_indirect(
         &self,
         pass: &mut ObjectId,
@@ -1881,7 +1881,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
         count: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_multi_draw_indexed_indirect(
         &self,
         pass: &mut ObjectId,
@@ -1890,7 +1890,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
         count: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     #[allow(clippy::too_many_arguments)]
     fn render_pass_multi_draw_indirect_count(
         &self,
@@ -1903,7 +1903,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         count_buffer_data: &crate::Data,
         count_buffer_offset: BufferAddress,
         max_count: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     #[allow(clippy::too_many_arguments)]
     fn render_pass_multi_draw_indexed_indirect_count(
         &self,
@@ -1916,13 +1916,13 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         command_buffer_data: &crate::Data,
         count_buffer_offset: BufferAddress,
         max_count: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_set_blend_constant(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         color: Color,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_set_scissor_rect(
         &self,
         pass: &mut ObjectId,
@@ -1931,7 +1931,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         y: u32,
         width: u32,
         height: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     #[allow(clippy::too_many_arguments)]
     fn render_pass_set_viewport(
         &self,
@@ -1943,26 +1943,26 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         height: f32,
         min_depth: f32,
         max_depth: f32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_set_stencil_reference(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         reference: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_insert_debug_marker(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         label: &str,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_push_debug_group(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         group_label: &str,
-    );
-    fn render_pass_pop_debug_group(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
+    ) -> Result<(), wgc::command::RenderPassError>;
+    fn render_pass_pop_debug_group(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_write_timestamp(
         &self,
         pass: &mut ObjectId,
@@ -1970,14 +1970,14 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         query_set: &ObjectId,
         query_set_data: &crate::Data,
         query_index: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_begin_occlusion_query(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         query_index: u32,
-    );
-    fn render_pass_end_occlusion_query(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
+    ) -> Result<(), wgc::command::RenderPassError>;
+    fn render_pass_end_occlusion_query(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_begin_pipeline_statistics_query(
         &self,
         pass: &mut ObjectId,
@@ -1985,19 +1985,19 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         query_set: &ObjectId,
         query_set_data: &crate::Data,
         query_index: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_end_pipeline_statistics_query(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_execute_bundles(
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         render_bundles: &mut dyn Iterator<Item = (&ObjectId, &crate::Data)>,
-    );
-    fn render_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
+    ) -> Result<(), wgc::command::RenderPassError>;
+    fn render_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) -> Result<(), wgc::command::RenderPassError>;
 }
 
 // Blanket impl of DynContext for all types which implement Context.
@@ -2264,7 +2264,7 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &PipelineLayoutDescriptor<'_>,
-    ) -> Result<(ObjectId, Box<Data>), CreatePipelineLayoutError> {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreatePipelineLayoutError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         let (pipeline_layout, data) =
@@ -2303,12 +2303,12 @@ where
         device: &ObjectId,
         device_data: &crate::Data,
         desc: &PipelineCacheDescriptor<'_>,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CreatePipelineCacheError> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         let (pipeline_cache, data) =
-            unsafe { Context::device_create_pipeline_cache(self, &device, device_data, desc) };
-        (pipeline_cache.into(), Box::new(data) as _)
+            unsafe { Context::device_create_pipeline_cache(self, &device, device_data, desc) }?;
+        Ok((pipeline_cache.into(), Box::new(data) as _))
     }
 
     fn device_create_buffer(
@@ -2730,12 +2730,12 @@ where
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         desc: &ComputePassDescriptor<'_>,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CommandEncoderError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         let (compute_pass, data) =
-            Context::command_encoder_begin_compute_pass(self, &encoder, encoder_data, desc);
-        (compute_pass.into(), Box::new(data) as _)
+            Context::command_encoder_begin_compute_pass(self, &encoder, encoder_data, desc)?;
+        Ok((compute_pass.into(), Box::new(data) as _))
     }
 
     fn command_encoder_begin_render_pass(
@@ -2743,12 +2743,12 @@ where
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         desc: &RenderPassDescriptor<'_>,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> Result<(ObjectId, Box<crate::Data>), CommandEncoderError> {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
         let (render_pass, data) =
-            Context::command_encoder_begin_render_pass(self, &encoder, encoder_data, desc);
-        (render_pass.into(), Box::new(data) as _)
+            Context::command_encoder_begin_render_pass(self, &encoder, encoder_data, desc)?;
+        Ok((render_pass.into(), Box::new(data) as _))
     }
 
     fn command_encoder_finish(
@@ -3064,7 +3064,7 @@ where
         pass_data: &mut crate::Data,
         pipeline: &ObjectId,
         pipeline_data: &crate::Data,
-    ) {
+    ) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         let pipeline = <T::ComputePipelineId>::from(*pipeline);
@@ -3080,7 +3080,7 @@ where
         bind_group: &ObjectId,
         bind_group_data: &crate::Data,
         offsets: &[DynamicOffset],
-    ) {
+    ) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         let bind_group = <T::BindGroupId>::from(*bind_group);
@@ -3102,7 +3102,7 @@ where
         pass_data: &mut crate::Data,
         offset: u32,
         data: &[u8],
-    ) {
+    ) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         Context::compute_pass_set_push_constants(self, &mut pass, pass_data, offset, data)
@@ -3113,7 +3113,7 @@ where
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         label: &str,
-    ) {
+    ) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         Context::compute_pass_insert_debug_marker(self, &mut pass, pass_data, label)
@@ -3124,13 +3124,13 @@ where
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         group_label: &str,
-    ) {
+    ) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         Context::compute_pass_push_debug_group(self, &mut pass, pass_data, group_label)
     }
 
-    fn compute_pass_pop_debug_group(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) {
+    fn compute_pass_pop_debug_group(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         Context::compute_pass_pop_debug_group(self, &mut pass, pass_data)
@@ -3143,7 +3143,7 @@ where
         query_set: &ObjectId,
         query_set_data: &crate::Data,
         query_index: u32,
-    ) {
+    ) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         let query_set = <T::QuerySetId>::from(*query_set);
@@ -3165,7 +3165,7 @@ where
         query_set: &ObjectId,
         query_set_data: &crate::Data,
         query_index: u32,
-    ) {
+    ) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         let query_set = <T::QuerySetId>::from(*query_set);
@@ -3184,7 +3184,7 @@ where
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-    ) {
+    ) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         Context::compute_pass_end_pipeline_statistics_query(self, &mut pass, pass_data)
@@ -3197,7 +3197,7 @@ where
         x: u32,
         y: u32,
         z: u32,
-    ) {
+    ) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         Context::compute_pass_dispatch_workgroups(self, &mut pass, pass_data, x, y, z)
@@ -3210,7 +3210,7 @@ where
         indirect_buffer: &ObjectId,
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
-    ) {
+    ) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
         let indirect_buffer = <T::BufferId>::from(*indirect_buffer);
@@ -3225,7 +3225,7 @@ where
         )
     }
 
-    fn compute_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) {
+    fn compute_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) -> Result<(), ComputePassError> {
         let mut pass = <T::ComputePassId>::from(*pass);
         let pass_data = downcast_mut(pass_data);
         Context::compute_pass_end(self, &mut pass, pass_data)
@@ -3541,7 +3541,7 @@ where
         pass_data: &mut crate::Data,
         pipeline: &ObjectId,
         pipeline_data: &crate::Data,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let pipeline = <T::RenderPipelineId>::from(*pipeline);
@@ -3557,7 +3557,7 @@ where
         bind_group: &ObjectId,
         bind_group_data: &crate::Data,
         offsets: &[DynamicOffset],
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let bind_group = <T::BindGroupId>::from(*bind_group);
@@ -3582,7 +3582,7 @@ where
         index_format: IndexFormat,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let buffer = <T::BufferId>::from(*buffer);
@@ -3608,7 +3608,7 @@ where
         buffer_data: &crate::Data,
         offset: BufferAddress,
         size: Option<BufferSize>,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let buffer = <T::BufferId>::from(*buffer);
@@ -3632,7 +3632,7 @@ where
         stages: ShaderStages,
         offset: u32,
         data: &[u8],
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_set_push_constants(self, &mut pass, pass_data, stages, offset, data)
@@ -3644,7 +3644,7 @@ where
         pass_data: &mut crate::Data,
         vertices: Range<u32>,
         instances: Range<u32>,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_draw(self, &mut pass, pass_data, vertices, instances)
@@ -3657,7 +3657,7 @@ where
         indices: Range<u32>,
         base_vertex: i32,
         instances: Range<u32>,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_draw_indexed(
@@ -3677,7 +3677,7 @@ where
         indirect_buffer: &ObjectId,
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let indirect_buffer = <T::BufferId>::from(*indirect_buffer);
@@ -3699,7 +3699,7 @@ where
         indirect_buffer: &ObjectId,
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let indirect_buffer = <T::BufferId>::from(*indirect_buffer);
@@ -3722,7 +3722,7 @@ where
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
         count: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let indirect_buffer = <T::BufferId>::from(*indirect_buffer);
@@ -3746,7 +3746,7 @@ where
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
         count: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let indirect_buffer = <T::BufferId>::from(*indirect_buffer);
@@ -3773,7 +3773,7 @@ where
         count_buffer_data: &crate::Data,
         count_buffer_offset: BufferAddress,
         max_count: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let indirect_buffer = <T::BufferId>::from(*indirect_buffer);
@@ -3805,7 +3805,7 @@ where
         count_buffer_data: &crate::Data,
         count_buffer_offset: BufferAddress,
         max_count: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let indirect_buffer = <T::BufferId>::from(*indirect_buffer);
@@ -3831,7 +3831,7 @@ where
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         color: Color,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_set_blend_constant(self, &mut pass, pass_data, color)
@@ -3845,7 +3845,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_set_scissor_rect(self, &mut pass, pass_data, x, y, width, height)
@@ -3861,7 +3861,7 @@ where
         height: f32,
         min_depth: f32,
         max_depth: f32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_set_viewport(
@@ -3874,7 +3874,7 @@ where
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         reference: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_set_stencil_reference(self, &mut pass, pass_data, reference)
@@ -3885,7 +3885,7 @@ where
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         label: &str,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_insert_debug_marker(self, &mut pass, pass_data, label)
@@ -3896,13 +3896,13 @@ where
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         group_label: &str,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_push_debug_group(self, &mut pass, pass_data, group_label)
     }
 
-    fn render_pass_pop_debug_group(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) {
+    fn render_pass_pop_debug_group(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_pop_debug_group(self, &mut pass, pass_data)
@@ -3915,7 +3915,7 @@ where
         query_set: &ObjectId,
         query_set_data: &crate::Data,
         query_index: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let query_set = <T::QuerySetId>::from(*query_set);
@@ -3935,13 +3935,13 @@ where
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         query_index: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_begin_occlusion_query(self, &mut pass, pass_data, query_index)
     }
 
-    fn render_pass_end_occlusion_query(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) {
+    fn render_pass_end_occlusion_query(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_end_occlusion_query(self, &mut pass, pass_data)
@@ -3954,7 +3954,7 @@ where
         query_set: &ObjectId,
         query_set_data: &crate::Data,
         query_index: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let query_set = <T::QuerySetId>::from(*query_set);
@@ -3973,7 +3973,7 @@ where
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         Context::render_pass_end_pipeline_statistics_query(self, &mut pass, pass_data)
@@ -3984,7 +3984,7 @@ where
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
         render_bundles: &mut dyn Iterator<Item = (&ObjectId, &crate::Data)>,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let mut render_bundles = render_bundles.map(|(id, data)| {
@@ -3994,7 +3994,7 @@ where
         Context::render_pass_execute_bundles(self, &mut pass, pass_data, &mut render_bundles)
     }
 
-    fn render_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) {
+    fn render_pass_end(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) -> Result<(), wgc::command::RenderPassError> {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut(pass_data);
         Context::render_pass_end(self, &mut pass, pass_data)

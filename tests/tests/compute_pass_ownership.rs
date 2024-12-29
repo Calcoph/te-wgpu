@@ -40,13 +40,14 @@ async fn compute_pass_resource_ownership(ctx: TestingContext) {
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
 
     {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-        cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.dispatch_workgroups_indirect(&indirect_buffer, 0);
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()).unwrap();
+        cpass.set_pipeline(&pipeline).unwrap();
+        cpass.set_bind_group(0, &bind_group, &[]).unwrap();
+        cpass.dispatch_workgroups_indirect(&indirect_buffer, 0).unwrap();
 
         // Now drop all resources we set. Then do a device poll to make sure the resources are really not dropped too early, no matter what.
         drop(pipeline);
@@ -86,19 +87,20 @@ async fn compute_pass_query_set_ownership_pipeline_statistics(ctx: TestingContex
             wgpu::PipelineStatisticsTypes::COMPUTE_SHADER_INVOCATIONS,
         ),
         count: 1,
-    });
+    }).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
 
     {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-        cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.begin_pipeline_statistics_query(&query_set, 0);
-        cpass.dispatch_workgroups(1, 1, 1);
-        cpass.end_pipeline_statistics_query();
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()).unwrap();
+        cpass.set_pipeline(&pipeline).unwrap();
+        cpass.set_bind_group(0, &bind_group, &[]).unwrap();
+        cpass.begin_pipeline_statistics_query(&query_set, 0).unwrap();
+        cpass.dispatch_workgroups(1, 1, 1).unwrap();
+        cpass.end_pipeline_statistics_query().unwrap();
 
         // Drop the query set. Then do a device poll to make sure it's not dropped too early, no matter what.
         drop(query_set);
@@ -132,16 +134,17 @@ async fn compute_pass_query_set_ownership_timestamps(ctx: TestingContext) {
         label: Some("query_set_timestamp_writes"),
         ty: wgpu::QueryType::Timestamp,
         count: 2,
-    });
+    }).unwrap();
     let query_set_write_timestamp = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
         label: Some("query_set_write_timestamp"),
         ty: wgpu::QueryType::Timestamp,
         count: 1,
-    });
+    }).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
 
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -151,11 +154,11 @@ async fn compute_pass_query_set_ownership_timestamps(ctx: TestingContext) {
                 beginning_of_pass_write_index: Some(0),
                 end_of_pass_write_index: Some(1),
             }),
-        });
-        cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.write_timestamp(&query_set_write_timestamp, 0);
-        cpass.dispatch_workgroups(1, 1, 1);
+        }).unwrap();
+        cpass.set_pipeline(&pipeline).unwrap();
+        cpass.set_bind_group(0, &bind_group, &[]).unwrap();
+        cpass.write_timestamp(&query_set_write_timestamp, 0).unwrap();
+        cpass.dispatch_workgroups(1, 1, 1).unwrap();
 
         // Drop the query sets. Then do a device poll to make sure they're not dropped too early, no matter what.
         drop(query_set_timestamp_writes);
@@ -185,12 +188,13 @@ async fn compute_pass_keep_encoder_alive(ctx: TestingContext) {
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
 
     let cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: Some("compute_pass"),
         timestamp_writes: None,
-    });
+    }).unwrap();
 
     // Now drop the encoder - it is kept alive by the compute pass.
     // To do so, we have to make the compute pass forget the lifetime constraint first.
@@ -202,15 +206,15 @@ async fn compute_pass_keep_encoder_alive(ctx: TestingContext) {
         .panic_on_timeout();
 
     // Record some draw commands.
-    cpass.set_pipeline(&pipeline);
-    cpass.set_bind_group(0, &bind_group, &[]);
-    cpass.dispatch_workgroups_indirect(&indirect_buffer, 0);
+    cpass.set_pipeline(&pipeline).unwrap();
+    cpass.set_bind_group(0, &bind_group, &[]).unwrap();
+    cpass.dispatch_workgroups_indirect(&indirect_buffer, 0).unwrap();
 
     // Dropping the pass will still execute the pass, even though there's no way to submit it.
     // Ideally, this would log an error, but the encoder is not dropped until the compute pass is dropped,
     // making this a valid operation.
     // (If instead the encoder was explicitly destroyed or finished, this would be an error.)
-    valid(&ctx.device, || drop(cpass));
+    valid(|| cpass.end());
 }
 
 async fn assert_compute_pass_executed_normally(
@@ -220,9 +224,9 @@ async fn assert_compute_pass_executed_normally(
     buffer_size: u64,
     ctx: TestingContext,
 ) {
-    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
-    ctx.queue.submit([encoder.finish()]);
-    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
+    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size).unwrap();
+    ctx.queue.submit([encoder.finish().unwrap()]);
+    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
     ctx.async_poll(wgpu::Maintain::wait())
         .await
         .panic_on_timeout();
@@ -251,7 +255,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
-        });
+        }).unwrap();
 
     let buffer_size = 4 * std::mem::size_of::<f32>() as u64;
 
@@ -269,7 +273,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
                 },
                 count: None,
             }],
-        });
+        }).unwrap();
 
     let gpu_buffer = ctx
         .device
@@ -277,14 +281,14 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             label: Some("gpu_buffer"),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             contents: bytemuck::bytes_of(&[1.0_f32, 2.0, 3.0, 4.0]),
-        });
+        }).unwrap();
 
     let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("cpu_buffer"),
         size: buffer_size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let indirect_buffer = ctx
         .device
@@ -292,7 +296,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             label: Some("indirect_buffer"),
             usage: wgpu::BufferUsages::INDIRECT,
             contents: wgpu::util::DispatchIndirectArgs { x: 1, y: 1, z: 1 }.as_bytes(),
-        });
+        }).unwrap();
 
     let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("bind_group"),
@@ -301,7 +305,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             binding: 0,
             resource: gpu_buffer.as_entire_binding(),
         }],
-    });
+    }).unwrap();
 
     let pipeline_layout = ctx
         .device
@@ -309,7 +313,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[&bgl],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
     let pipeline = ctx
         .device
@@ -320,7 +324,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             entry_point: "main",
             compilation_options: Default::default(),
             cache: None,
-        });
+        }).unwrap();
 
     ResourceSetup {
         gpu_buffer,

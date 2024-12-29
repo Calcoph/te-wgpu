@@ -110,7 +110,7 @@ impl ComputepassState {
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
                     entries: &bind_group_layout_entries,
-                });
+                }).unwrap();
 
         let mut texture_views = Vec::with_capacity(TEXTURE_COUNT);
         for i in 0..TEXTURE_COUNT {
@@ -129,11 +129,11 @@ impl ComputepassState {
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
-                });
+                }).unwrap();
             texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("Texture View {i}")),
                 ..Default::default()
-            }));
+            }).unwrap());
         }
         random.shuffle(&mut texture_views);
         let texture_view_refs: Vec<_> = texture_views.iter().collect();
@@ -155,11 +155,11 @@ impl ComputepassState {
                     format: wgpu::TextureFormat::R32Float,
                     usage: wgpu::TextureUsages::STORAGE_BINDING,
                     view_formats: &[],
-                });
+                }).unwrap();
             storage_texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("StorageTexture View {i}")),
                 ..Default::default()
-            }));
+            }).unwrap());
         }
         random.shuffle(&mut storage_texture_views);
         let storage_texture_view_refs: Vec<_> = storage_texture_views.iter().collect();
@@ -171,7 +171,7 @@ impl ComputepassState {
                 size: BUFFER_SIZE,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
-            }));
+            }).unwrap());
         }
         random.shuffle(&mut storage_buffers);
         let storage_buffer_bindings: Vec<_> = storage_buffers
@@ -217,14 +217,15 @@ impl ComputepassState {
                         label: None,
                         layout: &bind_group_layout,
                         entries: &entries,
-                    }),
+                    }).unwrap(),
             );
         }
         random.shuffle(&mut bind_groups);
 
         let sm = device_state
             .device
-            .create_shader_module(wgpu::include_wgsl!("computepass.wgsl"));
+            .create_shader_module(wgpu::include_wgsl!("computepass.wgsl"))
+            .unwrap();
 
         let pipeline_layout =
             device_state
@@ -233,7 +234,7 @@ impl ComputepassState {
                     label: None,
                     bind_group_layouts: &[&bind_group_layout],
                     push_constant_ranges: &[],
-                });
+                }).unwrap();
 
         let pipeline =
             device_state
@@ -245,7 +246,7 @@ impl ComputepassState {
                     entry_point: "cs_main",
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     cache: None,
-                });
+                }).unwrap();
 
         let (bindless_bind_group, bindless_pipeline) = if supports_bindless {
             let bindless_bind_group_layout =
@@ -287,7 +288,7 @@ impl ComputepassState {
                                 count: Some(NonZeroU32::new(STORAGE_BUFFER_COUNT as u32).unwrap()),
                             },
                         ],
-                    });
+                    }).unwrap();
 
             let bindless_bind_group =
                 device_state
@@ -315,11 +316,12 @@ impl ComputepassState {
                                 ),
                             },
                         ],
-                    });
+                    }).unwrap();
 
             let bindless_sm = device_state
                 .device
-                .create_shader_module(wgpu::include_wgsl!("computepass-bindless.wgsl"));
+                .create_shader_module(wgpu::include_wgsl!("computepass-bindless.wgsl"))
+                .unwrap();
 
             let bindless_pipeline_layout =
                 device_state
@@ -328,7 +330,7 @@ impl ComputepassState {
                         label: None,
                         bind_group_layouts: &[&bindless_bind_group_layout],
                         push_constant_ranges: &[],
-                    });
+                    }).unwrap();
 
             let bindless_pipeline =
                 device_state
@@ -340,7 +342,7 @@ impl ComputepassState {
                         entry_point: "cs_main",
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                         cache: None,
-                    });
+                    }).unwrap();
 
             (Some(bindless_bind_group), Some(bindless_pipeline))
         } else {
@@ -365,24 +367,25 @@ impl ComputepassState {
         let mut encoder = self
             .device_state
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
 
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        });
+        }).unwrap();
 
         let start_idx = pass_number * dispatch_per_pass;
         let end_idx = start_idx + dispatch_per_pass;
         for dispatch_idx in start_idx..end_idx {
-            compute_pass.set_pipeline(&self.pipeline);
-            compute_pass.set_bind_group(0, &self.bind_groups[dispatch_idx], &[]);
-            compute_pass.dispatch_workgroups(1, 1, 1);
+            compute_pass.set_pipeline(&self.pipeline).unwrap();
+            compute_pass.set_bind_group(0, &self.bind_groups[dispatch_idx], &[]).unwrap();
+            compute_pass.dispatch_workgroups(1, 1, 1).unwrap();
         }
 
         drop(compute_pass);
 
-        encoder.finish()
+        encoder.finish().unwrap()
     }
 
     fn run_bindless_pass(&self) -> wgpu::CommandBuffer {
@@ -391,22 +394,23 @@ impl ComputepassState {
         let mut encoder = self
             .device_state
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
 
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        });
+        }).unwrap();
 
-        compute_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap());
-        compute_pass.set_bind_group(0, self.bindless_bind_group.as_ref().unwrap(), &[]);
+        compute_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap()).unwrap();
+        compute_pass.set_bind_group(0, self.bindless_bind_group.as_ref().unwrap(), &[]).unwrap();
         for _ in 0..DISPATCH_COUNT_BINDLESS {
-            compute_pass.dispatch_workgroups(1, 1, 1);
+            compute_pass.dispatch_workgroups(1, 1, 1).unwrap();
         }
 
         drop(compute_pass);
 
-        encoder.finish()
+        encoder.finish().unwrap()
     }
 }
 

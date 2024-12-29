@@ -37,7 +37,6 @@ getrandom.workspace = true
 glam.workspace = true
 ktx2.workspace = true
 log.workspace = true
-futures-intrusive.workspace = true
 nanorand.workspace = true
 noise.workspace = true
 obj.workspace = true

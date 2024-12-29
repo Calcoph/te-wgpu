@@ -163,12 +163,12 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        });
+        }).unwrap();
 
-        double_rpass.set_pipeline(&double_pipeline);
-        double_rpass.set_vertex_buffer(0, vertex_buffer1.slice(..));
-        double_rpass.set_vertex_buffer(1, vertex_buffer2.slice(..));
-        double_rpass.draw(0..3, 0..1);
+        double_rpass.set_pipeline(&double_pipeline).unwrap();
+        double_rpass.set_vertex_buffer(0, vertex_buffer1.slice(..)).unwrap();
+        double_rpass.set_vertex_buffer(1, vertex_buffer2.slice(..)).unwrap();
+        double_rpass.draw(0..3, 0..1).unwrap();
 
         drop(double_rpass);
 
@@ -199,11 +199,11 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        });
+        }).unwrap();
 
-        single_rpass.set_pipeline(&single_pipeline);
-        single_rpass.set_vertex_buffer(0, vertex_buffer1.slice(..));
-        single_rpass.draw(0..3, 0..1);
+        single_rpass.set_pipeline(&single_pipeline).unwrap();
+        single_rpass.set_vertex_buffer(0, vertex_buffer1.slice(..)).unwrap();
+        single_rpass.draw(0..3, 0..1).unwrap();
 
         drop(single_rpass);
 

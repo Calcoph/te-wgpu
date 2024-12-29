@@ -109,9 +109,9 @@ async fn run(_path: Option<String>) {
             depth_stencil_attachment: None,
             occlusion_query_set: None,
             timestamp_writes: None,
-        });
-        render_pass.set_pipeline(&pipeline);
-        render_pass.draw(0..3, 0..1);
+        }).unwrap();
+        render_pass.set_pipeline(&pipeline).unwrap();
+        render_pass.draw(0..3, 0..1).unwrap();
     }
     // The texture now contains our rendered image
     command_encoder

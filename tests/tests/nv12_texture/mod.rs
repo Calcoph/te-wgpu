@@ -134,10 +134,10 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        });
-        rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, &bind_group, &[]);
-        rpass.draw(0..4, 0..1);
+        }).unwrap();
+        rpass.set_pipeline(&pipeline).unwrap();
+        rpass.set_bind_group(0, &bind_group, &[]).unwrap();
+        rpass.draw(0..4, 0..1).unwrap();
         drop(rpass);
         ctx.queue.submit(Some(encoder.finish().unwrap()));
     });
@@ -164,10 +164,10 @@ static NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT: GpuTestConfiguration =
             }).unwrap();
             fail(
                 || {
-                    let _ = tex.create_view(&wgpu::TextureViewDescriptor {
+                    tex.create_view(&wgpu::TextureViewDescriptor {
                         aspect: wgpu::TextureAspect::Plane0,
                         ..Default::default()
-                    });
+                    })
                 },
                 None,
             );
@@ -194,11 +194,11 @@ static NV12_TEXTURE_VIEW_PLANE_OUT_OF_BOUNDS: GpuTestConfiguration = GpuTestConf
         }).unwrap();
         fail(
             || {
-                let _ = tex.create_view(&wgpu::TextureViewDescriptor {
+                tex.create_view(&wgpu::TextureViewDescriptor {
                     format: Some(wgpu::TextureFormat::R8Unorm),
                     aspect: wgpu::TextureAspect::Plane2,
                     ..Default::default()
-                });
+                })
             },
             None,
         );
@@ -225,11 +225,11 @@ static NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE: GpuTestConfiguration = GpuTestConfigu
         }).unwrap();
         fail(
             || {
-                let _ = tex.create_view(&wgpu::TextureViewDescriptor {
+                tex.create_view(&wgpu::TextureViewDescriptor {
                     format: Some(wgpu::TextureFormat::Rg8Unorm),
                     aspect: wgpu::TextureAspect::Plane0,
                     ..Default::default()
-                });
+                })
             },
             None,
         );

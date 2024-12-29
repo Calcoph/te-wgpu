@@ -206,10 +206,10 @@ async fn draw_test_with_reports(
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
-    });
+    }).unwrap();
 
-    rpass.set_pipeline(&pipeline);
-    rpass.set_bind_group(0, &bg, &[]);
+    rpass.set_pipeline(&pipeline).unwrap();
+    rpass.set_bind_group(0, &bg, &[]).unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report(ctx.adapter_info.backend);
@@ -307,6 +307,6 @@ static SIMPLE_DRAW_CHECK_MEM_LEAKS: wgpu_test::GpuTestConfiguration =
         )
         .run_async(|ctx| {
             draw_test_with_reports(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
-                cmb.draw(0..6, 0..1);
+                cmb.draw(0..6, 0..1).unwrap();
             })
         });

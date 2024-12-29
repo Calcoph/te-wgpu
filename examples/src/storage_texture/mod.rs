@@ -42,68 +42,56 @@ async fn run(_path: Option<String>) {
         .await
         .unwrap();
 
-    let shader = device
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shader.wgsl"
-            ))),
-        })
-        .unwrap();
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
+    }).unwrap();
 
-    let storage_texture = device
-        .create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: wgpu::Extent3d {
-                width: TEXTURE_DIMS.0 as u32,
-                height: TEXTURE_DIMS.1 as u32,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        })
-        .unwrap();
+    let storage_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: TEXTURE_DIMS.0 as u32,
+            height: TEXTURE_DIMS.1 as u32,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    }).unwrap();
     let storage_texture_view = storage_texture
         .create_view(&wgpu::TextureViewDescriptor::default())
         .unwrap();
-    let output_staging_buffer = device
-        .create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: std::mem::size_of_val(&texture_data[..]) as u64,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        })
-        .unwrap();
+    let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: std::mem::size_of_val(&texture_data[..]) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    }).unwrap();
 
-    let bind_group_layout = device
-        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::StorageTexture {
-                    access: wgpu::StorageTextureAccess::WriteOnly,
-                    format: wgpu::TextureFormat::Rgba8Unorm,
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                },
-                count: None,
-            }],
-        })
-        .unwrap();
-    let bind_group = device
-        .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&storage_texture_view),
-            }],
-        })
-        .unwrap();
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::COMPUTE,
+            ty: wgpu::BindingType::StorageTexture {
+                access: wgpu::StorageTextureAccess::WriteOnly,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                view_dimension: wgpu::TextureViewDimension::D2,
+            },
+            count: None,
+        }],
+    }).unwrap();
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::TextureView(&storage_texture_view),
+        }],
+    }).unwrap();
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
@@ -129,44 +117,40 @@ async fn run(_path: Option<String>) {
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        });
-        compute_pass.set_bind_group(0, &bind_group, &[]);
-        compute_pass.set_pipeline(&pipeline);
-        compute_pass.dispatch_workgroups(TEXTURE_DIMS.0 as u32, TEXTURE_DIMS.1 as u32, 1);
+        }).unwrap();
+        compute_pass.set_bind_group(0, &bind_group, &[]).unwrap();
+        compute_pass.set_pipeline(&pipeline).unwrap();
+        compute_pass.dispatch_workgroups(TEXTURE_DIMS.0 as u32, TEXTURE_DIMS.1 as u32, 1).unwrap();
     }
-    command_encoder
-        .copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
-                texture: &storage_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
+    command_encoder.copy_texture_to_buffer(
+        wgpu::ImageCopyTexture {
+            texture: &storage_texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::ImageCopyBuffer {
+            buffer: &output_staging_buffer,
+            layout: wgpu::ImageDataLayout {
+                offset: 0,
+                // This needs to be padded to 256.
+                bytes_per_row: Some((TEXTURE_DIMS.0 * 4) as u32),
+                rows_per_image: Some(TEXTURE_DIMS.1 as u32),
             },
-            wgpu::ImageCopyBuffer {
-                buffer: &output_staging_buffer,
-                layout: wgpu::ImageDataLayout {
-                    offset: 0,
-                    // This needs to be padded to 256.
-                    bytes_per_row: Some((TEXTURE_DIMS.0 * 4) as u32),
-                    rows_per_image: Some(TEXTURE_DIMS.1 as u32),
-                },
-            },
-            wgpu::Extent3d {
-                width: TEXTURE_DIMS.0 as u32,
-                height: TEXTURE_DIMS.1 as u32,
-                depth_or_array_layers: 1,
-            },
-        )
-        .unwrap();
+        },
+        wgpu::Extent3d {
+            width: TEXTURE_DIMS.0 as u32,
+            height: TEXTURE_DIMS.1 as u32,
+            depth_or_array_layers: 1,
+        },
+    ).unwrap();
     queue.submit(Some(command_encoder.finish().unwrap()));
 
     let buffer_slice = output_staging_buffer.slice(..);
-    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
-    buffer_slice
-        .map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap())
-        .unwrap();
-    device.poll(wgpu::Maintain::Wait);
-    receiver.receive().await.unwrap().unwrap();
+    let (sender, receiver) = flume::bounded(1);
+    buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap()).unwrap();
+    device.poll(wgpu::Maintain::wait()).panic_on_timeout();
+    receiver.recv_async().await.unwrap().unwrap();
     log::info!("Output buffer mapped");
     {
         let view = buffer_slice.get_mapped_range();

@@ -101,10 +101,10 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
                 timestamp_writes: None,
-            });
-            cpass.set_pipeline(&compute_pipeline);
-            cpass.set_bind_group(0, &bind_group, &[]);
-            cpass.dispatch_workgroups(1, 1, 1);
+            }).unwrap();
+            cpass.set_pipeline(&compute_pipeline).unwrap();
+            cpass.set_bind_group(0, &bind_group, &[]).unwrap();
+            cpass.dispatch_workgroups(1, 1, 1).unwrap();
         }
 
         let readback_buffers = ReadbackBuffers::new(&ctx.device, &storage_texture);

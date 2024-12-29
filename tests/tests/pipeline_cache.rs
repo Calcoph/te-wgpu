@@ -32,7 +32,7 @@ fn shader() -> String {
         r#"
         @group(0) @binding(0)
         var<storage, read_write> output: array<u32>;
-    
+
         @compute @workgroup_size(1)
         fn main() {{
         {body}
@@ -48,7 +48,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: wgpu::ShaderSource::Wgsl(shader.into()),
-        });
+        }).unwrap();
 
     let bgl = ctx
         .device
@@ -64,21 +64,21 @@ async fn pipeline_cache_test(ctx: TestingContext) {
                 },
                 count: None,
             }],
-        });
+        }).unwrap();
 
     let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("gpu_buffer"),
         size: ARRAY_SIZE * 4,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("cpu_buffer"),
         size: ARRAY_SIZE * 4,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("bind_group"),
@@ -87,7 +87,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
             binding: 0,
             resource: gpu_buffer.as_entire_binding(),
         }],
-    });
+    }).unwrap();
 
     let pipeline_layout = ctx
         .device
@@ -95,7 +95,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[&bgl],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
     let first_cache_data;
     {
@@ -106,7 +106,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
                     data: None,
                     fallback: false,
                 })
-        };
+        }.unwrap();
         let first_pipeline = ctx
             .device
             .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -116,7 +116,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
                 entry_point: "main",
                 compilation_options: Default::default(),
                 cache: Some(&first_cache),
-            });
+            }).unwrap();
         validate_pipeline(&ctx, first_pipeline, &bind_group, &gpu_buffer, &cpu_buffer).await;
         first_cache_data = first_cache.get_data();
     }
@@ -129,7 +129,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
                 data: first_cache_data.as_deref(),
                 fallback: false,
             })
-    };
+    }.unwrap();
     let first_pipeline = ctx
         .device
         .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -139,7 +139,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
             entry_point: "main",
             compilation_options: Default::default(),
             cache: Some(&second_cache),
-        });
+        }).unwrap();
     validate_pipeline(&ctx, first_pipeline, &bind_group, &gpu_buffer, &cpu_buffer).await;
 
     // Ideally, we could assert here that the second compilation was faster than the first
@@ -159,22 +159,22 @@ async fn validate_pipeline(
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("encoder"),
-        });
+        }).unwrap();
 
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("compute_pass"),
             timestamp_writes: None,
-        });
-        cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, bind_group, &[]);
+        }).unwrap();
+        cpass.set_pipeline(&pipeline).unwrap();
+        cpass.set_bind_group(0, bind_group, &[]).unwrap();
 
-        cpass.dispatch_workgroups(1, 1, 1);
+        cpass.dispatch_workgroups(1, 1, 1).unwrap();
     }
 
-    encoder.copy_buffer_to_buffer(gpu_buffer, 0, cpu_buffer, 0, ARRAY_SIZE * 4);
-    ctx.queue.submit([encoder.finish()]);
-    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
+    encoder.copy_buffer_to_buffer(gpu_buffer, 0, cpu_buffer, 0, ARRAY_SIZE * 4).unwrap();
+    ctx.queue.submit([encoder.finish().unwrap()]);
+    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
     ctx.async_poll(wgpu::Maintain::wait())
         .await
         .panic_on_timeout();
@@ -188,5 +188,5 @@ async fn validate_pipeline(
         assert_eq!(value as usize, idx);
     }
     drop(data);
-    cpu_buffer.unmap();
+    cpu_buffer.unmap().unwrap();
 }

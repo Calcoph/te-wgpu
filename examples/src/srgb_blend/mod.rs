@@ -212,15 +212,15 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
-            rpass.push_debug_group("Prepare data for draw.");
-            rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint16);
-            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
-            rpass.pop_debug_group();
-            rpass.insert_debug_marker("Draw!");
-            rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
+            }).unwrap();
+            rpass.push_debug_group("Prepare data for draw.").unwrap();
+            rpass.set_pipeline(&self.pipeline).unwrap();
+            rpass.set_bind_group(0, &self.bind_group, &[]).unwrap();
+            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint16).unwrap();
+            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..)).unwrap();
+            rpass.pop_debug_group().unwrap();
+            rpass.insert_debug_marker("Draw!").unwrap();
+            rpass.draw_indexed(0..self.index_count as u32, 0, 0..1).unwrap();
         }
 
         queue.submit(Some(encoder.finish().unwrap()));

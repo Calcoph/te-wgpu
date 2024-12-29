@@ -89,23 +89,23 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: Some(&query_set),
-            });
-            render_pass.set_pipeline(&pipeline);
+            }).unwrap();
+            render_pass.set_pipeline(&pipeline).unwrap();
 
             // Not occluded (z = 1.0, nothing drawn yet)
-            render_pass.begin_occlusion_query(0);
-            render_pass.draw(4..7, 0..1);
-            render_pass.end_occlusion_query();
+            render_pass.begin_occlusion_query(0).unwrap();
+            render_pass.draw(4..7, 0..1).unwrap();
+            render_pass.end_occlusion_query().unwrap();
 
             // Not occluded (z = 0.0)
-            render_pass.begin_occlusion_query(1);
-            render_pass.draw(0..3, 0..1);
-            render_pass.end_occlusion_query();
+            render_pass.begin_occlusion_query(1).unwrap();
+            render_pass.draw(0..3, 0..1).unwrap();
+            render_pass.end_occlusion_query().unwrap();
 
             // Occluded (z = 1.0)
-            render_pass.begin_occlusion_query(2);
-            render_pass.draw(4..7, 0..1);
-            render_pass.end_occlusion_query();
+            render_pass.begin_occlusion_query(2).unwrap();
+            render_pass.draw(4..7, 0..1).unwrap();
+            render_pass.end_occlusion_query().unwrap();
         }
 
         // Resolve query set to buffer

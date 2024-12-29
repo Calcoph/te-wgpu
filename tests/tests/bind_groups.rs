@@ -17,9 +17,9 @@ fn try_sampler_nonfiltering_layout(
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                 count: None,
             }],
-        });
+        }).unwrap();
 
-    let sampler = ctx.device.create_sampler(descriptor);
+    let sampler = ctx.device.create_sampler(descriptor).unwrap();
 
     let create_bind_group = || {
         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -29,14 +29,13 @@ fn try_sampler_nonfiltering_layout(
                 binding: 0,
                 resource: wgpu::BindingResource::Sampler(&sampler),
             }],
-        });
+        })
     };
 
     if good {
-        wgpu_test::valid(&ctx.device, create_bind_group);
+        wgpu_test::valid(create_bind_group);
     } else {
         wgpu_test::fail(
-            &ctx.device,
             create_bind_group,
             Some("but given a sampler with filtering"),
         );

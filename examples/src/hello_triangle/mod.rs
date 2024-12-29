@@ -133,9 +133,9 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                                     depth_stencil_attachment: None,
                                     timestamp_writes: None,
                                     occlusion_query_set: None,
-                                });
-                            rpass.set_pipeline(&render_pipeline);
-                            rpass.draw(0..3, 0..1);
+                                }).unwrap();
+                            rpass.set_pipeline(&render_pipeline).unwrap();
+                            rpass.draw(0..3, 0..1).unwrap();
                         }
 
                         queue.submit(Some(encoder.finish().unwrap()));

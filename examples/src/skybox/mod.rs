@@ -474,18 +474,18 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
 
-            rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.set_pipeline(&self.entity_pipeline);
+            rpass.set_bind_group(0, &self.bind_group, &[]).unwrap();
+            rpass.set_pipeline(&self.entity_pipeline).unwrap();
 
             for entity in self.entities.iter() {
-                rpass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
-                rpass.draw(0..entity.vertex_count, 0..1);
+                rpass.set_vertex_buffer(0, entity.vertex_buf.slice(..)).unwrap();
+                rpass.draw(0..entity.vertex_count, 0..1).unwrap();
             }
 
-            rpass.set_pipeline(&self.sky_pipeline);
-            rpass.draw(0..3, 0..1);
+            rpass.set_pipeline(&self.sky_pipeline).unwrap();
+            rpass.draw(0..3, 0..1).unwrap();
         }
 
         queue.submit(std::iter::once(encoder.finish().unwrap()));

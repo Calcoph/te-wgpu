@@ -96,15 +96,15 @@ async fn scissor_test_impl(
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
-            render_pass.set_pipeline(&pipeline);
+            }).unwrap();
+            render_pass.set_pipeline(&pipeline).unwrap();
             render_pass.set_scissor_rect(
                 scissor_rect.x,
                 scissor_rect.y,
                 scissor_rect.width,
                 scissor_rect.height,
-            );
-            render_pass.draw(0..3, 0..1);
+            ).unwrap();
+            render_pass.draw(0..3, 0..1).unwrap();
         }
         readback_buffer.copy_from(&ctx.device, &mut encoder, &texture);
         ctx.queue.submit(Some(encoder.finish().unwrap()));

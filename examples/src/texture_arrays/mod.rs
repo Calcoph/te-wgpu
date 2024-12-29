@@ -425,19 +425,19 @@ impl crate::framework::Example for Example {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        });
+        }).unwrap();
 
-        rpass.set_pipeline(&self.pipeline);
-        rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        rpass.set_index_buffer(self.index_buffer.slice(..), self.index_format);
+        rpass.set_pipeline(&self.pipeline).unwrap();
+        rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..)).unwrap();
+        rpass.set_index_buffer(self.index_buffer.slice(..), self.index_format).unwrap();
         if self.uniform_workaround {
-            rpass.set_bind_group(0, &self.bind_group, &[0]);
-            rpass.draw_indexed(0..6, 0, 0..1);
-            rpass.set_bind_group(0, &self.bind_group, &[256]);
-            rpass.draw_indexed(6..12, 0, 0..1);
+            rpass.set_bind_group(0, &self.bind_group, &[0]).unwrap();
+            rpass.draw_indexed(0..6, 0, 0..1).unwrap();
+            rpass.set_bind_group(0, &self.bind_group, &[256]).unwrap();
+            rpass.draw_indexed(6..12, 0, 0..1).unwrap();
         } else {
-            rpass.set_bind_group(0, &self.bind_group, &[0]);
-            rpass.draw_indexed(0..12, 0, 0..1);
+            rpass.set_bind_group(0, &self.bind_group, &[0]).unwrap();
+            rpass.draw_indexed(0..12, 0, 0..1).unwrap();
         }
 
         drop(rpass);

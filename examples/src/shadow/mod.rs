@@ -840,15 +840,15 @@ impl crate::framework::Example for Example {
                     }),
                     timestamp_writes: None,
                     occlusion_query_set: None,
-                });
-                pass.set_pipeline(&self.shadow_pass.pipeline);
-                pass.set_bind_group(0, &self.shadow_pass.bind_group, &[]);
+                }).unwrap();
+                pass.set_pipeline(&self.shadow_pass.pipeline).unwrap();
+                pass.set_bind_group(0, &self.shadow_pass.bind_group, &[]).unwrap();
 
                 for entity in &self.entities {
-                    pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]);
-                    pass.set_index_buffer(entity.index_buf.slice(..), entity.index_format);
-                    pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
-                    pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
+                    pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]).unwrap();
+                    pass.set_index_buffer(entity.index_buf.slice(..), entity.index_format).unwrap();
+                    pass.set_vertex_buffer(0, entity.vertex_buf.slice(..)).unwrap();
+                    pass.draw_indexed(0..entity.index_count as u32, 0, 0..1).unwrap();
                 }
             }
 
@@ -884,15 +884,15 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
-            pass.set_pipeline(&self.forward_pass.pipeline);
-            pass.set_bind_group(0, &self.forward_pass.bind_group, &[]);
+            }).unwrap();
+            pass.set_pipeline(&self.forward_pass.pipeline).unwrap();
+            pass.set_bind_group(0, &self.forward_pass.bind_group, &[]).unwrap();
 
             for entity in &self.entities {
-                pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]);
-                pass.set_index_buffer(entity.index_buf.slice(..), entity.index_format);
-                pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
-                pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
+                pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]).unwrap();
+                pass.set_index_buffer(entity.index_buf.slice(..), entity.index_format).unwrap();
+                pass.set_vertex_buffer(0, entity.vertex_buf.slice(..)).unwrap();
+                pass.draw_indexed(0..entity.index_count as u32, 0, 0..1).unwrap();
             }
         }
         encoder.pop_debug_group().unwrap();

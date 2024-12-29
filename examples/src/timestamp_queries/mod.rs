@@ -341,19 +341,19 @@ fn compute_pass(
             beginning_of_pass_write_index: Some(*next_unused_query),
             end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
-    });
+    }).unwrap();
     *next_unused_query += 2;
-    cpass.set_pipeline(&compute_pipeline);
-    cpass.set_bind_group(0, &bind_group, &[]);
-    cpass.dispatch_workgroups(1, 1, 1);
+    cpass.set_pipeline(&compute_pipeline).unwrap();
+    cpass.set_bind_group(0, &bind_group, &[]).unwrap();
+    cpass.dispatch_workgroups(1, 1, 1).unwrap();
     if device
         .features()
         .contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
     {
-        cpass.write_timestamp(query_set, *next_unused_query);
+        cpass.write_timestamp(query_set, *next_unused_query).unwrap();
         *next_unused_query += 1;
     }
-    cpass.dispatch_workgroups(1, 1, 1);
+    cpass.dispatch_workgroups(1, 1, 1).unwrap();
 }
 
 fn render_pass(
@@ -428,21 +428,21 @@ fn render_pass(
             end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
         occlusion_query_set: None,
-    });
+    }).unwrap();
     *next_unused_query += 2;
 
-    rpass.set_pipeline(&render_pipeline);
+    rpass.set_pipeline(&render_pipeline).unwrap();
 
-    rpass.draw(0..3, 0..1);
+    rpass.draw(0..3, 0..1).unwrap();
     if device
         .features()
         .contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
     {
-        rpass.write_timestamp(query_set, *next_unused_query);
+        rpass.write_timestamp(query_set, *next_unused_query).unwrap();
         *next_unused_query += 1;
     }
 
-    rpass.draw(0..3, 0..1);
+    rpass.draw(0..3, 0..1).unwrap();
 }
 
 #[cfg(not(test))]

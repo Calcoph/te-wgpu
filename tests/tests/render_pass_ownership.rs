@@ -59,7 +59,8 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
 
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -79,20 +80,20 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
             }),
             timestamp_writes: None,
             occlusion_query_set: Some(&occlusion_query_set),
-        });
+        }).unwrap();
 
         // Drop render pass attachments right away.
         drop(color_attachment_view);
         drop(color_attachment_resolve_view);
         drop(depth_stencil_view);
 
-        rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, &bind_group, &[]);
-        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        rpass.begin_occlusion_query(0);
-        rpass.draw_indirect(&indirect_buffer, 0);
-        rpass.end_occlusion_query();
+        rpass.set_pipeline(&pipeline).unwrap();
+        rpass.set_bind_group(0, &bind_group, &[]).unwrap();
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..)).unwrap();
+        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32).unwrap();
+        rpass.begin_occlusion_query(0).unwrap();
+        rpass.draw_indirect(&indirect_buffer, 0).unwrap();
+        rpass.end_occlusion_query().unwrap();
 
         // Now drop all resources we set. Then do a device poll to make sure the resources are really not dropped too early, no matter what.
         drop(pipeline);
@@ -139,11 +140,12 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
             wgpu::PipelineStatisticsTypes::VERTEX_SHADER_INVOCATIONS,
         ),
         count: 1,
-    });
+    }).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
 
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -161,14 +163,14 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
                 stencil_ops: None,
             }),
             ..Default::default()
-        });
-        rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, &bind_group, &[]);
-        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        rpass.begin_pipeline_statistics_query(&query_set, 0);
-        rpass.draw(0..3, 0..1);
-        rpass.end_pipeline_statistics_query();
+        }).unwrap();
+        rpass.set_pipeline(&pipeline).unwrap();
+        rpass.set_bind_group(0, &bind_group, &[]).unwrap();
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..)).unwrap();
+        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32).unwrap();
+        rpass.begin_pipeline_statistics_query(&query_set, 0).unwrap();
+        rpass.draw(0..3, 0..1).unwrap();
+        rpass.end_pipeline_statistics_query().unwrap();
 
         // Drop the query set. Then do a device poll to make sure it's not dropped too early, no matter what.
         drop(query_set);
@@ -206,16 +208,17 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
         label: Some("query_set_timestamp_writes"),
         ty: wgpu::QueryType::Timestamp,
         count: 2,
-    });
+    }).unwrap();
     let query_set_write_timestamp = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
         label: Some("query_set_write_timestamp"),
         ty: wgpu::QueryType::Timestamp,
         count: 1,
-    });
+    }).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
 
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -238,14 +241,14 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
                 end_of_pass_write_index: Some(1),
             }),
             ..Default::default()
-        });
-        rpass.write_timestamp(&query_set_write_timestamp, 0);
+        }).unwrap();
+        rpass.write_timestamp(&query_set_write_timestamp, 0).unwrap();
 
-        rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, &bind_group, &[]);
-        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        rpass.draw(0..3, 0..1);
+        rpass.set_pipeline(&pipeline).unwrap();
+        rpass.set_bind_group(0, &bind_group, &[]).unwrap();
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..)).unwrap();
+        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32).unwrap();
+        rpass.draw(0..3, 0..1).unwrap();
 
         // Drop the query sets. Then do a device poll to make sure they're not dropped too early, no matter what.
         drop(query_set_timestamp_writes);
@@ -276,7 +279,8 @@ async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
     let rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             view: &color_attachment_view,
@@ -292,7 +296,7 @@ async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
             stencil_ops: None,
         }),
         ..Default::default()
-    });
+    }).unwrap();
 
     // Now drop the encoder - it is kept alive by the compute pass.
     // To do so, we have to make the compute pass forget the lifetime constraint first.
@@ -304,17 +308,17 @@ async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
         .panic_on_timeout();
 
     // Record some a draw command.
-    rpass.set_pipeline(&pipeline);
-    rpass.set_bind_group(0, &bind_group, &[]);
-    rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-    rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-    rpass.draw(0..3, 0..1);
+    rpass.set_pipeline(&pipeline).unwrap();
+    rpass.set_bind_group(0, &bind_group, &[]).unwrap();
+    rpass.set_vertex_buffer(0, vertex_buffer.slice(..)).unwrap();
+    rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32).unwrap();
+    rpass.draw(0..3, 0..1).unwrap();
 
     // Dropping the pass will still execute the pass, even though there's no way to submit it.
     // Ideally, this would log an error, but the encoder is not dropped until the compute pass is dropped,
     // making this a valid operation.
     // (If instead the encoder was explicitly destroyed or finished, this would be an error.)
-    valid(&ctx.device, || drop(rpass));
+    valid(|| rpass.end());
 }
 
 async fn assert_render_pass_executed_normally(
@@ -324,9 +328,9 @@ async fn assert_render_pass_executed_normally(
     buffer_size: u64,
     ctx: TestingContext,
 ) {
-    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
-    ctx.queue.submit([encoder.finish()]);
-    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
+    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size).unwrap();
+    ctx.queue.submit([encoder.finish().unwrap()]);
+    cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
     ctx.async_poll(wgpu::Maintain::wait())
         .await
         .panic_on_timeout();
@@ -365,7 +369,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
-        });
+        }).unwrap();
 
     let buffer_size = 4 * std::mem::size_of::<f32>() as u64;
 
@@ -383,7 +387,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
                 },
                 count: None,
             }],
-        });
+        }).unwrap();
 
     let gpu_buffer = ctx
         .device
@@ -391,14 +395,14 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             label: Some("gpu_buffer"),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             contents: bytemuck::bytes_of(&[1.0_f32, 2.0, 3.0, 4.0]),
-        });
+        }).unwrap();
 
     let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("cpu_buffer"),
         size: buffer_size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let vertex_count = 3;
     let indirect_buffer = ctx
@@ -413,14 +417,14 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
                 first_instance: 0,
             }
             .as_bytes(),
-        });
+        }).unwrap();
 
     let vertex_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("vertex_buffer"),
         usage: wgpu::BufferUsages::VERTEX,
         size: std::mem::size_of::<u32>() as u64 * vertex_count as u64,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let index_buffer = ctx
         .device
@@ -428,7 +432,8 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             label: Some("vertex_buffer"),
             usage: wgpu::BufferUsages::INDEX,
             contents: bytemuck::cast_slice(&[0_u32, 1, 2]),
-        });
+        })
+        .unwrap();
 
     let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("bind_group"),
@@ -437,7 +442,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             binding: 0,
             resource: gpu_buffer.as_entire_binding(),
         }],
-    });
+    }).unwrap();
 
     let pipeline_layout = ctx
         .device
@@ -445,7 +450,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[&bgl],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
     let target_size = wgpu::Extent3d {
         width: 4,
@@ -465,16 +470,16 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[target_format],
     };
-    let target_tex = ctx.device.create_texture(&target_desc);
+    let target_tex = ctx.device.create_texture(&target_desc).unwrap();
     let target_tex_resolve = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("target_resolve"),
         sample_count: 1,
         ..target_desc
-    });
+    }).unwrap();
 
-    let color_attachment_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
+    let color_attachment_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
     let color_attachment_resolve_view =
-        target_tex_resolve.create_view(&wgpu::TextureViewDescriptor::default());
+        target_tex_resolve.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     let depth_stencil_format = wgpu::TextureFormat::Depth32Float;
     let depth_stencil = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -482,14 +487,14 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         format: depth_stencil_format,
         view_formats: &[depth_stencil_format],
         ..target_desc
-    });
-    let depth_stencil_view = depth_stencil.create_view(&wgpu::TextureViewDescriptor::default());
+    }).unwrap();
+    let depth_stencil_view = depth_stencil.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     let occlusion_query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
         label: Some("occ_query_set"),
         ty: wgpu::QueryType::Occlusion,
         count: 1,
-    });
+    }).unwrap();
 
     let pipeline = ctx
         .device
@@ -531,7 +536,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             },
             multiview: None,
             cache: None,
-        });
+        }).unwrap();
 
     ResourceSetup {
         gpu_buffer,

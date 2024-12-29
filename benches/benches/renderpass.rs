@@ -76,7 +76,7 @@ impl RenderpassState {
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
                     entries: &bind_group_layout_entries,
-                });
+                }).unwrap();
 
         let mut texture_views = Vec::with_capacity(TEXTURE_COUNT);
         for i in 0..TEXTURE_COUNT {
@@ -95,11 +95,11 @@ impl RenderpassState {
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
-                });
+                }).unwrap();
             texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("Texture View {i}")),
                 ..Default::default()
-            }));
+            }).unwrap());
         }
         random.shuffle(&mut texture_views);
 
@@ -124,14 +124,15 @@ impl RenderpassState {
                         label: None,
                         layout: &bind_group_layout,
                         entries: &entries,
-                    }),
+                    }).unwrap(),
             );
         }
         random.shuffle(&mut bind_groups);
 
         let sm = device_state
             .device
-            .create_shader_module(wgpu::include_wgsl!("renderpass.wgsl"));
+            .create_shader_module(wgpu::include_wgsl!("renderpass.wgsl"))
+            .unwrap();
 
         let pipeline_layout =
             device_state
@@ -140,7 +141,7 @@ impl RenderpassState {
                     label: None,
                     bind_group_layouts: &[&bind_group_layout],
                     push_constant_ranges: &[],
-                });
+                }).unwrap();
 
         let mut vertex_buffers = Vec::with_capacity(VERTEX_BUFFER_COUNT);
         for _ in 0..VERTEX_BUFFER_COUNT {
@@ -149,7 +150,7 @@ impl RenderpassState {
                 size: 3 * 16,
                 usage: wgpu::BufferUsages::VERTEX,
                 mapped_at_creation: false,
-            }));
+            }).unwrap());
         }
         random.shuffle(&mut vertex_buffers);
 
@@ -160,7 +161,7 @@ impl RenderpassState {
                 size: 3 * 4,
                 usage: wgpu::BufferUsages::INDEX,
                 mapped_at_creation: false,
-            }));
+            }).unwrap());
         }
         random.shuffle(&mut index_buffers);
 
@@ -213,7 +214,7 @@ impl RenderpassState {
                     }),
                     multiview: None,
                     cache: None,
-                });
+                }).unwrap();
 
         let render_target = device_state
             .device
@@ -231,7 +232,9 @@ impl RenderpassState {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
             })
-            .create_view(&wgpu::TextureViewDescriptor::default());
+            .unwrap()
+            .create_view(&wgpu::TextureViewDescriptor::default())
+            .unwrap();
 
         let mut bindless_bind_group = None;
         let mut bindless_pipeline = None;
@@ -252,7 +255,7 @@ impl RenderpassState {
                             },
                             count: Some(NonZeroU32::new(TEXTURE_COUNT as u32).unwrap()),
                         }],
-                    });
+                    }).unwrap();
 
             bindless_bind_group = Some(device_state.device.create_bind_group(
                 &wgpu::BindGroupDescriptor {
@@ -263,11 +266,12 @@ impl RenderpassState {
                         resource: wgpu::BindingResource::TextureViewArray(&texture_view_refs),
                     }],
                 },
-            ));
+            ).unwrap());
 
             let bindless_shader_module = device_state
                 .device
-                .create_shader_module(wgpu::include_wgsl!("renderpass-bindless.wgsl"));
+                .create_shader_module(wgpu::include_wgsl!("renderpass-bindless.wgsl"))
+                .unwrap();
 
             let bindless_pipeline_layout =
                 device_state
@@ -276,7 +280,7 @@ impl RenderpassState {
                         label: None,
                         bind_group_layouts: &[&bindless_bind_group_layout],
                         push_constant_ranges: &[],
-                    });
+                    }).unwrap();
 
             bindless_pipeline = Some(device_state.device.create_render_pipeline(
                 &wgpu::RenderPipelineDescriptor {
@@ -312,7 +316,7 @@ impl RenderpassState {
                     multiview: None,
                     cache: None,
                 },
-            ));
+            ).unwrap());
         }
 
         Self {
@@ -336,7 +340,8 @@ impl RenderpassState {
         let mut encoder = self
             .device_state
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -351,29 +356,29 @@ impl RenderpassState {
             occlusion_query_set: None,
             timestamp_writes: None,
             depth_stencil_attachment: None,
-        });
+        }).unwrap();
 
         let start_idx = pass_number * draws_per_pass;
         let end_idx = start_idx + draws_per_pass;
         for draw_idx in start_idx..end_idx {
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, &self.bind_groups[draw_idx], &[]);
+            render_pass.set_pipeline(&self.pipeline).unwrap();
+            render_pass.set_bind_group(0, &self.bind_groups[draw_idx], &[]).unwrap();
             for i in 0..VERTEX_BUFFERS_PER_DRAW {
                 render_pass.set_vertex_buffer(
                     i as u32,
                     self.vertex_buffers[draw_idx * VERTEX_BUFFERS_PER_DRAW + i].slice(..),
-                );
+                ).unwrap();
             }
             render_pass.set_index_buffer(
                 self.index_buffers[draw_idx].slice(..),
                 wgpu::IndexFormat::Uint32,
-            );
-            render_pass.draw_indexed(0..3, 0, 0..1);
+            ).unwrap();
+            render_pass.draw_indexed(0..3, 0, 0..1).unwrap();
         }
 
         drop(render_pass);
 
-        encoder.finish()
+        encoder.finish().unwrap()
     }
 
     fn run_bindless_pass(&self) -> wgpu::CommandBuffer {
@@ -382,7 +387,8 @@ impl RenderpassState {
         let mut encoder = self
             .device_state
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -397,22 +403,22 @@ impl RenderpassState {
             occlusion_query_set: None,
             timestamp_writes: None,
             depth_stencil_attachment: None,
-        });
+        }).unwrap();
 
-        render_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap());
-        render_pass.set_bind_group(0, self.bindless_bind_group.as_ref().unwrap(), &[]);
+        render_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap()).unwrap();
+        render_pass.set_bind_group(0, self.bindless_bind_group.as_ref().unwrap(), &[]).unwrap();
         for i in 0..VERTEX_BUFFERS_PER_DRAW {
-            render_pass.set_vertex_buffer(i as u32, self.vertex_buffers[0].slice(..));
+            render_pass.set_vertex_buffer(i as u32, self.vertex_buffers[0].slice(..)).unwrap();
         }
-        render_pass.set_index_buffer(self.index_buffers[0].slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_index_buffer(self.index_buffers[0].slice(..), wgpu::IndexFormat::Uint32).unwrap();
 
         for draw_idx in 0..DRAW_COUNT {
-            render_pass.draw_indexed(0..3, 0, draw_idx as u32..draw_idx as u32 + 1);
+            render_pass.draw_indexed(0..3, 0, draw_idx as u32..draw_idx as u32 + 1).unwrap();
         }
 
         drop(render_pass);
 
-        encoder.finish()
+        encoder.finish().unwrap()
     }
 }
 

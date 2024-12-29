@@ -243,17 +243,17 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
 
-            rpass.set_stencil_reference(1);
+            rpass.set_stencil_reference(1).unwrap();
 
-            rpass.set_pipeline(&self.mask_pipeline);
-            rpass.set_vertex_buffer(0, self.mask_vertex_buffer.slice(..));
-            rpass.draw(0..3, 0..1);
+            rpass.set_pipeline(&self.mask_pipeline).unwrap();
+            rpass.set_vertex_buffer(0, self.mask_vertex_buffer.slice(..)).unwrap();
+            rpass.draw(0..3, 0..1).unwrap();
 
-            rpass.set_pipeline(&self.outer_pipeline);
-            rpass.set_vertex_buffer(0, self.outer_vertex_buffer.slice(..));
-            rpass.draw(0..3, 0..1);
+            rpass.set_pipeline(&self.outer_pipeline).unwrap();
+            rpass.set_vertex_buffer(0, self.outer_vertex_buffer.slice(..)).unwrap();
+            rpass.draw(0..3, 0..1).unwrap();
         }
 
         queue.submit(Some(encoder.finish().unwrap()));

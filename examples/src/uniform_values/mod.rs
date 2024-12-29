@@ -341,11 +341,11 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                                         depth_stencil_attachment: None,
                                         occlusion_query_set: None,
                                         timestamp_writes: None,
-                                    });
-                                render_pass.set_pipeline(&wgpu_context_ref.pipeline);
+                                    }).unwrap();
+                                render_pass.set_pipeline(&wgpu_context_ref.pipeline).unwrap();
                                 // (9)
-                                render_pass.set_bind_group(0, &wgpu_context_ref.bind_group, &[]);
-                                render_pass.draw(0..3, 0..1);
+                                render_pass.set_bind_group(0, &wgpu_context_ref.bind_group, &[]).unwrap();
+                                render_pass.draw(0..3, 0..1).unwrap();
                             }
                             wgpu_context_ref
                                 .queue

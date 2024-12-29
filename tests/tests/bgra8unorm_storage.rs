@@ -124,11 +124,11 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
                 timestamp_writes: None,
-            });
+            }).unwrap();
 
-            pass.set_bind_group(0, &bg, &[]);
-            pass.set_pipeline(&pipeline);
-            pass.dispatch_workgroups(256, 256, 1);
+            pass.set_bind_group(0, &bg, &[]).unwrap();
+            pass.set_pipeline(&pipeline).unwrap();
+            pass.dispatch_workgroups(256, 256, 1).unwrap();
         }
 
         encoder

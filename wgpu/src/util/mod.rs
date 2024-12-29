@@ -120,11 +120,18 @@ impl From<CopyError> for ReadBufferError {
     }
 }
 
+#[derive(Debug)]
+/// Placeholder documentation just to remove warning
 pub enum ReadBufferError {
+    /// CreateBufferError
     CBError(CreateBufferError),
+    /// DeviceError
     DError(DeviceError),
+    /// CommandEncoderError
     CEError(CommandEncoderError),
+    /// BufferAccessError
     BAError(BufferAccessError),
+    /// CopyError
     CError(CopyError),
 }
 

@@ -127,17 +127,17 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
             .create_command_encoder(&CommandEncoderDescriptor::default())
             .unwrap();
 
-        let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
+        let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default()).unwrap();
 
-        cpass.set_pipeline(&pipeline_write);
+        cpass.set_pipeline(&pipeline_write).unwrap();
         for _ in 0..NR_OF_DISPATCHES {
-            cpass.dispatch_workgroups(DISPATCH_SIZE.0, DISPATCH_SIZE.1, DISPATCH_SIZE.2);
+            cpass.dispatch_workgroups(DISPATCH_SIZE.0, DISPATCH_SIZE.1, DISPATCH_SIZE.2).unwrap();
         }
 
-        cpass.set_pipeline(&pipeline_read);
+        cpass.set_pipeline(&pipeline_read).unwrap();
         for i in 0..NR_OF_DISPATCHES {
-            cpass.set_bind_group(0, &bg, &[i * BUFFER_BINDING_SIZE]);
-            cpass.dispatch_workgroups(DISPATCH_SIZE.0, DISPATCH_SIZE.1, DISPATCH_SIZE.2);
+            cpass.set_bind_group(0, &bg, &[i * BUFFER_BINDING_SIZE]).unwrap();
+            cpass.dispatch_workgroups(DISPATCH_SIZE.0, DISPATCH_SIZE.1, DISPATCH_SIZE.2).unwrap();
         }
         drop(cpass);
 

@@ -62,8 +62,8 @@ impl DummyWorkData {
             .create_command_encoder(&CommandEncoderDescriptor::default())
             .unwrap();
 
-        let mut cpass = cmd_buf.begin_compute_pass(&ComputePassDescriptor::default());
-        cpass.set_bind_group(0, &bind_group, &[]);
+        let mut cpass = cmd_buf.begin_compute_pass(&ComputePassDescriptor::default()).unwrap();
+        cpass.set_bind_group(0, &bind_group, &[]).unwrap();
         drop(cpass);
 
         Self {
@@ -151,7 +151,9 @@ async fn wait_after_bad_submission(ctx: TestingContext) {
     let command_buffer1 = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default())
-        .finish();
+        .unwrap()
+        .finish()
+        .unwrap();
 
     // This should panic, since the command buffer belongs to the wrong
     // device, and queue submission errors seem to be fatal errors?

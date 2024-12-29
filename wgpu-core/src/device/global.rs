@@ -505,8 +505,7 @@ impl Global {
 
         log::error!("Device::create_buffer error: {error}");
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn texture_destroy<A: HalApi>(
@@ -661,8 +660,7 @@ impl Global {
             return Ok(id);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn sampler_drop<A: HalApi>(&self, sampler_id: id::SamplerId) {
@@ -734,9 +732,8 @@ impl Global {
             return Ok(id);
         };
 
-        let fid = hub.bind_group_layouts.prepare(id_in);
-        let id = fid.assign_error(desc.label.borrow_or_default());
-        (id, Some(error))
+        let _ = hub.bind_group_layouts.prepare(id_in);
+        Err(error)
     }
 
     pub fn bind_group_layout_drop<A: HalApi>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
@@ -810,8 +807,7 @@ impl Global {
             return Ok(id);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn pipeline_layout_drop<A: HalApi>(&self, pipeline_layout_id: id::PipelineLayoutId) {
@@ -950,8 +946,7 @@ impl Global {
             return Ok(id);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn bind_group_drop<A: HalApi>(&self, bind_group_id: id::BindGroupId) {
@@ -1094,8 +1089,7 @@ impl Global {
 
         log::error!("Device::create_shader_module_spirv error: {error}");
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn shader_module_drop<A: HalApi>(&self, shader_module_id: id::ShaderModuleId) {
@@ -1142,8 +1136,7 @@ impl Global {
             return Ok(id.into_command_encoder_id());
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
-        (id.into_command_encoder_id(), Some(error))
+        Err(error)
     }
 
     pub fn command_encoder_drop<A: HalApi>(&self, command_encoder_id: id::CommandEncoderId) {
@@ -1230,8 +1223,7 @@ impl Global {
             return Ok(id);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn render_bundle_drop<A: HalApi>(&self, render_bundle_id: id::RenderBundleId) {
@@ -1467,9 +1459,6 @@ impl Global {
                 {
                     bgl_guard.insert(*bgl_id, bgl.clone());
                 }
-                for bgl_id in group_ids {
-                    bgl_guard.insert_error(*bgl_id);
-                }
             }
 
             let id = fid.assign(pipeline);
@@ -1499,10 +1488,10 @@ impl Global {
                 Err(_) => break 'error binding_model::GetBindGroupLayoutError::InvalidPipeline,
             };
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => hub.bind_group_layouts.prepare(id_in).assign_existing(bg),
-                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                Some(bg) => hub.bind_group_layouts.prepare(id_in).assign(bg.clone()),
+                None => break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
             };
-            return (id, None);
+            return Ok(id);
         };
 
         Err(error)
@@ -1642,9 +1631,6 @@ impl Global {
                 {
                     bgl_guard.insert(*bgl_id, bgl.clone());
                 }
-                for bgl_id in group_ids {
-                    bgl_guard.insert_error(*bgl_id);
-                }
             }
 
             let id = fid.assign(pipeline);
@@ -1673,7 +1659,7 @@ impl Global {
             };
 
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => hub.bind_group_layouts.prepare(id_in).assign_existing(bg),
+                Some(bg) => hub.bind_group_layouts.prepare(id_in).assign(bg.clone()),
                 None => break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
             };
 
@@ -1705,10 +1691,7 @@ impl Global {
         device_id: DeviceId,
         desc: &pipeline::PipelineCacheDescriptor<'_>,
         id_in: Option<id::PipelineCacheId>,
-    ) -> (
-        id::PipelineCacheId,
-        Option<pipeline::CreatePipelineCacheError>,
-    ) {
+    ) -> Result<id::PipelineCacheId, pipeline::CreatePipelineCacheError> {
         profiling::scope!("Device::create_pipeline_cache");
 
         let hub = A::hub(self);
@@ -1734,15 +1717,13 @@ impl Global {
                 Ok(cache) => {
                     let id = fid.assign(Arc::new(cache));
                     api_log!("Device::create_pipeline_cache -> {id:?}");
-                    return (id, None);
+                    return Ok(id);
                 }
                 Err(e) => break 'error e,
             }
         };
 
-        let id = fid.assign_error();
-
-        (id, Some(error))
+        Err(error)
     }
 
     pub fn pipeline_cache_drop<A: HalApi>(&self, pipeline_cache_id: id::PipelineCacheId) {
@@ -2176,6 +2157,37 @@ impl Global {
             }
             unsafe { device.raw().stop_capture() };
         }
+    }
+
+    pub fn pipeline_cache_get_data<A: HalApi>(&self, id: id::PipelineCacheId) -> Option<Vec<u8>> {
+        use crate::pipeline_cache;
+        api_log!("PipelineCache::get_data");
+        let hub = A::hub(self);
+
+        if let Ok(cache) = hub.pipeline_caches.get(id) {
+            // TODO: Is this check needed?
+            if !cache.device.is_valid() {
+                return None;
+            }
+            if let Some(raw_cache) = cache.raw.as_ref() {
+                let mut vec = unsafe { cache.device.raw().pipeline_cache_get_data(raw_cache) }?;
+                let validation_key = cache.device.raw().pipeline_cache_validation_key()?;
+
+                let mut header_contents = [0; pipeline_cache::HEADER_LENGTH];
+                pipeline_cache::add_cache_header(
+                    &mut header_contents,
+                    &vec,
+                    &cache.device.adapter.raw.info,
+                    validation_key,
+                );
+
+                let deleted = vec.splice(..0, header_contents).collect::<Vec<_>>();
+                debug_assert!(deleted.is_empty());
+
+                return Some(vec);
+            }
+        }
+        None
     }
 
     pub fn device_drop<A: HalApi>(&self, device_id: DeviceId) {

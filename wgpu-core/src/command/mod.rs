@@ -629,16 +629,16 @@ impl Global {
                     CommandEncoderStatus::Locked => {
                         cmd_buf_data.encoder.discard();
                         cmd_buf_data.status = CommandEncoderStatus::Error;
-                        Err(CommandEncoderError::Locked)?
+                        return Err(CommandEncoderError::Locked)
                     }
-                    CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording)?,
+                    CommandEncoderStatus::Finished => return Err(CommandEncoderError::NotRecording),
                     CommandEncoderStatus::Error => {
                         cmd_buf_data.encoder.discard();
-                        Err(CommandEncoderError::Invalid)?
+                        return Err(CommandEncoderError::Invalid)
                     }
                 }
             }
-            Err(_) => Err(CommandEncoderError::Invalid)?,
+            Err(_) => return Err(CommandEncoderError::Invalid),
         };
 
         Ok(encoder_id.into_command_buffer_id())
