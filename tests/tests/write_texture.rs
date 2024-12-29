@@ -28,27 +28,25 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
             .unwrap();
         let data = vec![1u8; size as usize * 2];
         // Write the first two rows
-        ctx.queue
-            .write_texture(
-                wgpu::ImageCopyTexture {
-                    texture: &tex,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                bytemuck::cast_slice(&data),
-                wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(size),
-                    rows_per_image: Some(size),
-                },
-                wgpu::Extent3d {
-                    width: size,
-                    height: 2,
-                    depth_or_array_layers: 1,
-                },
-            )
-            .unwrap();
+        ctx.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &data,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(size),
+                rows_per_image: Some(size),
+            },
+            wgpu::Extent3d {
+                width: size,
+                height: 2,
+                depth_or_array_layers: 1,
+            },
+        ).unwrap();
 
         ctx.queue.submit(None);
 
@@ -134,27 +132,25 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
             .unwrap();
         let data = vec![1u8; (size * size) as usize * 2];
         // Write the first two slices
-        ctx.queue
-            .write_texture(
-                wgpu::ImageCopyTexture {
-                    texture: &tex,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                bytemuck::cast_slice(&data),
-                wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(size),
-                    rows_per_image: Some(size),
-                },
-                wgpu::Extent3d {
-                    width: size,
-                    height: size,
-                    depth_or_array_layers: 2,
-                },
-            )
-            .unwrap();
+        ctx.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &data,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(size),
+                rows_per_image: Some(size),
+            },
+            wgpu::Extent3d {
+                width: size,
+                height: size,
+                depth_or_array_layers: 2,
+            },
+        ).unwrap();
 
         ctx.queue.submit(None);
 
@@ -212,4 +208,45 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
         for byte in &data[((size * size) as usize * 2)..] {
             assert_eq!(*byte, 0);
         }
+    });
+
+#[gpu_test]
+static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_async(|ctx| async move {
+        let size = 256;
+
+        let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            dimension: wgpu::TextureDimension::D2,
+            size: wgpu::Extent3d {
+                width: size,
+                height: size,
+                depth_or_array_layers: 1,
+            },
+            format: wgpu::TextureFormat::R8Uint,
+            usage: wgpu::TextureUsages::COPY_DST,
+            mip_level_count: 1,
+            sample_count: 1,
+            view_formats: &[],
+        });
+        let data = vec![1u8; size as usize * 2 + 100]; // check that we don't attempt to copy OOB internally by adding 100 bytes here
+        ctx.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &data,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(size),
+                rows_per_image: Some(size),
+            },
+            wgpu::Extent3d {
+                width: size,
+                height: 2,
+                depth_or_array_layers: 1,
+            },
+        );
     });

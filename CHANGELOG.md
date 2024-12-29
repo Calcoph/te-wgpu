@@ -39,6 +39,25 @@ Bottom level categories:
 
 ## Unreleased
 
+## 22.1.0
+
+### Added
+
+#### Naga
+
+- Added back implementations of PartialEq for more IR types. By @teoxoy in [#6045](https://github.com/gfx-rs/wgpu/pull/6045)
+
+### Bug Fixes
+
+#### General
+
+- Fix profiling with `tracy`. By @waywardmonkeys in [#5988](https://github.com/gfx-rs/wgpu/pull/5988)
+- Fix function for checking bind compatibility to error instead of panic. By @sagudev [#6012](https://github.com/gfx-rs/wgpu/pull/6012)
+- Fix crash when dropping the surface after the device. By @wumpf in [#6052](https://github.com/gfx-rs/wgpu/pull/6052)
+- Fix length of copy in `queue_write_texture`. By @teoxoy in [#6009](https://github.com/gfx-rs/wgpu/pull/6009)
+- Fix error message that is thrown in create_render_pass to no longer say `compute_pass`. By @matthew-wong1 [#6041](https://github.com/gfx-rs/wgpu/pull/6041)
+- As a workaround for [issue #4905](https://github.com/gfx-rs/wgpu/issues/4905), `wgpu-core` is undocumented unless `--cfg wgpu_core_doc` feature is enabled. By @kpreid in [#5987](https://github.com/gfx-rs/wgpu/pull/5987)
+
 ## 22.0.0 (2024-07-17)
 
 ### Overview
