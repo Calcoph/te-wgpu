@@ -59,7 +59,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                 layout: Some(&pipeline_layout),
                 vertex: VertexState {
                     module: &module,
-                    entry_point: "double_buffer_vert",
+                    entry_point: Some("double_buffer_vert"),
                     compilation_options: Default::default(),
                     buffers: &[
                         VertexBufferLayout {
@@ -79,7 +79,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                 multisample: MultisampleState::default(),
                 fragment: Some(FragmentState {
                     module: &module,
-                    entry_point: "double_buffer_frag",
+                    entry_point: Some("double_buffer_frag"),
                     compilation_options: Default::default(),
                     targets: &[Some(ColorTargetState {
                         format: TextureFormat::Rgba8Unorm,
@@ -99,7 +99,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                 layout: Some(&pipeline_layout),
                 vertex: VertexState {
                     module: &module,
-                    entry_point: "single_buffer_vert",
+                    entry_point: Some("single_buffer_vert"),
                     compilation_options: Default::default(),
                     buffers: &[VertexBufferLayout {
                         array_stride: 16,
@@ -112,7 +112,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                 multisample: MultisampleState::default(),
                 fragment: Some(FragmentState {
                     module: &module,
-                    entry_point: "single_buffer_frag",
+                    entry_point: Some("single_buffer_frag"),
                     compilation_options: Default::default(),
                     targets: &[Some(ColorTargetState {
                         format: TextureFormat::Rgba8Unorm,

@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::mem::size_of;
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
@@ -30,10 +30,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
         // Setup pipeline using a simple shader with hardcoded vertices
         let shader = ctx
             .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("Shader module"),
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            })
+            .create_shader_module(wgpu::include_wgsl!("shader.wgsl"))
             .unwrap();
         let pipeline = ctx
             .device
@@ -42,7 +39,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
                 layout: None,
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: "vs_main",
+                    entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
@@ -109,18 +106,13 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
         }
 
         // Resolve query set to buffer
-        let query_buffer = ctx
-            .device
-            .create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Query buffer"),
-                size: std::mem::size_of::<u64>() as u64 * 3,
-                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
-                mapped_at_creation: false,
-            })
-            .unwrap();
-        encoder
-            .resolve_query_set(&query_set, 0..3, &query_buffer, 0)
-            .unwrap();
+        let query_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Query buffer"),
+            size: size_of::<u64>() as u64 * 3,
+            usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        }).unwrap();
+        encoder.resolve_query_set(&query_set, 0..3, &query_buffer, 0).unwrap();
 
         let mapping_buffer = ctx
             .device

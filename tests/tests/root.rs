@@ -3,7 +3,10 @@ mod regression {
     mod issue_3457;
     mod issue_4024;
     mod issue_4122;
+    mod issue_4485;
+    mod issue_4514;
     mod issue_5553;
+    mod issue_6317;
 }
 
 mod bgra8unorm_storage;
@@ -16,6 +19,7 @@ mod clear_texture;
 mod compute_pass_ownership;
 mod create_surface_error;
 mod device;
+mod dispatch_workgroups_indirect;
 mod encoder;
 mod external_texture;
 mod float32_filterable;
@@ -24,6 +28,7 @@ mod life_cycle;
 mod mem_leaks;
 mod nv12_texture;
 mod occlusion_query;
+mod oob_indexing;
 mod partially_bounded_arrays;
 mod pipeline_cache;
 mod poll;
@@ -41,6 +46,7 @@ mod subgroup_operations;
 mod texture_bounds;
 mod texture_view_creation;
 mod transfer;
+mod vertex_formats;
 mod vertex_indices;
 mod write_texture;
 mod zero_init_texture_after_discard;

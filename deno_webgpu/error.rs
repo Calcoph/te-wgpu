@@ -68,6 +68,7 @@ pub struct WebGpuResult {
 }
 
 impl WebGpuResult {
+    #[must_use]
     pub fn rid(rid: ResourceId) -> Self {
         Self {
             rid: Some(rid),
@@ -75,6 +76,7 @@ impl WebGpuResult {
         }
     }
 
+    #[must_use]
     pub fn maybe_err<T: Into<WebGpuError>>(err: Option<T>) -> Self {
         Self {
             rid: None,
@@ -82,6 +84,7 @@ impl WebGpuResult {
         }
     }
 
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             rid: None,
@@ -300,6 +303,7 @@ pub struct DomExceptionOperationError {
 }
 
 impl DomExceptionOperationError {
+    #[must_use]
     pub fn new(msg: &str) -> Self {
         DomExceptionOperationError {
             msg: msg.to_string(),
@@ -315,6 +319,7 @@ impl fmt::Display for DomExceptionOperationError {
 
 impl std::error::Error for DomExceptionOperationError {}
 
+#[must_use]
 pub fn get_error_class_name(e: &AnyError) -> Option<&'static str> {
     e.downcast_ref::<DomExceptionOperationError>()
         .map(|_| "DOMExceptionOperationError")

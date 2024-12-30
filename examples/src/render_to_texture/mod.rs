@@ -28,14 +28,7 @@ async fn run(_path: Option<String>) {
         .await
         .unwrap();
 
-    let shader = device
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shader.wgsl"
-            ))),
-        })
-        .unwrap();
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl")).unwrap();
 
     let render_target = device
         .create_texture(&wgpu::TextureDescriptor {
@@ -67,13 +60,13 @@ async fn run(_path: Option<String>) {
         layout: None,
         vertex: wgpu::VertexState {
             module: &shader,
-            entry_point: "vs_main",
+            entry_point: Some("vs_main"),
             compilation_options: Default::default(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: "fs_main",
+            entry_point: Some("fs_main"),
             compilation_options: Default::default(),
             targets: &[Some(wgpu::TextureFormat::Rgba8UnormSrgb.into())],
         }),

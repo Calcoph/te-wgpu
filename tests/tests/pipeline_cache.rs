@@ -33,6 +33,7 @@ fn shader() -> String {
         @group(0) @binding(0)
         var<storage, read_write> output: array<u32>;
 
+
         @compute @workgroup_size(1)
         fn main() {{
         {body}
@@ -113,7 +114,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
                 label: Some("pipeline"),
                 layout: Some(&pipeline_layout),
                 module: &sm,
-                entry_point: "main",
+                entry_point: Some("main"),
                 compilation_options: Default::default(),
                 cache: Some(&first_cache),
             }).unwrap();
@@ -136,7 +137,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
             label: Some("pipeline"),
             layout: Some(&pipeline_layout),
             module: &sm,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: Some(&second_cache),
         }).unwrap();
@@ -167,7 +168,7 @@ async fn validate_pipeline(
             timestamp_writes: None,
         }).unwrap();
         cpass.set_pipeline(&pipeline).unwrap();
-        cpass.set_bind_group(0, bind_group, &[]).unwrap();
+        cpass.set_bind_group(0, Some(bind_group), &[]).unwrap();
 
         cpass.dispatch_workgroups(1, 1, 1).unwrap();
     }

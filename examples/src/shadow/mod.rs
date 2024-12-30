@@ -1,4 +1,4 @@
-use std::{borrow::Cow, f32::consts, iter, mem, ops::Range, sync::Arc};
+use std::{f32::consts, iter, mem::size_of, ops::Range, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::{
@@ -226,7 +226,7 @@ impl crate::framework::Example for Example {
             && device.limits().max_storage_buffers_per_shader_stage > 0;
 
         // Create the vertex and index buffers
-        let vertex_size = mem::size_of::<Vertex>();
+        let vertex_size = size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
         let cube_vertex_buf = Arc::new(
             device
@@ -298,7 +298,7 @@ impl crate::framework::Example for Example {
             },
         ];
 
-        let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
+        let entity_uniform_size = size_of::<EntityUniforms>() as wgpu::BufferAddress;
         let num_entities = 1 + cube_descs.len() as wgpu::BufferAddress;
         // Make the `uniform_alignment` >= `entity_uniform_size` and aligned to `min_uniform_buffer_offset_alignment`.
         let uniform_alignment = {
@@ -458,21 +458,18 @@ impl crate::framework::Example for Example {
                 target_view: shadow_target_views[1].take().unwrap(),
             },
         ];
-        let light_uniform_size =
-            (Self::MAX_LIGHTS * mem::size_of::<LightRaw>()) as wgpu::BufferAddress;
-        let light_storage_buf = device
-            .create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: light_uniform_size,
-                usage: if supports_storage_resources {
-                    wgpu::BufferUsages::STORAGE
-                } else {
-                    wgpu::BufferUsages::UNIFORM
-                } | wgpu::BufferUsages::COPY_SRC
-                    | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            })
-            .unwrap();
+        let light_uniform_size = (Self::MAX_LIGHTS * size_of::<LightRaw>()) as wgpu::BufferAddress;
+        let light_storage_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: light_uniform_size,
+            usage: if supports_storage_resources {
+                wgpu::BufferUsages::STORAGE
+            } else {
+                wgpu::BufferUsages::UNIFORM
+            } | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        }).unwrap();
 
         let vertex_attr = wgpu::vertex_attr_array![0 => Sint8x4, 1 => Sint8x4];
         let vb_desc = wgpu::VertexBufferLayout {
@@ -481,15 +478,10 @@ impl crate::framework::Example for Example {
             attributes: &vertex_attr,
         };
 
-        let shader = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            })
-            .unwrap();
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl")).unwrap();
 
         let shadow_pass = {
-            let uniform_size = mem::size_of::<GlobalUniforms>() as wgpu::BufferAddress;
+            let uniform_size = size_of::<GlobalUniforms>() as wgpu::BufferAddress;
             // Create pipeline layout
             let bind_group_layout = device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -541,7 +533,7 @@ impl crate::framework::Example for Example {
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: "vs_bake",
+                    entry_point: Some("vs_bake"),
                     compilation_options: Default::default(),
                     buffers: &[vb_desc.clone()],
                 },
@@ -590,7 +582,7 @@ impl crate::framework::Example for Example {
                                 ty: wgpu::BufferBindingType::Uniform,
                                 has_dynamic_offset: false,
                                 min_binding_size: wgpu::BufferSize::new(
-                                    mem::size_of::<GlobalUniforms>() as _,
+                                    size_of::<GlobalUniforms>() as _,
                                 ),
                             },
                             count: None,
@@ -682,17 +674,17 @@ impl crate::framework::Example for Example {
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: "vs_main",
+                    entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
                     buffers: &[vb_desc],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: if supports_storage_resources {
+                    entry_point: Some(if supports_storage_resources {
                         "fs_main"
                     } else {
                         "fs_main_without_storage"
-                    },
+                    }),
                     compilation_options: Default::default(),
                     targets: &[Some(config.view_formats[0].into())],
                 }),
@@ -790,13 +782,11 @@ impl crate::framework::Example for Example {
         if self.lights_are_dirty {
             self.lights_are_dirty = false;
             for (i, light) in self.lights.iter().enumerate() {
-                queue
-                    .write_buffer(
-                        &self.light_storage_buf,
-                        (i * mem::size_of::<LightRaw>()) as wgpu::BufferAddress,
-                        bytemuck::bytes_of(&light.to_raw()),
-                    )
-                    .unwrap();
+                queue.write_buffer(
+                    &self.light_storage_buf,
+                    (i * mem::size_of::<LightRaw>()) as wgpu::BufferAddress,
+                    bytemuck::bytes_of(&light.to_raw()),
+                ).unwrap();
             }
         }
 
@@ -815,15 +805,13 @@ impl crate::framework::Example for Example {
 
             // The light uniform buffer already has the projection,
             // let's just copy it over to the shadow uniform buffer.
-            encoder
-                .copy_buffer_to_buffer(
-                    &self.light_storage_buf,
-                    (i * mem::size_of::<LightRaw>()) as wgpu::BufferAddress,
-                    &self.shadow_pass.uniform_buf,
-                    0,
-                    64,
-                )
-                .unwrap();
+            encoder.copy_buffer_to_buffer(
+                &self.light_storage_buf,
+                (i * size_of::<LightRaw>()) as wgpu::BufferAddress,
+                &self.shadow_pass.uniform_buf,
+                0,
+                64,
+            ).unwrap();
 
             encoder.insert_debug_marker("render entities").unwrap();
             {

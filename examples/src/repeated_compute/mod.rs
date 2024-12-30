@@ -190,14 +190,7 @@ impl WgpuContext {
             .unwrap();
 
         // Our shader, kindly compiled with Naga.
-        let shader = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "shader.wgsl"
-                ))),
-            })
-            .unwrap();
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl")).unwrap();
 
         // This is where the GPU will read from and write to.
         let storage_buffer = device
@@ -265,7 +258,7 @@ impl WgpuContext {
             label: None,
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: None,
         }).unwrap();

@@ -69,7 +69,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_s
                 },
             )
         },
-        None,
+        Some("unable to select texture mip level"),
     );
     ctx.queue.submit(Some(encoder.finish().unwrap()));
 });

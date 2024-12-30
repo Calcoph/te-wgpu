@@ -1,3 +1,5 @@
+use std::mem::size_of_val;
+
 const ARR_SIZE: usize = 128;
 
 struct ExecuteResults {
@@ -54,31 +56,20 @@ async fn execute(
     let mut local_patient_workgroup_results = vec![0u32; result_vec_size];
     let mut local_hasty_workgroup_results = local_patient_workgroup_results.clone();
 
-    let shaders_module = device
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shaders.wgsl"
-            ))),
-        })
-        .unwrap();
+    let shaders_module = device.create_shader_module(wgpu::include_wgsl!("shaders.wgsl")).unwrap();
 
-    let storage_buffer = device
-        .create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: std::mem::size_of_val(local_patient_workgroup_results.as_slice()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        })
-        .unwrap();
-    let output_staging_buffer = device
-        .create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: std::mem::size_of_val(local_patient_workgroup_results.as_slice()) as u64,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        })
-        .unwrap();
+    let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: size_of_val(local_patient_workgroup_results.as_slice()) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    }).unwrap();
+    let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: size_of_val(local_patient_workgroup_results.as_slice()) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    }).unwrap();
 
     let bind_group_layout = device
         .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -115,7 +106,7 @@ async fn execute(
         label: None,
         layout: Some(&pipeline_layout),
         module: &shaders_module,
-        entry_point: "patient_main",
+        entry_point: Some("patient_main"),
         compilation_options: Default::default(),
         cache: None,
     }).unwrap();
@@ -123,7 +114,7 @@ async fn execute(
         label: None,
         layout: Some(&pipeline_layout),
         module: &shaders_module,
-        entry_point: "hasty_main",
+        entry_point: Some("hasty_main"),
         compilation_options: Default::default(),
         cache: None,
     }).unwrap();
@@ -192,15 +183,13 @@ async fn get_data<T: bytemuck::Pod>(
     let mut command_encoder = device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
         .unwrap();
-    command_encoder
-        .copy_buffer_to_buffer(
-            storage_buffer,
-            0,
-            staging_buffer,
-            0,
-            std::mem::size_of_val(output) as u64,
-        )
-        .unwrap();
+    command_encoder.copy_buffer_to_buffer(
+        storage_buffer,
+        0,
+        staging_buffer,
+        0,
+        size_of_val(output) as u64,
+    ).unwrap();
     queue.submit(Some(command_encoder.finish().unwrap()));
     let buffer_slice = staging_buffer.slice(..);
     let (sender, receiver) = flume::bounded(1);

@@ -13,7 +13,7 @@ async fn draw_test_with_reports(
     use wgpu::util::DeviceExt;
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.devices.num_allocated, 1);
     assert_eq!(report.queues.num_allocated, 1);
 
@@ -23,7 +23,7 @@ async fn draw_test_with_reports(
         .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.shader_modules.num_allocated, 1);
 
     let bgl = ctx
@@ -44,7 +44,7 @@ async fn draw_test_with_reports(
         .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.buffers.num_allocated, 0);
     assert_eq!(report.bind_groups.num_allocated, 0);
     assert_eq!(report.bind_group_layouts.num_allocated, 1);
@@ -60,7 +60,7 @@ async fn draw_test_with_reports(
         .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.buffers.num_allocated, 1);
 
     let bg = ctx
@@ -76,7 +76,7 @@ async fn draw_test_with_reports(
         .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.bind_groups.num_allocated, 1);
     assert_eq!(report.bind_group_layouts.num_allocated, 1);
@@ -91,7 +91,7 @@ async fn draw_test_with_reports(
         .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.pipeline_layouts.num_allocated, 1);
     assert_eq!(report.render_pipelines.num_allocated, 0);
@@ -105,7 +105,7 @@ async fn draw_test_with_reports(
             vertex: wgpu::VertexState {
                 buffers: &[],
                 module: &shader,
-                entry_point: "vs_main_builtin",
+                entry_point: Some("vs_main_builtin"),
                 compilation_options: Default::default(),
             },
             primitive: wgpu::PrimitiveState::default(),
@@ -113,7 +113,7 @@ async fn draw_test_with_reports(
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
@@ -126,7 +126,7 @@ async fn draw_test_with_reports(
         }).unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.bind_groups.num_allocated, 1);
     assert_eq!(report.bind_group_layouts.num_allocated, 1);
@@ -138,7 +138,7 @@ async fn draw_test_with_reports(
     drop(shader);
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.shader_modules.num_allocated, 0);
     assert_eq!(report.shader_modules.num_kept_from_user, 0);
     assert_eq!(report.textures.num_allocated, 0);
@@ -171,7 +171,7 @@ async fn draw_test_with_reports(
         .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.texture_views.num_allocated, 1);
     assert_eq!(report.textures.num_allocated, 1);
@@ -179,7 +179,7 @@ async fn draw_test_with_reports(
     drop(texture);
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.texture_views.num_allocated, 1);
     assert_eq!(report.texture_views.num_kept_from_user, 1);
@@ -192,7 +192,7 @@ async fn draw_test_with_reports(
         .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.command_buffers.num_allocated, 1);
     assert_eq!(report.buffers.num_allocated, 1);
 
@@ -212,7 +212,7 @@ async fn draw_test_with_reports(
     rpass.set_bind_group(0, &bg, &[]).unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.bind_groups.num_allocated, 1);
     assert_eq!(report.bind_group_layouts.num_allocated, 1);
@@ -235,7 +235,7 @@ async fn draw_test_with_reports(
     drop(buffer);
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
     assert_eq!(report.command_buffers.num_kept_from_user, 1);
     assert_eq!(report.render_pipelines.num_kept_from_user, 0);
     assert_eq!(report.pipeline_layouts.num_kept_from_user, 0);
@@ -257,7 +257,7 @@ async fn draw_test_with_reports(
 
     // TODO: fix in https://github.com/gfx-rs/wgpu/pull/5141
     // let global_report = ctx.instance.generate_report().unwrap();
-    // let report = global_report.hub_report(ctx.adapter_info.backend);
+    // let report = global_report.hub_report();
     // assert_eq!(report.command_buffers.num_allocated, 0);
 
     ctx.async_poll(wgpu::Maintain::wait_for(submit_index))
@@ -265,7 +265,7 @@ async fn draw_test_with_reports(
         .panic_on_timeout();
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
 
     assert_eq!(report.render_pipelines.num_allocated, 0);
     assert_eq!(report.bind_groups.num_allocated, 0);
@@ -280,7 +280,7 @@ async fn draw_test_with_reports(
     drop(ctx.adapter);
 
     let global_report = ctx.instance.generate_report().unwrap();
-    let report = global_report.hub_report(ctx.adapter_info.backend);
+    let report = global_report.hub_report();
 
     assert_eq!(report.queues.num_kept_from_user, 0);
     assert_eq!(report.textures.num_kept_from_user, 0);

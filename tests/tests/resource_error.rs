@@ -13,7 +13,7 @@ static BAD_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|
                 mapped_at_creation: false,
             })
         },
-        None,
+        Some("`map` usage can only be combined with the opposite `copy`"),
     );
 });
 
@@ -36,6 +36,6 @@ static BAD_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(
                 view_formats: &[],
             })
         },
-        None,
+        Some("dimension x is zero"),
     );
 });

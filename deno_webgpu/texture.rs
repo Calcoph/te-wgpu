@@ -13,7 +13,6 @@ use super::error::WebGpuResult;
 pub(crate) struct WebGpuTexture {
     pub(crate) instance: crate::Instance,
     pub(crate) id: wgpu_core::id::TextureId,
-    pub(crate) owned: bool,
 }
 
 impl Resource for WebGpuTexture {
@@ -22,10 +21,8 @@ impl Resource for WebGpuTexture {
     }
 
     fn close(self: Rc<Self>) {
-        if self.owned {
-            let instance = &self.instance;
-            gfx_select!(self.id => instance.texture_drop(self.id, true));
-        }
+        let instance = &self.instance;
+        instance.texture_drop(self.id);
     }
 }
 
@@ -39,7 +36,7 @@ impl Resource for WebGpuTextureView {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.texture_view_drop(self.1, true)).unwrap();
+        self.0.texture_view_drop(self.1).unwrap();
     }
 }
 
@@ -80,16 +77,11 @@ pub fn op_webgpu_create_texture(
         view_formats: args.view_formats,
     };
 
-    let val = gfx_select!(device => instance.device_create_texture(
-      device,
-      &descriptor,
-      None
-    ))?;
+    let val = instance.device_create_texture(device, &descriptor, None)?;
 
     let rid = state.resource_table.add(WebGpuTexture {
         instance: instance.clone(),
         id: val,
-        owned: true,
     });
 
     Ok(WebGpuResult::rid(rid))
@@ -125,9 +117,9 @@ pub fn op_webgpu_create_texture_view(
         range: args.range,
     };
 
-    gfx_put!(texture => instance.texture_create_view(
-    texture,
-    &descriptor,
-    None
-  ) => state, WebGpuTextureView)
+    gfx_put!(instance.texture_create_view(
+        texture,
+        &descriptor,
+        None
+    ) => state, WebGpuTextureView)
 }

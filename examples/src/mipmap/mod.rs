@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, mem};
+use std::{f32::consts, mem::size_of};
 use wgpu::{core::resource::CreateTextureError, util::DeviceExt};
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -54,8 +54,7 @@ type TimestampQueries = [TimestampData; MIP_PASS_COUNT as usize];
 type PipelineStatisticsQueries = [u64; MIP_PASS_COUNT as usize];
 
 fn pipeline_statistics_offset() -> wgpu::BufferAddress {
-    (mem::size_of::<TimestampQueries>() as wgpu::BufferAddress)
-        .max(wgpu::QUERY_RESOLVE_BUFFER_ALIGNMENT)
+    (size_of::<TimestampQueries>() as wgpu::BufferAddress).max(wgpu::QUERY_RESOLVE_BUFFER_ALIGNMENT)
 }
 
 struct Example {
@@ -82,25 +81,20 @@ impl Example {
         query_sets: &Option<QuerySets>,
         mip_count: u32,
     ) {
-        let shader = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
-            })
-            .unwrap();
+        let shader = device.create_shader_module(wgpu::include_wgsl!("blit.wgsl")).unwrap();
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("blit"),
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(TEXTURE_FORMAT.into())],
             }),
@@ -307,25 +301,20 @@ impl crate::framework::Example for Example {
             .unwrap();
 
         // Create the render pipeline
-        let shader = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-            })
-            .unwrap();
+        let shader = device.create_shader_module(wgpu::include_wgsl!("draw.wgsl")).unwrap();
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("draw"),
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),
@@ -396,15 +385,13 @@ impl crate::framework::Example for Example {
             // This databuffer has to store all of the query results, 2 * passes timestamp queries
             // and 1 * passes statistics queries. Each query returns a u64 value.
             let buffer_size = pipeline_statistics_offset()
-                + mem::size_of::<PipelineStatisticsQueries>() as wgpu::BufferAddress;
-            let data_buffer = device
-                .create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("query buffer"),
-                    size: buffer_size,
-                    usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
-                    mapped_at_creation: false,
-                })
-                .unwrap();
+                + size_of::<PipelineStatisticsQueries>() as wgpu::BufferAddress;
+            let data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("query buffer"),
+                size: buffer_size,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            }).unwrap();
 
             // Mapping buffer
             let mapping_buffer = device
@@ -460,7 +447,7 @@ impl crate::framework::Example for Example {
             // This is guaranteed to be ready.
             let timestamp_view = query_sets
                 .mapping_buffer
-                .slice(..mem::size_of::<TimestampQueries>() as wgpu::BufferAddress)
+                .slice(..size_of::<TimestampQueries>() as wgpu::BufferAddress)
                 .get_mapped_range();
             let pipeline_stats_view = query_sets
                 .mapping_buffer

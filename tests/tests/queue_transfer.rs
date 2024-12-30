@@ -48,6 +48,6 @@ static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration =
                     },
                 )
             },
-            None,
+            Some("end up overrunning the bounds of the destination texture"),
         );
     });

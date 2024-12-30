@@ -5,7 +5,7 @@
 //! * passing `wgpu::RenderPassTimestampWrites`/`wgpu::ComputePassTimestampWrites` during render/compute pass creation.
 //!     This writes timestamps for the beginning and end of a given pass.
 //!     (enabled with wgpu::Features::TIMESTAMP_QUERY)
-//! * `wgpu::CommandEncoder::write_timestamp` writes a between any commands recorded on an encoder.
+//! * `wgpu::CommandEncoder::write_timestamp` writes a timestamp between any commands recorded on an encoder.
 //!     (enabled with wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)
 //! * `wgpu::RenderPass/ComputePass::write_timestamp` writes a timestamp within commands of a render pass.
 //!     Note that some GPU architectures do not support this.
@@ -16,6 +16,8 @@
 //!
 //! The period, i.e. the unit of time, of the timestamps in wgpu is undetermined and needs to be queried with `wgpu::Queue::get_timestamp_period`
 //! in order to get comparable results.
+
+use std::mem::size_of;
 
 use wgpu::util::DeviceExt;
 
@@ -116,29 +118,23 @@ impl QueryResults {
 impl Queries {
     fn new(device: &wgpu::Device, num_queries: u64) -> Self {
         Queries {
-            set: device
-                .create_query_set(&wgpu::QuerySetDescriptor {
-                    label: Some("Timestamp query set"),
-                    count: num_queries as _,
-                    ty: wgpu::QueryType::Timestamp,
-                })
-                .unwrap(),
-            resolve_buffer: device
-                .create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("query resolve buffer"),
-                    size: std::mem::size_of::<u64>() as u64 * num_queries,
-                    usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::QUERY_RESOLVE,
-                    mapped_at_creation: false,
-                })
-                .unwrap(),
-            destination_buffer: device
-                .create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("query dest buffer"),
-                    size: std::mem::size_of::<u64>() as u64 * num_queries,
-                    usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                    mapped_at_creation: false,
-                })
-                .unwrap(),
+            set: device.create_query_set(&wgpu::QuerySetDescriptor {
+                label: Some("Timestamp query set"),
+                count: num_queries as _,
+                ty: wgpu::QueryType::Timestamp,
+            }).unwrap(),
+            resolve_buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("query resolve buffer"),
+                size: size_of::<u64>() as u64 * num_queries,
+                usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::QUERY_RESOLVE,
+                mapped_at_creation: false,
+            }).unwrap(),
+            destination_buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("query dest buffer"),
+                size: size_of::<u64>() as u64 * num_queries,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            }).unwrap(),
             num_queries,
             next_unused_query: 0,
         }
@@ -175,7 +171,7 @@ impl Queries {
         let timestamps = {
             let timestamp_view = self
                 .destination_buffer
-                .slice(..(std::mem::size_of::<u64>() as wgpu::BufferAddress * self.num_queries))
+                .slice(..(size_of::<u64>() as wgpu::BufferAddress * self.num_queries))
                 .get_mapped_range();
             bytemuck::cast_slice(&timestamp_view).to_vec()
         };
@@ -236,7 +232,7 @@ async fn run() {
 
     let queries = submit_render_and_compute_pass_with_queries(&device, &queue);
     let raw_results = queries.wait_for_results(&device);
-    println!("Raw timestamp buffer contents: {:?}", raw_results);
+    println!("Raw timestamp buffer contents: {raw_results:?}");
     QueryResults::from_raw_results(raw_results, timestamps_inside_passes).print(&queue);
 }
 
@@ -249,14 +245,7 @@ fn submit_render_and_compute_pass_with_queries(
         .unwrap();
 
     let mut queries = Queries::new(device, QueryResults::NUM_QUERIES);
-    let shader = device
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shader.wgsl"
-            ))),
-        })
-        .unwrap();
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl")).unwrap();
 
     if device
         .features()
@@ -318,7 +307,7 @@ fn compute_pass(
         label: None,
         layout: None,
         module,
-        entry_point: "main_cs",
+        entry_point: Some("main_cs"),
         compilation_options: Default::default(),
         cache: None,
     }).unwrap();
@@ -378,13 +367,13 @@ fn render_pass(
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module,
-            entry_point: "vs_main",
+            entry_point: Some("vs_main"),
             compilation_options: Default::default(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module,
-            entry_point: "fs_main",
+            entry_point: Some("fs_main"),
             compilation_options: Default::default(),
             targets: &[Some(format.into())],
         }),

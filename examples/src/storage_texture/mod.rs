@@ -14,6 +14,8 @@
 //! A lot of things aren't explained here via comments. See hello-compute and
 //! repeated-compute for code that is more thoroughly commented.
 
+use std::mem::size_of_val;
+
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utils::output_image_native;
 #[cfg(target_arch = "wasm32")]
@@ -42,10 +44,7 @@ async fn run(_path: Option<String>) {
         .await
         .unwrap();
 
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
-    }).unwrap();
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl")).unwrap();
 
     let storage_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
@@ -66,7 +65,7 @@ async fn run(_path: Option<String>) {
         .unwrap();
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: std::mem::size_of_val(&texture_data[..]) as u64,
+        size: size_of_val(&texture_data[..]) as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     }).unwrap();
@@ -102,7 +101,7 @@ async fn run(_path: Option<String>) {
         label: None,
         layout: Some(&pipeline_layout),
         module: &shader,
-        entry_point: "main",
+        entry_point: Some("main"),
         compilation_options: Default::default(),
         cache: None,
     }).unwrap();

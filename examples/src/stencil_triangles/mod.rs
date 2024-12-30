@@ -1,6 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::borrow::Cow;
-use std::mem;
+use std::mem::size_of;
 use wgpu::core::resource::CreateTextureError;
 use wgpu::util::DeviceExt;
 
@@ -32,7 +31,7 @@ impl crate::framework::Example for Example {
         _queue: &wgpu::Queue,
     ) -> Self {
         // Create the vertex and index buffers
-        let vertex_size = mem::size_of::<Vertex>();
+        let vertex_size = size_of::<Vertex>();
         let outer_vertices = [vertex(-1.0, -1.0), vertex(1.0, -1.0), vertex(0.0, 1.0)];
         let mask_vertices = [vertex(-0.5, 0.0), vertex(0.0, -1.0), vertex(0.5, 0.0)];
 
@@ -60,12 +59,7 @@ impl crate::framework::Example for Example {
             })
             .unwrap();
 
-        let shader = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            })
-            .unwrap();
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl")).unwrap();
 
         let vertex_buffers = [wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
@@ -82,13 +76,13 @@ impl crate::framework::Example for Example {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &vertex_buffers,
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.view_formats[0],
@@ -123,13 +117,13 @@ impl crate::framework::Example for Example {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &vertex_buffers,
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),

@@ -589,24 +589,16 @@ impl FunctionInfo {
                     requirements: UniformityRequirements::empty(),
                 }
             }
-            // depends on the builtin or interpolation
+            // depends on the builtin
             E::FunctionArgument(index) => {
                 let arg = &resolve_context.arguments[index as usize];
                 let uniform = match arg.binding {
-                    Some(crate::Binding::BuiltIn(built_in)) => match built_in {
-                        // per-polygon built-ins are uniform
-                        crate::BuiltIn::FrontFacing
+                    Some(crate::Binding::BuiltIn(
                         // per-work-group built-ins are uniform
-                        | crate::BuiltIn::WorkGroupId
+                        crate::BuiltIn::WorkGroupId
                         | crate::BuiltIn::WorkGroupSize
-                        | crate::BuiltIn::NumWorkGroups => true,
-                        _ => false,
-                    },
-                    // only flat inputs are uniform
-                    Some(crate::Binding::Location {
-                        interpolation: Some(crate::Interpolation::Flat),
-                        ..
-                    }) => true,
+                        | crate::BuiltIn::NumWorkGroups,
+                    )) => true,
                     _ => false,
                 };
                 Uniformity {

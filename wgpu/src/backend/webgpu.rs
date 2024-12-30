@@ -1,5 +1,6 @@
 #![allow(clippy::type_complexity)]
 
+mod defined_non_null_js_value;
 mod ext_bindings;
 mod webgpu_sys;
 
@@ -10,54 +11,28 @@ use std::{
     collections::HashMap,
     fmt,
     future::Future,
-    marker::PhantomData,
-    num::NonZeroU64,
     ops::Range,
     pin::Pin,
     rc::Rc,
-    sync::atomic::{AtomicU64, Ordering},
     task::{self, Poll},
 };
 use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
-    context::{downcast_ref, ObjectId, QueueWriteBuffer, Unused},
+    context::{downcast_ref, QueueWriteBuffer},
     CompilationInfo, SurfaceTargetUnsafe, UncapturedErrorHandler,
 };
 
-fn create_identified<T>(value: T) -> (Identified<T>, Sendable<T>) {
-    static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    (
-        Identified(NonZeroU64::new(id).unwrap(), PhantomData),
-        Sendable(value),
-    )
-}
+use defined_non_null_js_value::DefinedNonNullJsValue;
 
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
 // implement `Send` and `Sync` to match native.
 //
 // SAFETY: All webgpu handle types in wasm32 are internally a `JsValue`, and `JsValue` is neither
-// Send nor Sync.  Currently, wasm32 has no threading support so implementing `Send` or `Sync` for a
-// type is (for now) harmless.  Eventually wasm32 will support threading, and depending on how this
-// is integrated (or not integrated) with values like those in webgpu, this may become unsound.
-
-impl<T> From<ObjectId> for Identified<T> {
-    fn from(object_id: ObjectId) -> Self {
-        Self(object_id.global_id(), PhantomData)
-    }
-}
-
-impl<T> From<Identified<T>> for ObjectId {
-    fn from(identified: Identified<T>) -> Self {
-        Self::new(
-            // TODO: the ID isn't used, so we hardcode it to 1 for now until we rework this
-            // API.
-            NonZeroU64::new(1).unwrap(),
-            identified.0,
-        )
-    }
-}
+// Send nor Sync.  Currently, wasm32 has no threading support by default, so implementing `Send` or
+// `Sync` for a type is harmless. However, nightly Rust supports compiling wasm with experimental
+// threading support via `--target-features`. If `wgpu` is being compiled with those features, we do
+// not implement `Send` and `Sync` on the webgpu handle types.
 
 #[derive(Clone, Debug)]
 pub(crate) struct Sendable<T>(T);
@@ -66,14 +41,10 @@ unsafe impl<T> Send for Sendable<T> {}
 #[cfg(send_sync)]
 unsafe impl<T> Sync for Sendable<T> {}
 
-#[derive(Clone, Debug)]
-pub(crate) struct Identified<T>(std::num::NonZeroU64, PhantomData<T>);
-#[cfg(send_sync)]
-unsafe impl<T> Send for Identified<T> {}
-#[cfg(send_sync)]
-unsafe impl<T> Sync for Identified<T> {}
-
-pub(crate) struct ContextWebGpu(webgpu_sys::Gpu);
+pub(crate) struct ContextWebGpu {
+    /// `None` if browser does not advertise support for WebGPU.
+    gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
+}
 #[cfg(send_sync)]
 unsafe impl Send for ContextWebGpu {}
 #[cfg(send_sync)]
@@ -224,6 +195,36 @@ impl<F, M> MakeSendFuture<F, M> {
 #[cfg(send_sync)]
 unsafe impl<F, M> Send for MakeSendFuture<F, M> {}
 
+/// Wraps a future that returns `Option<T>` and adds the ability to immediately
+/// return None.
+pub(crate) struct OptionFuture<F>(Option<F>);
+
+impl<F: Future<Output = Option<T>>, T> Future for OptionFuture<F> {
+    type Output = Option<T>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
+        // This is safe because we have no Drop implementation to violate the Pin requirements and
+        // do not provide any means of moving the inner future.
+        unsafe {
+            let this = self.get_unchecked_mut();
+            match &mut this.0 {
+                Some(future) => Pin::new_unchecked(future).poll(cx),
+                None => task::Poll::Ready(None),
+            }
+        }
+    }
+}
+
+impl<F> OptionFuture<F> {
+    fn some(future: F) -> Self {
+        Self(Some(future))
+    }
+
+    fn none() -> Self {
+        Self(None)
+    }
+}
+
 fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuTextureFormat {
     use webgpu_sys::GpuTextureFormat as tf;
     use wgt::TextureFormat;
@@ -261,7 +262,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuText
             unimplemented!("Current version of web_sys is missing {texture_format:?}")
         }
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
-        TextureFormat::Rg11b10Float => tf::Rg11b10ufloat,
+        TextureFormat::Rg11b10Ufloat => tf::Rg11b10ufloat,
         // 64-bit formats
         TextureFormat::Rg32Uint => tf::Rg32uint,
         TextureFormat::Rg32Sint => tf::Rg32sint,
@@ -726,7 +727,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 11] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 12] = [
     //TODO: update the name
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
@@ -739,6 +740,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 11] = [
     (
         wgt::Features::TEXTURE_COMPRESSION_BC,
         webgpu_sys::GpuFeatureName::TextureCompressionBc,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
+        webgpu_sys::GpuFeatureName::TextureCompressionBcSliced3d,
     ),
     (
         wgt::Features::TEXTURE_COMPRESSION_ETC2,
@@ -810,7 +815,6 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
         min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
         min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
-        max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
         max_color_attachments: limits.max_color_attachments(),
         max_color_attachment_bytes_per_sample: limits.max_color_attachment_bytes_per_sample(),
         max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
@@ -824,6 +828,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_subgroup_size: wgt::Limits::default().max_subgroup_size,
         max_push_constant_size: wgt::Limits::default().max_push_constant_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
+        max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
     }
 }
 
@@ -870,7 +875,6 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
         (maxBufferSize, max_buffer_size),
         (maxVertexAttributes, max_vertex_attributes),
         (maxVertexBufferArrayStride, max_vertex_buffer_array_stride),
-        (maxInterStageShaderComponents, max_inter_stage_shader_components),
         (maxComputeWorkgroupStorageSize, max_compute_workgroup_storage_size),
         (maxComputeInvocationsPerWorkgroup, max_compute_invocations_per_workgroup),
         (maxComputeWorkgroupSizeX, max_compute_workgroup_size_x),
@@ -884,14 +888,9 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
 
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
-fn future_request_adapter(
-    result: JsFutureResult,
-) -> Option<(
-    Identified<webgpu_sys::GpuAdapter>,
-    Sendable<webgpu_sys::GpuAdapter>,
-)> {
+fn future_request_adapter(result: JsFutureResult) -> Option<Sendable<webgpu_sys::GpuAdapter>> {
     match result.and_then(wasm_bindgen::JsCast::dyn_into) {
-        Ok(adapter) => Some(create_identified(adapter)),
+        Ok(adapter) => Some(Sendable(adapter)),
         Err(_) => None,
     }
 }
@@ -900,19 +899,17 @@ fn future_request_device(
     result: JsFutureResult,
 ) -> Result<
     (
-        Identified<webgpu_sys::GpuDevice>,
         Sendable<webgpu_sys::GpuDevice>,
-        Identified<webgpu_sys::GpuQueue>,
         Sendable<webgpu_sys::GpuQueue>,
     ),
     crate::RequestDeviceError,
 > {
     result
         .map(|js_value| {
-            let (device_id, device_data) = create_identified(webgpu_sys::GpuDevice::from(js_value));
-            let (queue_id, queue_data) = create_identified(device_data.0.queue());
+            let device_data = Sendable(webgpu_sys::GpuDevice::from(js_value));
+            let queue_data = Sendable(device_data.0.queue());
 
-            (device_id, device_data, queue_id, queue_data)
+            (device_data, queue_data)
         })
         .map_err(|error_value| crate::RequestDeviceError {
             inner: crate::RequestDeviceErrorKind::WebGpu(error_value),
@@ -1015,13 +1012,7 @@ impl ContextWebGpu {
         &self,
         canvas: Canvas,
         context_result: Result<Option<js_sys::Object>, wasm_bindgen::JsValue>,
-    ) -> Result<
-        (
-            <Self as crate::Context>::SurfaceId,
-            <Self as crate::Context>::SurfaceData,
-        ),
-        crate::CreateSurfaceError,
-    > {
+    ) -> Result<<Self as crate::Context>::SurfaceData, crate::CreateSurfaceError> {
         let context: js_sys::Object = match context_result {
             Ok(Some(context)) => context,
             Ok(None) => {
@@ -1056,7 +1047,7 @@ impl ContextWebGpu {
             .dyn_into()
             .expect("canvas context is not a GPUCanvasContext");
 
-        Ok(create_identified((canvas, context)))
+        Ok(Sendable((canvas, context)))
     }
 
     /// Get mapped buffer range directly as a `js_sys::ArrayBuffer`.
@@ -1090,95 +1081,78 @@ pub enum Canvas {
     Offscreen(web_sys::OffscreenCanvas),
 }
 
-/// Returns the browsers gpu object or `None` if the current context is neither the main thread nor a dedicated worker.
+#[derive(Debug, Clone, Copy)]
+pub struct BrowserGpuPropertyInaccessible;
+
+/// Returns the browser's gpu object or `Err(BrowserGpuPropertyInaccessible)` if
+/// the current context is neither the main thread nor a dedicated worker.
 ///
-/// If WebGPU is not supported, the Gpu property is `undefined` (but *not* necessarily `None`).
+/// If WebGPU is not supported, the Gpu property may (!) be `undefined`,
+/// and so this function will return `Ok(None)`.
+/// Note that this check is insufficient to determine whether WebGPU is
+/// supported, as the browser may define the Gpu property, but be unable to
+/// create any WebGPU adapters.
+/// To detect whether WebGPU is supported, use the [`crate::utils::is_browser_webgpu_supported`] function.
 ///
 /// See:
 /// * <https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu>
 /// * <https://developer.mozilla.org/en-US/docs/Web/API/WorkerNavigator/gpu>
-pub fn get_browser_gpu_property() -> Option<webgpu_sys::Gpu> {
+pub fn get_browser_gpu_property(
+) -> Result<Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>, BrowserGpuPropertyInaccessible> {
     let global: Global = js_sys::global().unchecked_into();
 
-    if !global.window().is_undefined() {
+    let maybe_undefined_gpu: webgpu_sys::Gpu = if !global.window().is_undefined() {
         let navigator = global.unchecked_into::<web_sys::Window>().navigator();
-        Some(ext_bindings::NavigatorGpu::gpu(&navigator))
+        ext_bindings::NavigatorGpu::gpu(&navigator)
     } else if !global.worker().is_undefined() {
         let navigator = global
             .unchecked_into::<web_sys::WorkerGlobalScope>()
             .navigator();
-        Some(ext_bindings::NavigatorGpu::gpu(&navigator))
+        ext_bindings::NavigatorGpu::gpu(&navigator)
     } else {
-        None
-    }
+        return Err(BrowserGpuPropertyInaccessible);
+    };
+    Ok(DefinedNonNullJsValue::new(maybe_undefined_gpu))
 }
 
 impl crate::context::Context for ContextWebGpu {
-    type AdapterId = Identified<webgpu_sys::GpuAdapter>;
     type AdapterData = Sendable<webgpu_sys::GpuAdapter>;
-    type DeviceId = Identified<webgpu_sys::GpuDevice>;
     type DeviceData = Sendable<webgpu_sys::GpuDevice>;
-    type QueueId = Identified<webgpu_sys::GpuQueue>;
     type QueueData = Sendable<webgpu_sys::GpuQueue>;
-    type ShaderModuleId = Identified<WebShaderModule>;
     type ShaderModuleData = Sendable<WebShaderModule>;
-    type BindGroupLayoutId = Identified<webgpu_sys::GpuBindGroupLayout>;
     type BindGroupLayoutData = Sendable<webgpu_sys::GpuBindGroupLayout>;
-    type BindGroupId = Identified<webgpu_sys::GpuBindGroup>;
     type BindGroupData = Sendable<webgpu_sys::GpuBindGroup>;
-    type TextureViewId = Identified<webgpu_sys::GpuTextureView>;
     type TextureViewData = Sendable<webgpu_sys::GpuTextureView>;
-    type SamplerId = Identified<webgpu_sys::GpuSampler>;
     type SamplerData = Sendable<webgpu_sys::GpuSampler>;
-    type BufferId = Identified<WebBuffer>;
     type BufferData = Sendable<WebBuffer>;
-    type TextureId = Identified<webgpu_sys::GpuTexture>;
     type TextureData = Sendable<webgpu_sys::GpuTexture>;
-    type QuerySetId = Identified<webgpu_sys::GpuQuerySet>;
     type QuerySetData = Sendable<webgpu_sys::GpuQuerySet>;
-    type PipelineLayoutId = Identified<webgpu_sys::GpuPipelineLayout>;
     type PipelineLayoutData = Sendable<webgpu_sys::GpuPipelineLayout>;
-    type RenderPipelineId = Identified<webgpu_sys::GpuRenderPipeline>;
     type RenderPipelineData = Sendable<webgpu_sys::GpuRenderPipeline>;
-    type ComputePipelineId = Identified<webgpu_sys::GpuComputePipeline>;
     type ComputePipelineData = Sendable<webgpu_sys::GpuComputePipeline>;
-    type CommandEncoderId = Identified<webgpu_sys::GpuCommandEncoder>;
     type CommandEncoderData = Sendable<webgpu_sys::GpuCommandEncoder>;
-    type ComputePassId = Identified<webgpu_sys::GpuComputePassEncoder>;
     type ComputePassData = Sendable<webgpu_sys::GpuComputePassEncoder>;
-    type RenderPassId = Identified<webgpu_sys::GpuRenderPassEncoder>;
     type RenderPassData = Sendable<webgpu_sys::GpuRenderPassEncoder>;
-    type CommandBufferId = Identified<webgpu_sys::GpuCommandBuffer>;
     type CommandBufferData = Sendable<webgpu_sys::GpuCommandBuffer>;
-    type RenderBundleEncoderId = Identified<webgpu_sys::GpuRenderBundleEncoder>;
     type RenderBundleEncoderData = Sendable<webgpu_sys::GpuRenderBundleEncoder>;
-    type RenderBundleId = Identified<webgpu_sys::GpuRenderBundle>;
     type RenderBundleData = Sendable<webgpu_sys::GpuRenderBundle>;
-    type SurfaceId = Identified<(Canvas, webgpu_sys::GpuCanvasContext)>;
     type SurfaceData = Sendable<(Canvas, webgpu_sys::GpuCanvasContext)>;
 
     type SurfaceOutputDetail = SurfaceOutputDetail;
     type SubmissionIndexData = ();
-    type PipelineCacheId = Unused;
     type PipelineCacheData = ();
 
-    type RequestAdapterFuture = MakeSendFuture<
-        wasm_bindgen_futures::JsFuture,
-        fn(JsFutureResult) -> Option<(Self::AdapterId, Self::AdapterData)>,
+    type RequestAdapterFuture = OptionFuture<
+        MakeSendFuture<
+            wasm_bindgen_futures::JsFuture,
+            fn(JsFutureResult) -> Option<Self::AdapterData>,
+        >,
     >;
     type RequestDeviceFuture = MakeSendFuture<
         wasm_bindgen_futures::JsFuture,
         fn(
             JsFutureResult,
-        ) -> Result<
-            (
-                Self::DeviceId,
-                Self::DeviceData,
-                Self::QueueId,
-                Self::QueueData,
-            ),
-            crate::RequestDeviceError,
-        >,
+        ) -> Result<(Self::DeviceData, Self::QueueData), crate::RequestDeviceError>,
     >;
     type PopErrorScopeFuture =
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
@@ -1189,18 +1163,19 @@ impl crate::context::Context for ContextWebGpu {
     >;
 
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
-        let Some(gpu) = get_browser_gpu_property() else {
+        let Ok(gpu) = get_browser_gpu_property() else {
             panic!(
                 "Accessing the GPU is only supported on the main thread or from a dedicated worker"
             );
         };
-        ContextWebGpu(gpu)
+
+        ContextWebGpu { gpu }
     }
 
     unsafe fn instance_create_surface(
         &self,
         target: SurfaceTargetUnsafe,
-    ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
+    ) -> Result<Self::SurfaceData, crate::CreateSurfaceError> {
         match target {
             SurfaceTargetUnsafe::RawHandle {
                 raw_display_handle: _,
@@ -1264,17 +1239,20 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(mapped_pref) = mapped_power_preference {
             mapped_options.power_preference(mapped_pref);
         }
-        let adapter_promise = self.0.request_adapter_with_options(&mapped_options);
-
-        MakeSendFuture::new(
-            wasm_bindgen_futures::JsFuture::from(adapter_promise),
-            future_request_adapter,
-        )
+        if let Some(gpu) = &self.gpu {
+            let adapter_promise = gpu.request_adapter_with_options(&mapped_options);
+            OptionFuture::some(MakeSendFuture::new(
+                wasm_bindgen_futures::JsFuture::from(adapter_promise),
+                future_request_adapter,
+            ))
+        } else {
+            // Gpu is undefined; WebGPU is not supported in this browser.
+            OptionFuture::none()
+        }
     }
 
     fn adapter_request_device(
         &self,
-        _adapter: &Self::AdapterId,
         adapter_data: &Self::AdapterData,
         desc: &crate::DeviceDescriptor<'_>,
         trace_dir: Option<&std::path::Path>,
@@ -1328,44 +1306,29 @@ impl crate::context::Context for ContextWebGpu {
 
     fn adapter_is_surface_supported(
         &self,
-        _adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
-        _surface: &Self::SurfaceId,
         _surface_data: &Self::SurfaceData,
     ) -> bool {
         true
     }
 
-    fn adapter_features(
-        &self,
-        _adapter: &Self::AdapterId,
-        adapter_data: &Self::AdapterData,
-    ) -> wgt::Features {
+    fn adapter_features(&self, adapter_data: &Self::AdapterData) -> wgt::Features {
         map_wgt_features(adapter_data.0.features())
     }
 
-    fn adapter_limits(
-        &self,
-        _adapter: &Self::AdapterId,
-        adapter_data: &Self::AdapterData,
-    ) -> wgt::Limits {
+    fn adapter_limits(&self, adapter_data: &Self::AdapterData) -> wgt::Limits {
         map_wgt_limits(adapter_data.0.limits())
     }
 
     fn adapter_downlevel_capabilities(
         &self,
-        _adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::DownlevelCapabilities {
         // WebGPU is assumed to be fully compliant
         wgt::DownlevelCapabilities::default()
     }
 
-    fn adapter_get_info(
-        &self,
-        _adapter: &Self::AdapterId,
-        _adapter_data: &Self::AdapterData,
-    ) -> wgt::AdapterInfo {
+    fn adapter_get_info(&self, _adapter_data: &Self::AdapterData) -> wgt::AdapterInfo {
         // TODO: web-sys has no way of getting information on adapters
         wgt::AdapterInfo {
             name: String::new(),
@@ -1380,16 +1343,14 @@ impl crate::context::Context for ContextWebGpu {
 
     fn adapter_get_texture_format_features(
         &self,
-        adapter: &Self::AdapterId,
         adapter_data: &Self::AdapterData,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        format.guaranteed_format_features(self.adapter_features(adapter, adapter_data))
+        format.guaranteed_format_features(self.adapter_features(adapter_data))
     }
 
     fn adapter_get_presentation_timestamp(
         &self,
-        _adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp::INVALID_TIMESTAMP
@@ -1397,9 +1358,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn surface_get_capabilities(
         &self,
-        _surface: &Self::SurfaceId,
         _surface_data: &Self::SurfaceData,
-        _adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::SurfaceCapabilities {
         let mut formats = vec![
@@ -1410,7 +1369,11 @@ impl crate::context::Context for ContextWebGpu {
         let mut mapped_formats = formats.iter().map(|format| map_texture_format(*format));
         // Preferred canvas format will only be either "rgba8unorm" or "bgra8unorm".
         // https://www.w3.org/TR/webgpu/#dom-gpu-getpreferredcanvasformat
-        let preferred_format = self.0.get_preferred_canvas_format();
+        let gpu = self
+            .gpu
+            .as_ref()
+            .expect("Caller could not have created an adapter if gpu is undefined.");
+        let preferred_format = gpu.get_preferred_canvas_format();
         if let Some(index) = mapped_formats.position(|format| format == preferred_format) {
             formats.swap(0, index);
         }
@@ -1428,9 +1391,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn surface_configure(
         &self,
-        _surface: &Self::SurfaceId,
         surface_data: &Self::SurfaceData,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         config: &crate::SurfaceConfiguration,
     ) {
@@ -1474,58 +1435,30 @@ impl crate::context::Context for ContextWebGpu {
 
     fn surface_get_current_texture(
         &self,
-        _surface: &Self::SurfaceId,
         surface_data: &Self::SurfaceData,
     ) -> (
-        Option<Self::TextureId>,
         Option<Self::TextureData>,
         wgt::SurfaceStatus,
         Self::SurfaceOutputDetail,
     ) {
-        let (surface_id, surface_data) = create_identified(surface_data.0 .1.get_current_texture());
-        (
-            Some(surface_id),
-            Some(surface_data),
-            wgt::SurfaceStatus::Good,
-            (),
-        )
+        let surface_data = Sendable(surface_data.0 .1.get_current_texture());
+        (Some(surface_data), wgt::SurfaceStatus::Good, ())
     }
 
-    fn surface_present(&self, _texture: &Self::TextureId, _detail: &Self::SurfaceOutputDetail) {
+    fn surface_present(&self, _detail: &Self::SurfaceOutputDetail) {
         // Swapchain is presented automatically
     }
 
-    fn surface_texture_discard(
-        &self,
-        _texture: &Self::TextureId,
-        _detail: &Self::SurfaceOutputDetail,
-    ) {
+    fn surface_texture_discard(&self, _detail: &Self::SurfaceOutputDetail) {
         // Can't really discard this on the Web
     }
 
-    fn device_features(
-        &self,
-        _device: &Self::DeviceId,
-        device_data: &Self::DeviceData,
-    ) -> wgt::Features {
+    fn device_features(&self, device_data: &Self::DeviceData) -> wgt::Features {
         map_wgt_features(device_data.0.features())
     }
 
-    fn device_limits(
-        &self,
-        _device: &Self::DeviceId,
-        device_data: &Self::DeviceData,
-    ) -> wgt::Limits {
+    fn device_limits(&self, device_data: &Self::DeviceData) -> wgt::Limits {
         map_wgt_limits(device_data.0.limits())
-    }
-
-    fn device_downlevel_properties(
-        &self,
-        _device: &Self::DeviceId,
-        _device_data: &Self::DeviceData,
-    ) -> wgt::DownlevelCapabilities {
-        // WebGPU is assumed to be fully compliant
-        wgt::DownlevelCapabilities::default()
     }
 
     #[cfg_attr(
@@ -1539,11 +1472,10 @@ impl crate::context::Context for ContextWebGpu {
     )]
     fn device_create_shader_module(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: crate::ShaderModuleDescriptor<'_>,
         _shader_bound_checks: wgt::ShaderBoundChecks,
-    ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
+    ) -> Self::ShaderModuleData {
         let shader_module_result = match desc.source {
             #[cfg(feature = "spirv")]
             crate::ShaderSource::SpirV(ref spv) => {
@@ -1672,25 +1604,22 @@ impl crate::context::Context for ContextWebGpu {
             module: device_data.0.create_shader_module(&descriptor),
             compilation_info,
         };
-        let (id, data) = create_identified(shader_module);
-        (id, data)
+        Sendable(shader_module)
     }
 
     unsafe fn device_create_shader_module_spirv(
         &self,
-        _device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
         _desc: &crate::ShaderModuleDescriptorSpirV<'_>,
-    ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
+    ) -> Self::ShaderModuleData {
         unreachable!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
     }
 
     fn device_create_bind_group_layout(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::BindGroupLayoutDescriptor<'_>,
-    ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
+    ) -> Self::BindGroupLayoutData {
         let mapped_bindings = desc
             .entries
             .iter()
@@ -1782,15 +1711,14 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_bind_group_layout(&mapped_desc))
+        Sendable(device_data.0.create_bind_group_layout(&mapped_desc))
     }
 
     fn device_create_bind_group(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::BindGroupDescriptor<'_>,
-    ) -> (Self::BindGroupId, Self::BindGroupData) {
+    ) -> Self::BindGroupData {
         let mapped_entries = desc
             .entries
             .iter()
@@ -1842,15 +1770,14 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_bind_group(&mapped_desc))
+        Sendable(device_data.0.create_bind_group(&mapped_desc))
     }
 
     fn device_create_pipeline_layout(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::PipelineLayoutDescriptor<'_>,
-    ) -> (Self::PipelineLayoutId, Self::PipelineLayoutData) {
+    ) -> Self::PipelineLayoutData {
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
@@ -1864,15 +1791,14 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_pipeline_layout(&mapped_desc))
+        Sendable(device_data.0.create_pipeline_layout(&mapped_desc))
     }
 
     fn device_create_render_pipeline(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::RenderPipelineDescriptor<'_>,
-    ) -> (Self::RenderPipelineId, Self::RenderPipelineData) {
+    ) -> Self::RenderPipelineData {
         let module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.vertex.module.data.as_ref());
         let mut mapped_vertex_state = webgpu_sys::GpuVertexState::new(&module.0.module);
@@ -1880,7 +1806,9 @@ impl crate::context::Context for ContextWebGpu {
             &mapped_vertex_state,
             desc.vertex.compilation_options.constants,
         );
-        mapped_vertex_state.entry_point(desc.vertex.entry_point);
+        if let Some(ep) = desc.vertex.entry_point {
+            mapped_vertex_state.entry_point(ep);
+        }
 
         let buffers = desc
             .vertex
@@ -1957,7 +1885,9 @@ impl crate::context::Context for ContextWebGpu {
             let mut mapped_fragment_desc =
                 webgpu_sys::GpuFragmentState::new(&module.0.module, &targets);
             insert_constants_map(&mapped_vertex_state, frag.compilation_options.constants);
-            mapped_fragment_desc.entry_point(frag.entry_point);
+            if let Some(ep) = frag.entry_point {
+                mapped_fragment_desc.entry_point(ep);
+            }
             mapped_desc.fragment(&mapped_fragment_desc);
         }
 
@@ -1970,21 +1900,22 @@ impl crate::context::Context for ContextWebGpu {
         let mapped_primitive = map_primitive_state(&desc.primitive);
         mapped_desc.primitive(&mapped_primitive);
 
-        create_identified(device_data.0.create_render_pipeline(&mapped_desc))
+        Sendable(device_data.0.create_render_pipeline(&mapped_desc))
     }
 
     fn device_create_compute_pipeline(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::ComputePipelineDescriptor<'_>,
-    ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
+    ) -> Self::ComputePipelineData {
         let shader_module: &<ContextWebGpu as crate::Context>::ShaderModuleData =
             downcast_ref(desc.module.data.as_ref());
         let mut mapped_compute_stage =
             webgpu_sys::GpuProgrammableStage::new(&shader_module.0.module);
         insert_constants_map(&mapped_compute_stage, desc.compilation_options.constants);
-        mapped_compute_stage.entry_point(desc.entry_point);
+        if let Some(ep) = desc.entry_point {
+            mapped_compute_stage.entry_point(ep);
+        }
         let auto_layout = wasm_bindgen::JsValue::from(webgpu_sys::GpuAutoLayoutMode::Auto);
         let mut mapped_desc = webgpu_sys::GpuComputePipelineDescriptor::new(
             &match desc.layout {
@@ -2001,32 +1932,29 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.label(label);
         }
 
-        create_identified(device_data.0.create_compute_pipeline(&mapped_desc))
+        Sendable(device_data.0.create_compute_pipeline(&mapped_desc))
     }
 
     unsafe fn device_create_pipeline_cache(
         &self,
-        _: &Self::DeviceId,
         _: &Self::DeviceData,
         _: &crate::PipelineCacheDescriptor<'_>,
-    ) -> (Self::PipelineCacheId, Self::PipelineCacheData) {
-        (Unused, ())
+    ) -> Self::PipelineCacheData {
     }
-    fn pipeline_cache_drop(&self, _: &Self::PipelineCacheId, _: &Self::PipelineCacheData) {}
+    fn pipeline_cache_drop(&self, _: &Self::PipelineCacheData) {}
 
     fn device_create_buffer(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::BufferDescriptor<'_>,
-    ) -> (Self::BufferId, Self::BufferData) {
+    ) -> Self::BufferData {
         let mut mapped_desc =
             webgpu_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
         mapped_desc.mapped_at_creation(desc.mapped_at_creation);
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(WebBuffer::new(
+        Sendable(WebBuffer::new(
             device_data.0.create_buffer(&mapped_desc),
             desc,
         ))
@@ -2034,10 +1962,9 @@ impl crate::context::Context for ContextWebGpu {
 
     fn device_create_texture(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::TextureDescriptor<'_>,
-    ) -> (Self::TextureId, Self::TextureData) {
+    ) -> Self::TextureData {
         let mut mapped_desc = webgpu_sys::GpuTextureDescriptor::new(
             map_texture_format(desc.format),
             &map_extent_3d(desc.size),
@@ -2055,15 +1982,14 @@ impl crate::context::Context for ContextWebGpu {
             .map(|format| JsValue::from(map_texture_format(*format)))
             .collect::<js_sys::Array>();
         mapped_desc.view_formats(&mapped_view_formats);
-        create_identified(device_data.0.create_texture(&mapped_desc))
+        Sendable(device_data.0.create_texture(&mapped_desc))
     }
 
     fn device_create_sampler(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::SamplerDescriptor<'_>,
-    ) -> (Self::SamplerId, Self::SamplerData) {
+    ) -> Self::SamplerData {
         let mut mapped_desc = webgpu_sys::GpuSamplerDescriptor::new();
         mapped_desc.address_mode_u(map_address_mode(desc.address_mode_u));
         mapped_desc.address_mode_v(map_address_mode(desc.address_mode_v));
@@ -2081,15 +2007,14 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_sampler_with_descriptor(&mapped_desc))
+        Sendable(device_data.0.create_sampler_with_descriptor(&mapped_desc))
     }
 
     fn device_create_query_set(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &wgt::QuerySetDescriptor<crate::Label<'_>>,
-    ) -> (Self::QuerySetId, Self::QuerySetData) {
+    ) -> Self::QuerySetData {
         let ty = match desc.ty {
             wgt::QueryType::Occlusion => webgpu_sys::GpuQueryType::Occlusion,
             wgt::QueryType::Timestamp => webgpu_sys::GpuQueryType::Timestamp,
@@ -2099,20 +2024,19 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_query_set(&mapped_desc))
+        Sendable(device_data.0.create_query_set(&mapped_desc))
     }
 
     fn device_create_command_encoder(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::CommandEncoderDescriptor<'_>,
-    ) -> (Self::CommandEncoderId, Self::CommandEncoderData) {
+    ) -> Self::CommandEncoderData {
         let mut mapped_desc = webgpu_sys::GpuCommandEncoderDescriptor::new();
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(
+        Sendable(
             device_data
                 .0
                 .create_command_encoder_with_descriptor(&mapped_desc),
@@ -2121,10 +2045,9 @@ impl crate::context::Context for ContextWebGpu {
 
     fn device_create_render_bundle_encoder(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
-    ) -> (Self::RenderBundleEncoderId, Self::RenderBundleEncoderData) {
+    ) -> Self::RenderBundleEncoderData {
         let mapped_color_formats = desc
             .color_formats
             .iter()
@@ -2144,40 +2067,23 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.stencil_read_only(ds.stencil_read_only);
         }
         mapped_desc.sample_count(desc.sample_count);
-        create_identified(device_data.0.create_render_bundle_encoder(&mapped_desc))
+        Sendable(device_data.0.create_render_bundle_encoder(&mapped_desc))
     }
 
-    #[doc(hidden)]
-    fn device_make_invalid(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
-        // Unimplemented
-    }
-
-    fn device_drop(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+    fn device_drop(&self, _device_data: &Self::DeviceData) {
         // Device is dropped automatically
     }
 
-    fn device_destroy(&self, _buffer: &Self::DeviceId, device_data: &Self::DeviceData) {
+    fn device_destroy(&self, device_data: &Self::DeviceData) {
         device_data.0.destroy();
     }
 
-    fn device_mark_lost(
-        &self,
-        _device: &Self::DeviceId,
-        _device_data: &Self::DeviceData,
-        _message: &str,
-    ) {
-        // TODO: figure out the GPUDevice implementation of this, including resolving
-        // the device.lost promise, which will require a different invocation pattern
-        // with a callback.
-    }
-
-    fn queue_drop(&self, _queue: &Self::QueueId, _queue_data: &Self::QueueData) {
+    fn queue_drop(&self, _queue_data: &Self::QueueData) {
         // Queue is dropped automatically
     }
 
     fn device_set_device_lost_callback(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         device_lost_callback: crate::context::DeviceLostCallback,
     ) {
@@ -2199,7 +2105,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn device_poll(
         &self,
-        _device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
         _maintain: crate::Maintain,
     ) -> crate::MaintainResult {
@@ -2209,7 +2114,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn device_on_uncaptured_error(
         &self,
-        _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         handler: Box<dyn UncapturedErrorHandler>,
     ) {
@@ -2224,12 +2128,7 @@ impl crate::context::Context for ContextWebGpu {
         f.forget();
     }
 
-    fn device_push_error_scope(
-        &self,
-        _device: &Self::DeviceId,
-        device_data: &Self::DeviceData,
-        filter: crate::ErrorFilter,
-    ) {
+    fn device_push_error_scope(&self, device_data: &Self::DeviceData, filter: crate::ErrorFilter) {
         device_data.0.push_error_scope(match filter {
             crate::ErrorFilter::OutOfMemory => webgpu_sys::GpuErrorFilter::OutOfMemory,
             crate::ErrorFilter::Validation => webgpu_sys::GpuErrorFilter::Validation,
@@ -2237,11 +2136,7 @@ impl crate::context::Context for ContextWebGpu {
         });
     }
 
-    fn device_pop_error_scope(
-        &self,
-        _device: &Self::DeviceId,
-        device_data: &Self::DeviceData,
-    ) -> Self::PopErrorScopeFuture {
+    fn device_pop_error_scope(&self, device_data: &Self::DeviceData) -> Self::PopErrorScopeFuture {
         let error_promise = device_data.0.pop_error_scope();
         MakeSendFuture::new(
             wasm_bindgen_futures::JsFuture::from(error_promise),
@@ -2251,7 +2146,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn buffer_map_async(
         &self,
-        _buffer: &Self::BufferId,
         buffer_data: &Self::BufferData,
         mode: crate::MapMode,
         range: Range<wgt::BufferAddress>,
@@ -2270,7 +2164,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn buffer_get_mapped_range(
         &self,
-        _buffer: &Self::BufferId,
         buffer_data: &Self::BufferData,
         sub_range: Range<wgt::BufferAddress>,
     ) -> Box<dyn crate::context::BufferMappedRange> {
@@ -2282,14 +2175,13 @@ impl crate::context::Context for ContextWebGpu {
         })
     }
 
-    fn buffer_unmap(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
+    fn buffer_unmap(&self, buffer_data: &Self::BufferData) {
         buffer_data.0.buffer.unmap();
         buffer_data.0.mapping.borrow_mut().mapped_buffer = None;
     }
 
     fn shader_get_compilation_info(
         &self,
-        _shader: &Self::ShaderModuleId,
         shader_data: &Self::ShaderModuleData,
     ) -> Self::CompilationInfoFuture {
         let compilation_info_promise = shader_data.0.module.get_compilation_info();
@@ -2305,10 +2197,9 @@ impl crate::context::Context for ContextWebGpu {
 
     fn texture_create_view(
         &self,
-        _texture: &Self::TextureId,
         texture_data: &Self::TextureData,
         desc: &crate::TextureViewDescriptor<'_>,
-    ) -> (Self::TextureViewId, Self::TextureViewData) {
+    ) -> Self::TextureViewData {
         let mut mapped = webgpu_sys::GpuTextureViewDescriptor::new();
         if let Some(dim) = desc.dimension {
             mapped.dimension(map_texture_view_dimension(dim));
@@ -2328,147 +2219,102 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped.label(label);
         }
-        create_identified(texture_data.0.create_view_with_descriptor(&mapped))
+        Sendable(texture_data.0.create_view_with_descriptor(&mapped))
     }
 
-    fn surface_drop(&self, _surface: &Self::SurfaceId, _surface_data: &Self::SurfaceData) {
+    fn surface_drop(&self, _surface_data: &Self::SurfaceData) {
         // Dropped automatically
     }
 
-    fn adapter_drop(&self, _adapter: &Self::AdapterId, _adapter_data: &Self::AdapterData) {
+    fn adapter_drop(&self, _adapter_data: &Self::AdapterData) {
         // Dropped automatically
     }
 
-    fn buffer_destroy(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
+    fn buffer_destroy(&self, buffer_data: &Self::BufferData) {
         buffer_data.0.buffer.destroy();
     }
 
-    fn buffer_drop(&self, _buffer: &Self::BufferId, _buffer_data: &Self::BufferData) {
+    fn buffer_drop(&self, _buffer_data: &Self::BufferData) {
         // Dropped automatically
     }
 
-    fn texture_destroy(&self, _texture: &Self::TextureId, texture_data: &Self::TextureData) {
+    fn texture_destroy(&self, texture_data: &Self::TextureData) {
         texture_data.0.destroy();
     }
 
-    fn texture_drop(&self, _texture: &Self::TextureId, _texture_data: &Self::TextureData) {
+    fn texture_drop(&self, _texture_data: &Self::TextureData) {
         // Dropped automatically
     }
 
-    fn texture_view_drop(
-        &self,
-        _texture_view: &Self::TextureViewId,
-        _texture_view_data: &Self::TextureViewData,
-    ) {
+    fn texture_view_drop(&self, _texture_view_data: &Self::TextureViewData) {
         // Dropped automatically
     }
 
-    fn sampler_drop(&self, _sampler: &Self::SamplerId, _sampler_data: &Self::SamplerData) {
+    fn sampler_drop(&self, _sampler_data: &Self::SamplerData) {
         // Dropped automatically
     }
 
-    fn query_set_drop(&self, _query_set: &Self::QuerySetId, _query_set_data: &Self::QuerySetData) {
+    fn query_set_drop(&self, _query_set_data: &Self::QuerySetData) {
         // Dropped automatically
     }
 
-    fn bind_group_drop(
-        &self,
-        _bind_group: &Self::BindGroupId,
-        _bind_group_data: &Self::BindGroupData,
-    ) {
+    fn bind_group_drop(&self, _bind_group_data: &Self::BindGroupData) {
         // Dropped automatically
     }
 
-    fn bind_group_layout_drop(
-        &self,
-        _bind_group_layout: &Self::BindGroupLayoutId,
-        _bind_group_layout_data: &Self::BindGroupLayoutData,
-    ) {
+    fn bind_group_layout_drop(&self, _bind_group_layout_data: &Self::BindGroupLayoutData) {
         // Dropped automatically
     }
 
-    fn pipeline_layout_drop(
-        &self,
-        _pipeline_layout: &Self::PipelineLayoutId,
-        _pipeline_layout_data: &Self::PipelineLayoutData,
-    ) {
+    fn pipeline_layout_drop(&self, _pipeline_layout_data: &Self::PipelineLayoutData) {
         // Dropped automatically
     }
 
-    fn shader_module_drop(
-        &self,
-        _shader_module: &Self::ShaderModuleId,
-        _shader_module_data: &Self::ShaderModuleData,
-    ) {
+    fn shader_module_drop(&self, _shader_module_data: &Self::ShaderModuleData) {
         // Dropped automatically
     }
 
-    fn command_encoder_drop(
-        &self,
-        _command_encoder: &Self::CommandEncoderId,
-        _command_encoder_data: &Self::CommandEncoderData,
-    ) {
+    fn command_encoder_drop(&self, _command_encoder_data: &Self::CommandEncoderData) {
         // Dropped automatically
     }
 
-    fn command_buffer_drop(
-        &self,
-        _command_buffer: &Self::CommandBufferId,
-        _command_buffer_data: &Self::CommandBufferData,
-    ) {
+    fn command_buffer_drop(&self, _command_buffer_data: &Self::CommandBufferData) {
         // Dropped automatically
     }
 
-    fn render_bundle_drop(
-        &self,
-        _render_bundle: &Self::RenderBundleId,
-        _render_bundle_data: &Self::RenderBundleData,
-    ) {
+    fn render_bundle_drop(&self, _render_bundle_data: &Self::RenderBundleData) {
         // Dropped automatically
     }
 
-    fn compute_pipeline_drop(
-        &self,
-        _pipeline: &Self::ComputePipelineId,
-        _pipeline_data: &Self::ComputePipelineData,
-    ) {
+    fn compute_pipeline_drop(&self, _pipeline_data: &Self::ComputePipelineData) {
         // Dropped automatically
     }
 
-    fn render_pipeline_drop(
-        &self,
-        _pipeline: &Self::RenderPipelineId,
-        _pipeline_data: &Self::RenderPipelineData,
-    ) {
+    fn render_pipeline_drop(&self, _pipeline_data: &Self::RenderPipelineData) {
         // Dropped automatically
     }
 
     fn compute_pipeline_get_bind_group_layout(
         &self,
-        _pipeline: &Self::ComputePipelineId,
         pipeline_data: &Self::ComputePipelineData,
         index: u32,
-    ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
-        create_identified(pipeline_data.0.get_bind_group_layout(index))
+    ) -> Self::BindGroupLayoutData {
+        Sendable(pipeline_data.0.get_bind_group_layout(index))
     }
 
     fn render_pipeline_get_bind_group_layout(
         &self,
-        _pipeline: &Self::RenderPipelineId,
         pipeline_data: &Self::RenderPipelineData,
         index: u32,
-    ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
-        create_identified(pipeline_data.0.get_bind_group_layout(index))
+    ) -> Self::BindGroupLayoutData {
+        Sendable(pipeline_data.0.get_bind_group_layout(index))
     }
 
     fn command_encoder_copy_buffer_to_buffer(
         &self,
-        _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        _source: &Self::BufferId,
         source_data: &Self::BufferData,
         source_offset: wgt::BufferAddress,
-        _destination: &Self::BufferId,
         destination_data: &Self::BufferData,
         destination_offset: wgt::BufferAddress,
         copy_size: wgt::BufferAddress,
@@ -2486,7 +2332,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn command_encoder_copy_buffer_to_texture(
         &self,
-        _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         source: crate::ImageCopyBuffer<'_>,
         destination: crate::ImageCopyTexture<'_>,
@@ -2503,7 +2348,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn command_encoder_copy_texture_to_buffer(
         &self,
-        _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         source: crate::ImageCopyTexture<'_>,
         destination: crate::ImageCopyBuffer<'_>,
@@ -2520,7 +2364,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn command_encoder_copy_texture_to_texture(
         &self,
-        _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         source: crate::ImageCopyTexture<'_>,
         destination: crate::ImageCopyTexture<'_>,
@@ -2537,10 +2380,9 @@ impl crate::context::Context for ContextWebGpu {
 
     fn command_encoder_begin_compute_pass(
         &self,
-        _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         desc: &crate::ComputePassDescriptor<'_>,
-    ) -> (Self::ComputePassId, Self::ComputePassData) {
+    ) -> Self::ComputePassData {
         let mut mapped_desc = webgpu_sys::GpuComputePassDescriptor::new();
         if let Some(label) = desc.label {
             mapped_desc.label(label);
@@ -2559,7 +2401,7 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.timestamp_writes(&writes);
         }
 
-        create_identified(
+        Sendable(
             encoder_data
                 .0
                 .begin_compute_pass_with_descriptor(&mapped_desc),
@@ -2568,10 +2410,9 @@ impl crate::context::Context for ContextWebGpu {
 
     fn command_encoder_begin_render_pass(
         &self,
-        _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         desc: &crate::RenderPassDescriptor<'_>,
-    ) -> (Self::RenderPassId, Self::RenderPassData) {
+    ) -> Self::RenderPassData {
         let mapped_color_attachments = desc
             .color_attachments
             .iter()
@@ -2661,16 +2502,15 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.timestamp_writes(&writes);
         }
 
-        create_identified(encoder_data.0.begin_render_pass(&mapped_desc))
+        Sendable(encoder_data.0.begin_render_pass(&mapped_desc))
     }
 
     fn command_encoder_finish(
         &self,
-        _encoder: Self::CommandEncoderId,
         encoder_data: &mut Self::CommandEncoderData,
-    ) -> (Self::CommandBufferId, Self::CommandBufferData) {
+    ) -> Self::CommandBufferData {
         let label = encoder_data.0.label();
-        create_identified(if label.is_empty() {
+        Sendable(if label.is_empty() {
             encoder_data.0.finish()
         } else {
             let mut mapped_desc = webgpu_sys::GpuCommandBufferDescriptor::new();
@@ -2681,9 +2521,8 @@ impl crate::context::Context for ContextWebGpu {
 
     fn command_encoder_clear_texture(
         &self,
-        _encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        _texture: &crate::Texture,
+        _texture_data: &Self::TextureData,
         _subresource_range: &wgt::ImageSubresourceRange,
     ) {
         //TODO
@@ -2691,29 +2530,25 @@ impl crate::context::Context for ContextWebGpu {
 
     fn command_encoder_clear_buffer(
         &self,
-        _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        buffer: &crate::Buffer,
+        buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     ) {
-        let buffer: &<ContextWebGpu as crate::Context>::BufferData =
-            downcast_ref(buffer.data.as_ref());
         match size {
             Some(size) => encoder_data.0.clear_buffer_with_f64_and_f64(
-                &buffer.0.buffer,
+                &buffer_data.0.buffer,
                 offset as f64,
                 size as f64,
             ),
             None => encoder_data
                 .0
-                .clear_buffer_with_f64(&buffer.0.buffer, offset as f64),
+                .clear_buffer_with_f64(&buffer_data.0.buffer, offset as f64),
         }
     }
 
     fn command_encoder_insert_debug_marker(
         &self,
-        _encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
         _label: &str,
     ) {
@@ -2723,7 +2558,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn command_encoder_push_debug_group(
         &self,
-        _encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
         _label: &str,
     ) {
@@ -2731,20 +2565,14 @@ impl crate::context::Context for ContextWebGpu {
         // encoder.push_debug_group(label);
     }
 
-    fn command_encoder_pop_debug_group(
-        &self,
-        _encoder: &Self::CommandEncoderId,
-        _encoder_data: &Self::CommandEncoderData,
-    ) {
+    fn command_encoder_pop_debug_group(&self, _encoder_data: &Self::CommandEncoderData) {
         // Not available in gecko yet
         // encoder.pop_debug_group();
     }
 
     fn command_encoder_write_timestamp(
         &self,
-        _encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        _query_set: &Self::QuerySetId,
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
@@ -2755,13 +2583,10 @@ impl crate::context::Context for ContextWebGpu {
 
     fn command_encoder_resolve_query_set(
         &self,
-        _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        _query_set: &Self::QuerySetId,
         query_set_data: &Self::QuerySetData,
         first_query: u32,
         query_count: u32,
-        _destination: &Self::BufferId,
         destination_data: &Self::BufferData,
         destination_offset: wgt::BufferAddress,
     ) {
@@ -2776,11 +2601,10 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_bundle_encoder_finish(
         &self,
-        _encoder: Self::RenderBundleEncoderId,
         encoder_data: Self::RenderBundleEncoderData,
         desc: &crate::RenderBundleDescriptor<'_>,
-    ) -> (Self::RenderBundleId, Self::RenderBundleData) {
-        create_identified(match desc.label {
+    ) -> Self::RenderBundleData {
+        Sendable(match desc.label {
             Some(label) => {
                 let mut mapped_desc = webgpu_sys::GpuRenderBundleDescriptor::new();
                 mapped_desc.label(label);
@@ -2792,9 +2616,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn queue_write_buffer(
         &self,
-        _queue: &Self::QueueId,
         queue_data: &Self::QueueData,
-        _buffer: &Self::BufferId,
         buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         data: &[u8],
@@ -2821,9 +2643,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn queue_validate_write_buffer(
         &self,
-        _queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
-        _buffer: &Self::BufferId,
         buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
@@ -2858,7 +2678,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn queue_create_staging_buffer(
         &self,
-        _queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
         size: wgt::BufferSize,
     ) -> Option<Box<dyn QueueWriteBuffer>> {
@@ -2869,9 +2688,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn queue_write_staging_buffer(
         &self,
-        queue: &Self::QueueId,
         queue_data: &Self::QueueData,
-        buffer: &Self::BufferId,
         buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         staging_buffer: &dyn QueueWriteBuffer,
@@ -2881,19 +2698,11 @@ impl crate::context::Context for ContextWebGpu {
             .downcast_ref::<WebQueueWriteBuffer>()
             .unwrap()
             .slice();
-        self.queue_write_buffer(
-            queue,
-            queue_data,
-            buffer,
-            buffer_data,
-            offset,
-            staging_buffer,
-        )
+        self.queue_write_buffer(queue_data, buffer_data, offset, staging_buffer)
     }
 
     fn queue_write_texture(
         &self,
-        _queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         texture: crate::ImageCopyTexture<'_>,
         data: &[u8],
@@ -2929,7 +2738,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn queue_copy_external_image_to_texture(
         &self,
-        _queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         source: &wgt::ImageCopyExternalImage,
         dest: crate::ImageCopyTextureTagged<'_>,
@@ -2944,61 +2752,55 @@ impl crate::context::Context for ContextWebGpu {
             );
     }
 
-    fn queue_submit<I: Iterator<Item = (Self::CommandBufferId, Self::CommandBufferData)>>(
+    fn queue_submit<I: Iterator<Item = Self::CommandBufferData>>(
         &self,
-        _queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         command_buffers: I,
     ) -> Self::SubmissionIndexData {
         let temp_command_buffers = command_buffers
-            .map(|(_, data)| data.0)
+            .map(|data| data.0)
             .collect::<js_sys::Array>();
 
         queue_data.0.submit(&temp_command_buffers);
     }
 
-    fn queue_get_timestamp_period(
-        &self,
-        _queue: &Self::QueueId,
-        _queue_data: &Self::QueueData,
-    ) -> f32 {
+    fn queue_get_timestamp_period(&self, _queue_data: &Self::QueueData) -> f32 {
         // Timestamp values are always in nanoseconds, see https://gpuweb.github.io/gpuweb/#timestamp
         1.0
     }
 
     fn queue_on_submitted_work_done(
         &self,
-        _queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
         _callback: crate::context::SubmittedWorkDoneCallback,
     ) {
         unimplemented!()
     }
 
-    fn device_start_capture(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {}
-    fn device_stop_capture(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {}
+    fn device_start_capture(&self, _device_data: &Self::DeviceData) {}
+    fn device_stop_capture(&self, _device_data: &Self::DeviceData) {}
 
     fn device_get_internal_counters(
         &self,
-        _device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
     ) -> wgt::InternalCounters {
         Default::default()
     }
 
-    fn pipeline_cache_get_data(
+    fn device_generate_allocator_report(
         &self,
-        _: &Self::PipelineCacheId,
-        _: &Self::PipelineCacheData,
-    ) -> Option<Vec<u8>> {
+        _device_data: &Self::DeviceData,
+    ) -> Option<wgt::AllocatorReport> {
+        None
+    }
+
+    fn pipeline_cache_get_data(&self, _: &Self::PipelineCacheData) -> Option<Vec<u8>> {
         None
     }
 
     fn compute_pass_set_pipeline(
         &self,
-        _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
-        _pipeline: &Self::ComputePipelineId,
         pipeline_data: &Self::ComputePipelineData,
     ) {
         pass_data.0.set_pipeline(&pipeline_data.0)
@@ -3006,13 +2808,16 @@ impl crate::context::Context for ContextWebGpu {
 
     fn compute_pass_set_bind_group(
         &self,
-        _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
         index: u32,
-        _bind_group: &Self::BindGroupId,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             pass_data.0.set_bind_group(index, Some(&bind_group_data.0));
         } else {
@@ -3030,7 +2835,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn compute_pass_set_push_constants(
         &self,
-        _pass: &mut Self::ComputePassId,
         _pass_data: &mut Self::ComputePassData,
         _offset: u32,
         _data: &[u8],
@@ -3040,7 +2844,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn compute_pass_insert_debug_marker(
         &self,
-        _pass: &mut Self::ComputePassId,
         _pass_data: &mut Self::ComputePassData,
         _label: &str,
     ) {
@@ -3050,7 +2853,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn compute_pass_push_debug_group(
         &self,
-        _pass: &mut Self::ComputePassId,
         _pass_data: &mut Self::ComputePassData,
         _group_label: &str,
     ) {
@@ -3058,20 +2860,14 @@ impl crate::context::Context for ContextWebGpu {
         // self.0.push_debug_group(group_label);
     }
 
-    fn compute_pass_pop_debug_group(
-        &self,
-        _pass: &mut Self::ComputePassId,
-        _pass_data: &mut Self::ComputePassData,
-    ) {
+    fn compute_pass_pop_debug_group(&self, _pass_data: &mut Self::ComputePassData) {
         // Not available in gecko yet
         // self.0.pop_debug_group();
     }
 
     fn compute_pass_write_timestamp(
         &self,
-        _pass: &mut Self::ComputePassId,
         _pass_data: &mut Self::ComputePassData,
-        _query_set: &Self::QuerySetId,
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
@@ -3080,26 +2876,19 @@ impl crate::context::Context for ContextWebGpu {
 
     fn compute_pass_begin_pipeline_statistics_query(
         &self,
-        _pass: &mut Self::ComputePassId,
         _pass_data: &mut Self::ComputePassData,
-        _query_set: &Self::QuerySetId,
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
         // Not available in gecko yet
     }
 
-    fn compute_pass_end_pipeline_statistics_query(
-        &self,
-        _pass: &mut Self::ComputePassId,
-        _pass_data: &mut Self::ComputePassData,
-    ) {
+    fn compute_pass_end_pipeline_statistics_query(&self, _pass_data: &mut Self::ComputePassData) {
         // Not available in gecko yet
     }
 
     fn compute_pass_dispatch_workgroups(
         &self,
-        _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
         x: u32,
         y: u32,
@@ -3112,9 +2901,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn compute_pass_dispatch_workgroups_indirect(
         &self,
-        _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
-        _indirect_buffer: &Self::BufferId,
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
@@ -3124,19 +2911,13 @@ impl crate::context::Context for ContextWebGpu {
         );
     }
 
-    fn compute_pass_end(
-        &self,
-        _pass: &mut Self::ComputePassId,
-        pass_data: &mut Self::ComputePassData,
-    ) {
+    fn compute_pass_end(&self, pass_data: &mut Self::ComputePassData) {
         pass_data.0.end();
     }
 
     fn render_bundle_encoder_set_pipeline(
         &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
         encoder_data: &mut Self::RenderBundleEncoderData,
-        _pipeline: &Self::RenderPipelineId,
         pipeline_data: &Self::RenderPipelineData,
     ) {
         encoder_data.0.set_pipeline(&pipeline_data.0);
@@ -3144,13 +2925,16 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_bundle_encoder_set_bind_group(
         &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
         encoder_data: &mut Self::RenderBundleEncoderData,
         index: u32,
-        _bind_group: &Self::BindGroupId,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             encoder_data
                 .0
@@ -3170,9 +2954,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_bundle_encoder_set_index_buffer(
         &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
         encoder_data: &mut Self::RenderBundleEncoderData,
-        _buffer: &Self::BufferId,
         buffer_data: &Self::BufferData,
         index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
@@ -3199,10 +2981,8 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_bundle_encoder_set_vertex_buffer(
         &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
         encoder_data: &mut Self::RenderBundleEncoderData,
         slot: u32,
-        _buffer: &Self::BufferId,
         buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
@@ -3228,7 +3008,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_bundle_encoder_set_push_constants(
         &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
         _encoder_data: &mut Self::RenderBundleEncoderData,
         _stages: wgt::ShaderStages,
         _offset: u32,
@@ -3239,7 +3018,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_bundle_encoder_draw(
         &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
         encoder_data: &mut Self::RenderBundleEncoderData,
         vertices: Range<u32>,
         instances: Range<u32>,
@@ -3256,7 +3034,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_bundle_encoder_draw_indexed(
         &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
         encoder_data: &mut Self::RenderBundleEncoderData,
         indices: Range<u32>,
         base_vertex: i32,
@@ -3275,9 +3052,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_bundle_encoder_draw_indirect(
         &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
         encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer: &Self::BufferId,
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
@@ -3288,9 +3063,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_bundle_encoder_draw_indexed_indirect(
         &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
         encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer: &Self::BufferId,
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
@@ -3299,67 +3072,9 @@ impl crate::context::Context for ContextWebGpu {
             .draw_indexed_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
     }
 
-    fn render_bundle_encoder_multi_draw_indirect(
-        &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer: &Self::BufferId,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indirect")
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect(
-        &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer: &Self::BufferId,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indexed_indirect")
-    }
-
-    fn render_bundle_encoder_multi_draw_indirect_count(
-        &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer: &Self::BufferId,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count_buffer: &Self::BufferId,
-        _count_buffer_data: &Self::BufferData,
-        _count_buffer_offset: wgt::BufferAddress,
-        _max_count: u32,
-    ) {
-        panic!(
-            "MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indirect_count"
-        )
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect_count(
-        &self,
-        _encoder: &mut Self::RenderBundleEncoderId,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer: &Self::BufferId,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count_buffer: &Self::BufferId,
-        _count_buffer_data: &Self::BufferData,
-        _count_buffer_offset: wgt::BufferAddress,
-        _max_count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indexed_indirect_count")
-    }
-
     fn render_pass_set_pipeline(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        _pipeline: &Self::RenderPipelineId,
         pipeline_data: &Self::RenderPipelineData,
     ) {
         pass_data.0.set_pipeline(&pipeline_data.0);
@@ -3367,13 +3082,16 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_set_bind_group(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         index: u32,
-        _bind_group: &Self::BindGroupId,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             pass_data.0.set_bind_group(index, Some(&bind_group_data.0));
         } else {
@@ -3391,9 +3109,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_set_index_buffer(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        _buffer: &Self::BufferId,
         buffer_data: &Self::BufferData,
         index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
@@ -3420,10 +3136,8 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_set_vertex_buffer(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         slot: u32,
-        _buffer: &Self::BufferId,
         buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
@@ -3449,7 +3163,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_set_push_constants(
         &self,
-        _pass: &mut Self::RenderPassId,
         _pass_data: &mut Self::RenderPassData,
         _stages: wgt::ShaderStages,
         _offset: u32,
@@ -3460,7 +3173,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_draw(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         vertices: Range<u32>,
         instances: Range<u32>,
@@ -3477,7 +3189,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_draw_indexed(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         indices: Range<u32>,
         base_vertex: i32,
@@ -3496,9 +3207,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_draw_indirect(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        _indirect_buffer: &Self::BufferId,
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
@@ -3509,9 +3218,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_draw_indexed_indirect(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        _indirect_buffer: &Self::BufferId,
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
@@ -3522,9 +3229,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_multi_draw_indirect(
         &self,
-        _pass: &mut Self::RenderPassId,
         _pass_data: &mut Self::RenderPassData,
-        _indirect_buffer: &Self::BufferId,
         _indirect_buffer_data: &Self::BufferData,
         _indirect_offset: wgt::BufferAddress,
         _count: u32,
@@ -3534,9 +3239,7 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_multi_draw_indexed_indirect(
         &self,
-        _pass: &mut Self::RenderPassId,
         _pass_data: &mut Self::RenderPassData,
-        _indirect_buffer: &Self::BufferId,
         _indirect_buffer_data: &Self::BufferData,
         _indirect_offset: wgt::BufferAddress,
         _count: u32,
@@ -3546,12 +3249,9 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_multi_draw_indirect_count(
         &self,
-        _pass: &mut Self::RenderPassId,
         _pass_data: &mut Self::RenderPassData,
-        _indirect_buffer: &Self::BufferId,
         _indirect_buffer_data: &Self::BufferData,
         _indirect_offset: wgt::BufferAddress,
-        _count_buffer: &Self::BufferId,
         _count_buffer_data: &Self::BufferData,
         _count_buffer_offset: wgt::BufferAddress,
         _max_count: u32,
@@ -3563,12 +3263,9 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_multi_draw_indexed_indirect_count(
         &self,
-        _pass: &mut Self::RenderPassId,
         _pass_data: &mut Self::RenderPassData,
-        _indirect_buffer: &Self::BufferId,
         _indirect_buffer_data: &Self::BufferData,
         _indirect_offset: wgt::BufferAddress,
-        _count_buffer: &Self::BufferId,
         _count_buffer_data: &Self::BufferData,
         _count_buffer_offset: wgt::BufferAddress,
         _max_count: u32,
@@ -3578,7 +3275,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_set_blend_constant(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         color: wgt::Color,
     ) {
@@ -3589,7 +3285,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_set_scissor_rect(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         x: u32,
         y: u32,
@@ -3601,7 +3296,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_set_viewport(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         x: f32,
         y: f32,
@@ -3617,26 +3311,19 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_set_stencil_reference(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
         reference: u32,
     ) {
         pass_data.0.set_stencil_reference(reference);
     }
 
-    fn render_pass_insert_debug_marker(
-        &self,
-        _pass: &mut Self::RenderPassId,
-        _pass_data: &mut Self::RenderPassData,
-        _label: &str,
-    ) {
+    fn render_pass_insert_debug_marker(&self, _pass_data: &mut Self::RenderPassData, _label: &str) {
         // Not available in gecko yet
         // self.0.insert_debug_marker(label);
     }
 
     fn render_pass_push_debug_group(
         &self,
-        _pass: &mut Self::RenderPassId,
         _pass_data: &mut Self::RenderPassData,
         _group_label: &str,
     ) {
@@ -3644,20 +3331,14 @@ impl crate::context::Context for ContextWebGpu {
         // self.0.push_debug_group(group_label);
     }
 
-    fn render_pass_pop_debug_group(
-        &self,
-        _pass: &mut Self::RenderPassId,
-        _pass_data: &mut Self::RenderPassData,
-    ) {
+    fn render_pass_pop_debug_group(&self, _pass_data: &mut Self::RenderPassData) {
         // Not available in gecko yet
         // self.0.pop_debug_group();
     }
 
     fn render_pass_write_timestamp(
         &self,
-        _pass: &mut Self::RenderPassId,
         _pass_data: &mut Self::RenderPassData,
-        _query_set: &Self::QuerySetId,
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
@@ -3666,57 +3347,41 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_begin_occlusion_query(
         &self,
-        _pass: &mut Self::RenderPassId,
         _pass_data: &mut Self::RenderPassData,
         _query_index: u32,
     ) {
         // Not available in gecko yet
     }
 
-    fn render_pass_end_occlusion_query(
-        &self,
-        _pass: &mut Self::RenderPassId,
-        _pass_data: &mut Self::RenderPassData,
-    ) {
+    fn render_pass_end_occlusion_query(&self, _pass_data: &mut Self::RenderPassData) {
         // Not available in gecko yet
     }
 
     fn render_pass_begin_pipeline_statistics_query(
         &self,
-        _pass: &mut Self::RenderPassId,
         _pass_data: &mut Self::RenderPassData,
-        _query_set: &Self::QuerySetId,
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
         // Not available in gecko yet
     }
 
-    fn render_pass_end_pipeline_statistics_query(
-        &self,
-        _pass: &mut Self::RenderPassId,
-        _pass_data: &mut Self::RenderPassData,
-    ) {
+    fn render_pass_end_pipeline_statistics_query(&self, _pass_data: &mut Self::RenderPassData) {
         // Not available in gecko yet
     }
 
     fn render_pass_execute_bundles(
         &self,
-        _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
+        render_bundles: &mut dyn Iterator<Item = &Self::RenderBundleData>,
     ) {
         let mapped = render_bundles
-            .map(|(_, bundle_data)| &bundle_data.0)
+            .map(|bundle_data| &bundle_data.0)
             .collect::<js_sys::Array>();
         pass_data.0.execute_bundles(&mapped);
     }
 
-    fn render_pass_end(
-        &self,
-        _pass: &mut Self::RenderPassId,
-        pass_data: &mut Self::RenderPassData,
-    ) {
+    fn render_pass_end(&self, pass_data: &mut Self::RenderPassData) {
         pass_data.0.end();
     }
 }

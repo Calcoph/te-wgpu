@@ -51,6 +51,7 @@ pub fn fail<T, E: Debug + ToString>(callback: impl FnOnce() -> Result<T, E>, exp
 }
 
 /// Run some code in an error scope and assert that validation succeeds.
+#[track_caller]
 pub fn valid<T, E: Debug>(callback: impl FnOnce() -> Result<T, E>) -> T {
     let result = callback();
     assert!(result.is_ok());

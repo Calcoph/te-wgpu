@@ -1,4 +1,4 @@
-use std::{panic::AssertUnwindSafe, sync::Arc};
+use std::panic::AssertUnwindSafe;
 
 use futures_lite::FutureExt;
 use wgpu::{Adapter, Device, Instance, Queue};
@@ -18,20 +18,20 @@ pub struct TestingContext {
     pub adapter: Adapter,
     pub adapter_info: wgpu::AdapterInfo,
     pub adapter_downlevel_capabilities: wgpu::DownlevelCapabilities,
-    pub device: Arc<Device>,
+    pub device: Device,
     pub device_features: wgpu::Features,
     pub device_limits: wgpu::Limits,
     pub queue: Queue,
 }
 
-/// Execute the given test configuration with the given adapter index.
+/// Execute the given test configuration with the given adapter report.
 ///
 /// If test_info is specified, will use the information whether to skip the test.
 /// If it is not, we'll create the test info from the adapter itself.
 pub async fn execute_test(
+    adapter_report: Option<&AdapterReport>,
     config: GpuTestConfiguration,
     test_info: Option<TestInfo>,
-    adapter_index: usize,
 ) {
     // If we get information externally, skip based on that information before we do anything.
     if let Some(TestInfo { skip: true, .. }) = test_info {
@@ -42,7 +42,8 @@ pub async fn execute_test(
 
     let _test_guard = isolation::OneTestPerProcessGuard::new();
 
-    let (instance, adapter, _surface_guard) = initialize_adapter(adapter_index).await;
+    let (instance, adapter, _surface_guard) =
+        initialize_adapter(adapter_report, config.params.force_fxc).await;
 
     let adapter_info = adapter.get_info();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
@@ -72,7 +73,7 @@ pub async fn execute_test(
         adapter,
         adapter_info,
         adapter_downlevel_capabilities,
-        device: Arc::new(device),
+        device,
         device_features: config.params.required_features,
         device_limits: config.params.required_limits.clone(),
         queue,

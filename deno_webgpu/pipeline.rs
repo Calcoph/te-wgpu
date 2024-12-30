@@ -23,7 +23,7 @@ impl Resource for WebGpuPipelineLayout {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.pipeline_layout_drop(self.1));
+        self.0.pipeline_layout_drop(self.1);
     }
 }
 
@@ -37,7 +37,7 @@ impl Resource for WebGpuComputePipeline {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.compute_pipeline_drop(self.1));
+        self.0.compute_pipeline_drop(self.1);
     }
 }
 
@@ -51,7 +51,7 @@ impl Resource for WebGpuRenderPipeline {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.render_pipeline_drop(self.1));
+        self.0.render_pipeline_drop(self.1);
     }
 }
 
@@ -111,17 +111,12 @@ pub fn op_webgpu_create_compute_pipeline(
             entry_point: compute.entry_point.map(Cow::from),
             constants: Cow::Owned(compute.constants.unwrap_or_default()),
             zero_initialize_workgroup_memory: true,
-            vertex_pulling_transform: false,
         },
         cache: None,
     };
 
-    let compute_pipeline = gfx_select!(device => instance.device_create_compute_pipeline(
-      device,
-      &descriptor,
-      None,
-      None,
-    ))?;
+    let compute_pipeline =
+        instance.device_create_compute_pipeline(device, &descriptor, None, None)?;
 
     let rid = state
         .resource_table
@@ -149,7 +144,8 @@ pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
         .get::<WebGpuComputePipeline>(compute_pipeline_rid)?;
     let compute_pipeline = compute_pipeline_resource.1;
 
-    let bind_group_layout = gfx_select!(compute_pipeline => instance.compute_pipeline_get_bind_group_layout(compute_pipeline, index, None))?;
+    let bind_group_layout =
+        instance.compute_pipeline_get_bind_group_layout(compute_pipeline, index, None)?;
 
     let rid = state
         .resource_table
@@ -343,7 +339,6 @@ pub fn op_webgpu_create_render_pipeline(
                 constants: Cow::Owned(fragment.constants.unwrap_or_default()),
                 // Required to be true for WebGPU
                 zero_initialize_workgroup_memory: true,
-                vertex_pulling_transform: false,
             },
             targets: Cow::Owned(fragment.targets),
         })
@@ -369,7 +364,6 @@ pub fn op_webgpu_create_render_pipeline(
                 constants: Cow::Owned(args.vertex.constants.unwrap_or_default()),
                 // Required to be true for WebGPU
                 zero_initialize_workgroup_memory: true,
-                vertex_pulling_transform: false,
             },
             buffers: Cow::Owned(vertex_buffers),
         },
@@ -381,12 +375,8 @@ pub fn op_webgpu_create_render_pipeline(
         cache: None,
     };
 
-    let render_pipeline = gfx_select!(device => instance.device_create_render_pipeline(
-      device,
-      &descriptor,
-      None,
-      None,
-    ))?;
+    let render_pipeline =
+        instance.device_create_render_pipeline(device, &descriptor, None, None)?;
 
     let rid = state
         .resource_table
@@ -408,7 +398,8 @@ pub fn op_webgpu_render_pipeline_get_bind_group_layout(
         .get::<WebGpuRenderPipeline>(render_pipeline_rid)?;
     let render_pipeline = render_pipeline_resource.1;
 
-    let bind_group_layout = gfx_select!(render_pipeline => instance.render_pipeline_get_bind_group_layout(render_pipeline, index, None))?;
+    let bind_group_layout =
+        instance.render_pipeline_get_bind_group_layout(render_pipeline, index, None)?;
 
     let rid = state
         .resource_table

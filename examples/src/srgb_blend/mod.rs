@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, mem};
+use std::mem::size_of;
 use wgpu::{core::resource::CreateTextureError, util::DeviceExt};
 
 #[repr(C)]
@@ -70,7 +70,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
         _queue: &wgpu::Queue,
     ) -> Self {
         // Create the vertex and index buffers
-        let vertex_size = mem::size_of::<Vertex>();
+        let vertex_size = size_of::<Vertex>();
         let (vertex_data, index_data) = create_vertices();
 
         let vertex_buf = device
@@ -113,12 +113,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
             })
             .unwrap();
 
-        let shader = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            })
-            .unwrap();
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl")).unwrap();
 
         let vertex_buffers = [wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
@@ -142,13 +137,13 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &vertex_buffers,
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.view_formats[0],

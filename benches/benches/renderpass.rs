@@ -10,18 +10,19 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::DeviceState;
 
-#[cfg(test)]
-const DRAW_COUNT: usize = 8; // Running with up to 8 threads.
-
-#[cfg(not(test))]
-const DRAW_COUNT: usize = 10_000;
+fn draw_count() -> usize {
+    // On CI we only want to run a very lightweight version of the benchmark
+    // to ensure that it does not break.
+    if std::env::var("WGPU_TESTING").is_ok() {
+        8
+    } else {
+        10_000
+    }
+}
 
 // Must match the number of textures in the renderpass.wgsl shader
 const TEXTURES_PER_DRAW: usize = 7;
 const VERTEX_BUFFERS_PER_DRAW: usize = 2;
-const VERTEX_BUFFER_COUNT: usize = DRAW_COUNT * VERTEX_BUFFERS_PER_DRAW;
-
-const TEXTURE_COUNT: usize = DRAW_COUNT * TEXTURES_PER_DRAW;
 
 struct RenderpassState {
     device_state: DeviceState,
@@ -41,6 +42,10 @@ impl RenderpassState {
     fn new() -> Self {
         let device_state = DeviceState::new();
 
+        let draw_count = draw_count();
+        let vertex_buffer_count = draw_count * VERTEX_BUFFERS_PER_DRAW;
+        let texture_count = draw_count * TEXTURES_PER_DRAW;
+
         let supports_bindless = device_state.device.features().contains(
             wgpu::Features::TEXTURE_BINDING_ARRAY
                 | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
@@ -48,7 +53,7 @@ impl RenderpassState {
             .device
             .limits()
             .max_sampled_textures_per_shader_stage
-            >= TEXTURE_COUNT as _;
+            >= texture_count as _;
 
         // Performance gets considerably worse if the resources are shuffled.
         //
@@ -78,8 +83,8 @@ impl RenderpassState {
                     entries: &bind_group_layout_entries,
                 }).unwrap();
 
-        let mut texture_views = Vec::with_capacity(TEXTURE_COUNT);
-        for i in 0..TEXTURE_COUNT {
+        let mut texture_views = Vec::with_capacity(texture_count);
+        for i in 0..texture_count {
             let texture = device_state
                 .device
                 .create_texture(&wgpu::TextureDescriptor {
@@ -105,8 +110,8 @@ impl RenderpassState {
 
         let texture_view_refs: Vec<_> = texture_views.iter().collect();
 
-        let mut bind_groups = Vec::with_capacity(DRAW_COUNT);
-        for draw_idx in 0..DRAW_COUNT {
+        let mut bind_groups = Vec::with_capacity(draw_count);
+        for draw_idx in 0..draw_count {
             let mut entries = Vec::with_capacity(TEXTURES_PER_DRAW);
             for tex_idx in 0..TEXTURES_PER_DRAW {
                 entries.push(wgpu::BindGroupEntry {
@@ -143,8 +148,8 @@ impl RenderpassState {
                     push_constant_ranges: &[],
                 }).unwrap();
 
-        let mut vertex_buffers = Vec::with_capacity(VERTEX_BUFFER_COUNT);
-        for _ in 0..VERTEX_BUFFER_COUNT {
+        let mut vertex_buffers = Vec::with_capacity(vertex_buffer_count);
+        for _ in 0..vertex_buffer_count {
             vertex_buffers.push(device_state.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: 3 * 16,
@@ -154,8 +159,8 @@ impl RenderpassState {
         }
         random.shuffle(&mut vertex_buffers);
 
-        let mut index_buffers = Vec::with_capacity(DRAW_COUNT);
-        for _ in 0..DRAW_COUNT {
+        let mut index_buffers = Vec::with_capacity(draw_count);
+        for _ in 0..draw_count {
             index_buffers.push(device_state.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: 3 * 4,
@@ -187,7 +192,7 @@ impl RenderpassState {
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &sm,
-                        entry_point: "vs_main",
+                        entry_point: Some("vs_main"),
                         buffers: &vertex_buffer_layouts,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     },
@@ -204,7 +209,7 @@ impl RenderpassState {
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &sm,
-                        entry_point: "fs_main",
+                        entry_point: Some("fs_main"),
                         targets: &[Some(wgpu::ColorTargetState {
                             format: wgpu::TextureFormat::Rgba8UnormSrgb,
                             blend: None,
@@ -253,7 +258,7 @@ impl RenderpassState {
                                 view_dimension: wgpu::TextureViewDimension::D2,
                                 multisampled: false,
                             },
-                            count: Some(NonZeroU32::new(TEXTURE_COUNT as u32).unwrap()),
+                            count: Some(NonZeroU32::new(texture_count as u32).unwrap()),
                         }],
                     }).unwrap();
 
@@ -288,7 +293,7 @@ impl RenderpassState {
                     layout: Some(&bindless_pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &bindless_shader_module,
-                        entry_point: "vs_main",
+                        entry_point: Some("vs_main"),
                         buffers: &vertex_buffer_layouts,
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     },
@@ -305,7 +310,7 @@ impl RenderpassState {
                     multisample: wgpu::MultisampleState::default(),
                     fragment: Some(wgpu::FragmentState {
                         module: &bindless_shader_module,
-                        entry_point: "fs_main",
+                        entry_point: Some("fs_main"),
                         targets: &[Some(wgpu::ColorTargetState {
                             format: wgpu::TextureFormat::Rgba8UnormSrgb,
                             blend: None,
@@ -332,10 +337,15 @@ impl RenderpassState {
         }
     }
 
-    fn run_subpass(&self, pass_number: usize, total_passes: usize) -> wgpu::CommandBuffer {
+    fn run_subpass(
+        &self,
+        pass_number: usize,
+        total_passes: usize,
+        draw_count: usize,
+    ) -> wgpu::CommandBuffer {
         profiling::scope!("Renderpass", &format!("Pass {pass_number}/{total_passes}"));
 
-        let draws_per_pass = DRAW_COUNT / total_passes;
+        let draws_per_pass = draw_count / total_passes;
 
         let mut encoder = self
             .device_state
@@ -381,7 +391,7 @@ impl RenderpassState {
         encoder.finish().unwrap()
     }
 
-    fn run_bindless_pass(&self) -> wgpu::CommandBuffer {
+    fn run_bindless_pass(&self, draw_count: usize) -> wgpu::CommandBuffer {
         profiling::scope!("Bindless Renderpass");
 
         let mut encoder = self
@@ -406,13 +416,13 @@ impl RenderpassState {
         }).unwrap();
 
         render_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap()).unwrap();
-        render_pass.set_bind_group(0, self.bindless_bind_group.as_ref().unwrap(), &[]).unwrap();
+        render_pass.set_bind_group(0, Some(self.bindless_bind_group.as_ref().unwrap()), &[]).unwrap();
         for i in 0..VERTEX_BUFFERS_PER_DRAW {
             render_pass.set_vertex_buffer(i as u32, self.vertex_buffers[0].slice(..)).unwrap();
         }
         render_pass.set_index_buffer(self.index_buffers[0].slice(..), wgpu::IndexFormat::Uint32).unwrap();
 
-        for draw_idx in 0..DRAW_COUNT {
+        for draw_idx in 0..draw_count {
             render_pass.draw_indexed(0..3, 0, draw_idx as u32..draw_idx as u32 + 1).unwrap();
         }
 
@@ -425,13 +435,17 @@ impl RenderpassState {
 fn run_bench(ctx: &mut Criterion) {
     let state = Lazy::new(RenderpassState::new);
 
+    let draw_count = draw_count();
+    let vertex_buffer_count = draw_count * VERTEX_BUFFERS_PER_DRAW;
+    let texture_count = draw_count * TEXTURES_PER_DRAW;
+
     // Test 10k draw calls split up into 1, 2, 4, and 8 renderpasses
     let mut group = ctx.benchmark_group("Renderpass: Single Threaded");
-    group.throughput(Throughput::Elements(DRAW_COUNT as _));
+    group.throughput(Throughput::Elements(draw_count as _));
 
     for time_submit in [false, true] {
         for rpasses in [1, 2, 4, 8] {
-            let draws_per_pass = DRAW_COUNT / rpasses;
+            let draws_per_pass = draw_count / rpasses;
 
             let label = if time_submit {
                 "Submit Time"
@@ -440,7 +454,7 @@ fn run_bench(ctx: &mut Criterion) {
             };
 
             group.bench_function(
-                &format!("{rpasses} renderpasses x {draws_per_pass} draws ({label})"),
+                format!("{rpasses} renderpasses x {draws_per_pass} draws ({label})"),
                 |b| {
                     Lazy::force(&state);
 
@@ -461,7 +475,7 @@ fn run_bench(ctx: &mut Criterion) {
 
                             let mut buffers: Vec<wgpu::CommandBuffer> = Vec::with_capacity(rpasses);
                             for i in 0..rpasses {
-                                buffers.push(state.run_subpass(i, rpasses));
+                                buffers.push(state.run_subpass(i, rpasses, draw_count));
                             }
 
                             if time_submit {
@@ -489,53 +503,50 @@ fn run_bench(ctx: &mut Criterion) {
 
     // Test 10k draw calls split up over 2, 4, and 8 threads.
     let mut group = ctx.benchmark_group("Renderpass: Multi Threaded");
-    group.throughput(Throughput::Elements(DRAW_COUNT as _));
+    group.throughput(Throughput::Elements(draw_count as _));
 
     for threads in [2, 4, 8] {
-        let draws_per_pass = DRAW_COUNT / threads;
-        group.bench_function(
-            &format!("{threads} threads x {draws_per_pass} draws"),
-            |b| {
-                Lazy::force(&state);
+        let draws_per_pass = draw_count / threads;
+        group.bench_function(format!("{threads} threads x {draws_per_pass} draws"), |b| {
+            Lazy::force(&state);
 
-                b.iter_custom(|iters| {
-                    profiling::scope!("benchmark invocation");
+            b.iter_custom(|iters| {
+                profiling::scope!("benchmark invocation");
 
-                    // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
-                    if state.device_state.adapter_info.name.contains("Paravirtual") {
-                        return Duration::from_secs_f32(1.0);
-                    }
+                // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
+                if state.device_state.adapter_info.name.contains("Paravirtual") {
+                    return Duration::from_secs_f32(1.0);
+                }
 
-                    let mut duration = Duration::ZERO;
+                let mut duration = Duration::ZERO;
 
-                    for _ in 0..iters {
-                        profiling::scope!("benchmark iteration");
+                for _ in 0..iters {
+                    profiling::scope!("benchmark iteration");
 
-                        let start = Instant::now();
+                    let start = Instant::now();
 
-                        let buffers = (0..threads)
-                            .into_par_iter()
-                            .map(|i| state.run_subpass(i, threads))
-                            .collect::<Vec<_>>();
+                    let buffers = (0..threads)
+                        .into_par_iter()
+                        .map(|i| state.run_subpass(i, threads, draw_count))
+                        .collect::<Vec<_>>();
 
-                        duration += start.elapsed();
+                    duration += start.elapsed();
 
-                        state.device_state.queue.submit(buffers);
-                        state.device_state.device.poll(wgpu::Maintain::Wait);
-                    }
+                    state.device_state.queue.submit(buffers);
+                    state.device_state.device.poll(wgpu::Maintain::Wait);
+                }
 
-                    duration
-                })
-            },
-        );
+                duration
+            })
+        });
     }
     group.finish();
 
     // Test 10k draw calls split up over 1, 2, 4, and 8 threads.
     let mut group = ctx.benchmark_group("Renderpass: Bindless");
-    group.throughput(Throughput::Elements(DRAW_COUNT as _));
+    group.throughput(Throughput::Elements(draw_count as _));
 
-    group.bench_function(&format!("{DRAW_COUNT} draws"), |b| {
+    group.bench_function(format!("{draw_count} draws"), |b| {
         Lazy::force(&state);
 
         b.iter_custom(|iters| {
@@ -553,7 +564,7 @@ fn run_bench(ctx: &mut Criterion) {
 
                 let start = Instant::now();
 
-                let buffer = state.run_bindless_pass();
+                let buffer = state.run_bindless_pass(draw_count);
 
                 duration += start.elapsed();
 
@@ -569,7 +580,7 @@ fn run_bench(ctx: &mut Criterion) {
     ctx.bench_function(
         &format!(
             "Renderpass: Empty Submit with {} Resources",
-            TEXTURE_COUNT + VERTEX_BUFFER_COUNT
+            texture_count + vertex_buffer_count
         ),
         |b| {
             Lazy::force(&state);

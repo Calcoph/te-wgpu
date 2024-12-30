@@ -24,13 +24,13 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
                 layout: None,
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: "vs_main",
+                    entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: "fs_main",
+                    entry_point: Some("fs_main"),
                     compilation_options: Default::default(),
                     targets: &[Some(target_format.into())],
                 }),
@@ -169,7 +169,7 @@ static NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT: GpuTestConfiguration =
                         ..Default::default()
                     })
                 },
-                None,
+                Some("aspect plane0 is not in the source texture format r8unorm"),
             );
         });
 
@@ -200,7 +200,7 @@ static NV12_TEXTURE_VIEW_PLANE_OUT_OF_BOUNDS: GpuTestConfiguration = GpuTestConf
                     ..Default::default()
                 })
             },
-            None,
+            Some("aspect plane2 is not in the source texture format nv12"),
         );
     });
 
@@ -231,7 +231,7 @@ static NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE: GpuTestConfiguration = GpuTestConfigu
                     ..Default::default()
                 })
             },
-            None,
+            Some("unable to view texture nv12 as rg8unorm"),
         );
     });
 
@@ -246,15 +246,17 @@ static NV12_TEXTURE_BAD_SIZE: GpuTestConfiguration = GpuTestConfiguration::new()
         };
 
         fail(|| {
-            ctx.device.create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                dimension: wgpu::TextureDimension::D2,
-                size,
-                format: wgpu::TextureFormat::NV12,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                mip_level_count: 1,
-                sample_count: 1,
-                view_formats: &[],
-            })
-        }, None);
+                ctx.device.create_texture(&wgpu::TextureDescriptor {
+                    label: None,
+                    dimension: wgpu::TextureDimension::D2,
+                    size,
+                    format: wgpu::TextureFormat::NV12,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    view_formats: &[],
+                })
+            },
+            Some("width 255 is not a multiple of nv12's width multiple requirement")
+        );
     });

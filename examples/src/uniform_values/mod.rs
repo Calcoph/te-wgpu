@@ -16,7 +16,7 @@
 //! The usage of the uniform buffer within the shader itself is pretty self-explanatory given
 //! some understanding of WGSL.
 
-use std::sync::Arc;
+use std::{mem::size_of, sync::Arc};
 // We won't bring StorageBuffer into scope as that might be too easy to confuse
 // with actual GPU-allocated WGPU storage buffers.
 use encase::ShaderType;
@@ -122,24 +122,15 @@ impl WgpuContext {
             .await
             .unwrap();
 
-        let shader = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "shader.wgsl"
-                ))),
-            })
-            .unwrap();
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl")).unwrap();
 
         // (2)
-        let uniform_buffer = device
-            .create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: std::mem::size_of::<AppState>() as u64,
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            })
-            .unwrap();
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: size_of::<AppState>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        }).unwrap();
 
         // (3)
         let bind_group_layout = device
@@ -189,13 +180,13 @@ impl WgpuContext {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(swapchain_format.into())],
             }),
@@ -344,7 +335,11 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                                     }).unwrap();
                                 render_pass.set_pipeline(&wgpu_context_ref.pipeline).unwrap();
                                 // (9)
-                                render_pass.set_bind_group(0, &wgpu_context_ref.bind_group, &[]).unwrap();
+                                render_pass.set_bind_group(
+                                    0,
+                                    Some(&wgpu_context_ref.bind_group),
+                                    &[],
+                                ).unwrap();
                                 render_pass.draw(0..3, 0..1).unwrap();
                             }
                             wgpu_context_ref

@@ -7,6 +7,8 @@
 //!
 //! Only parts specific to this example will be commented.
 
+use std::mem::size_of_val;
+
 use wgpu::util::DeviceExt;
 
 async fn run() {
@@ -39,37 +41,24 @@ async fn run() {
         .await
         .unwrap();
 
-    let shader = device
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shader.wgsl"
-            ))),
-        })
-        .unwrap();
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl")).unwrap();
 
-    let storage_buffer_a = device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(&local_a[..]),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-        })
-        .unwrap();
-    let storage_buffer_b = device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(&local_b[..]),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-        })
-        .unwrap();
-    let output_staging_buffer = device
-        .create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: std::mem::size_of_val(&local_a) as u64,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        })
-        .unwrap();
+    let storage_buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&local_a[..]),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+    }).unwrap();
+    let storage_buffer_b = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&local_b[..]),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+    }).unwrap();
+    let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: size_of_val(&local_a) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    }).unwrap();
 
     let bind_group_layout = device
         .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -124,7 +113,7 @@ async fn run() {
         label: None,
         layout: Some(&pipeline_layout),
         module: &shader,
-        entry_point: "main",
+        entry_point: Some("main"),
         compilation_options: Default::default(),
         cache: None,
     }).unwrap();
@@ -180,15 +169,13 @@ async fn get_data<T: bytemuck::Pod>(
     let mut command_encoder = device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
         .unwrap();
-    command_encoder
-        .copy_buffer_to_buffer(
-            storage_buffer,
-            0,
-            staging_buffer,
-            0,
-            std::mem::size_of_val(output) as u64,
-        )
-        .unwrap();
+    command_encoder.copy_buffer_to_buffer(
+        storage_buffer,
+        0,
+        staging_buffer,
+        0,
+        size_of_val(output) as u64,
+    ).unwrap();
     queue.submit(Some(command_encoder.finish().unwrap()));
     let buffer_slice = staging_buffer.slice(..);
     let (sender, receiver) = flume::bounded(1);

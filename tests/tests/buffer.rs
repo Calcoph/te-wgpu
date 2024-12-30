@@ -248,17 +248,20 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
             })
             .unwrap();
 
-        wgpu_test::fail(|| {
-            ctx.device
-                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: None,
-                    layout: Some(&pipeline_layout),
-                    module: &shader_module,
-                    entry_point: "main",
-                    compilation_options: Default::default(),
-                    cache: None
-                })
-        }, None);
+        wgpu_test::fail(
+            || {
+                ctx.device
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: None,
+                        layout: Some(&pipeline_layout),
+                        module: &shader_module,
+                        entry_point: Some("main"),
+                        compilation_options: Default::default(),
+                        cache: None,
+                    })
+            },
+            Some("shader global resourcebinding { group: 0, binding: 0 } is not available in the pipeline layout"),
+        );
     });
 
 /// The WebGPU algorithm [validating shader binding][vsb] requires
@@ -327,7 +330,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 label: None,
                 layout: Some(&pipeline_layout),
                 module: &shader_module,
-                entry_point: "main",
+                entry_point: Some("main"),
                 compilation_options: Default::default(),
                 cache: None,
             })
@@ -367,9 +370,11 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 pass.set_pipeline(&pipeline).unwrap();
                 pass.dispatch_workgroups(1, 1, 1).unwrap();
 
-            drop(pass);
-            encoder.finish()
-        }, None);
+                drop(pass);
+                encoder.finish()
+            },
+            Some("buffer is bound with size 16 where the shader expects 32 in group[0] compact index 0"),
+        );
     });
 
 #[gpu_test]
