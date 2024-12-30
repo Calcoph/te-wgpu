@@ -40,6 +40,25 @@ Bottom level categories:
 
 ## Unreleased
 
+## 23.0.1 (2024-11-24)
+
+This release includes `wgpu`, `wgpu-core` and `wgpu-hal`. All other crates remain at 23.0.0.
+Below changes were cherry-picked from 23.0.0.
+
+### Bug fixes
+
+#### General
+
+- Fix Texture view leaks regression. By @xiaopengli89 in [#6576](https://github.com/gfx-rs/wgpu/pull/6576)
+
+#### Metal
+
+- Fix surface creation crashing on iOS. By @mockersf in [#6535](https://github.com/gfx-rs/wgpu/pull/6535)
+
+#### Vulkan
+
+- Fix surface capabilities being advertised when its query failed. By @wumpf in [#6510](https://github.com/gfx-rs/wgpu/pull/6510)
+
 ## 23.0.0 (2024-10-25)
 
 ### Themes of this release
