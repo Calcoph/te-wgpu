@@ -1,5 +1,7 @@
 use std::{sync::Arc, thread};
 
+use wgc::resource::CreateTextureViewError;
+
 use crate::context::DynContext;
 use crate::*;
 
@@ -48,12 +50,12 @@ impl Texture {
     }
 
     /// Creates a view of this texture.
-    pub fn create_view(&self, desc: &TextureViewDescriptor<'_>) -> TextureView {
-        let data = DynContext::texture_create_view(&*self.context, self.data.as_ref(), desc);
-        TextureView {
+    pub fn create_view(&self, desc: &TextureViewDescriptor<'_>) -> Result<TextureView, CreateTextureViewError> {
+        let data = DynContext::texture_create_view(&*self.context, self.data.as_ref(), desc)?;
+        Ok(TextureView {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 
     /// Destroy the associated native resources as soon as possible.

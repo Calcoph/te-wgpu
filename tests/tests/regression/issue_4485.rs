@@ -31,12 +31,13 @@ async fn test_impl(ctx: &TestingContext) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
-    });
-    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    }).unwrap();
+    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("issue_4514.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("issue_4514.wgsl"))
+        .unwrap();
 
     let pipeline = ctx
         .device
@@ -64,13 +65,14 @@ async fn test_impl(ctx: &TestingContext) {
             }),
             multiview: None,
             cache: None,
-        });
+        }).unwrap();
 
     let readback_buffer = image::ReadbackBuffers::new(&ctx.device, &texture);
     {
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+            .unwrap();
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Renderpass"),
@@ -91,12 +93,12 @@ async fn test_impl(ctx: &TestingContext) {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
-            render_pass.set_pipeline(&pipeline);
-            render_pass.draw(0..3, 0..1);
+            }).unwrap();
+            render_pass.set_pipeline(&pipeline).unwrap();
+            render_pass.draw(0..3, 0..1).unwrap();
         }
         readback_buffer.copy_from(&ctx.device, &mut encoder, &texture);
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap()));
     }
 
     let expected_data = [255; BUFFER_SIZE];

@@ -121,11 +121,9 @@ impl GlobalPlay for wgc::global::Global {
                 }
             }
         }
-        let (cmd_buf, error) =
+        let cmd_buf =
             self.command_encoder_finish(encoder, &wgt::CommandBufferDescriptor { label: None }).unwrap();
-        if let Some(e) = error {
-            panic!("{e}");
-        }
+
         cmd_buf
     }
 

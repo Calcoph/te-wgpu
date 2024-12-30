@@ -183,7 +183,8 @@ async fn vertex_formats_10_10_10_2(ctx: TestingContext) {
 async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("draw.vert.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("draw.vert.wgsl"))
+        .unwrap();
 
     let bgl = ctx
         .device
@@ -199,7 +200,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
                 visibility: wgpu::ShaderStages::VERTEX,
                 count: None,
             }],
-        });
+        }).unwrap();
 
     let ppl = ctx
         .device
@@ -207,7 +208,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             label: None,
             bind_group_layouts: &[&bgl],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
     let dummy = ctx
         .device
@@ -229,8 +230,9 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             },
             wgpu::util::TextureDataOrder::LayerMajor,
             &[0, 0, 0, 1],
-        )
-        .create_view(&wgpu::TextureViewDescriptor::default());
+        ).unwrap()
+        .create_view(&wgpu::TextureViewDescriptor::default())
+        .unwrap();
 
     let mut failed = false;
     for test in tests {
@@ -238,7 +240,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             label: None,
             contents: bytemuck::cast_slice(test.input),
             usage: wgpu::BufferUsages::VERTEX,
-        });
+        }).unwrap();
 
         let pipeline_desc = wgpu::RenderPipelineDescriptor {
             label: None,
@@ -270,7 +272,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             cache: None,
         };
 
-        let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
+        let pipeline = ctx.device.create_render_pipeline(&pipeline_desc).unwrap();
 
         let expected = test.checksums;
         let buffer_size = (size_of_val(&expected[0]) * expected.len()) as u64;
@@ -279,14 +281,14 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             size: buffer_size,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: buffer_size,
             usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -295,11 +297,12 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
                 binding: 0,
                 resource: gpu_buffer.as_entire_binding(),
             }],
-        });
+        }).unwrap();
 
         let mut encoder1 = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+            .unwrap();
 
         let mut rpass = encoder1.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -311,33 +314,34 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        });
+        }).unwrap();
 
-        rpass.set_vertex_buffer(0, buffer_input.slice(..));
-        rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, &bg, &[]);
+        rpass.set_vertex_buffer(0, buffer_input.slice(..)).unwrap();
+        rpass.set_pipeline(&pipeline).unwrap();
+        rpass.set_bind_group(0, &bg, &[]).unwrap();
 
         // Draw three vertices and no instance, which is enough to generate the
         // checksums.
-        rpass.draw(0..3, 0..1);
+        rpass.draw(0..3, 0..1).unwrap();
 
         drop(rpass);
 
         let mut encoder2 = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+            .unwrap();
 
-        encoder2.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
+        encoder2.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size).unwrap();
 
         // See https://github.com/gfx-rs/wgpu/issues/4732 for why this is split between two submissions
         // with a hard wait in between.
-        ctx.queue.submit([encoder1.finish()]);
+        ctx.queue.submit([encoder1.finish().unwrap()]);
         ctx.async_poll(wgpu::Maintain::wait())
             .await
             .panic_on_timeout();
-        ctx.queue.submit([encoder2.finish()]);
+        ctx.queue.submit([encoder2.finish().unwrap()]);
         let slice = cpu_buffer.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| ());
+        slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
         ctx.async_poll(wgpu::Maintain::wait())
             .await
             .panic_on_timeout();

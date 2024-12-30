@@ -1,6 +1,10 @@
-use std::{error, fmt, future::Future, sync::Arc, thread};
+use std::{error, fmt, sync::Arc, thread};
 
 use parking_lot::Mutex;
+use wgc::binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError};
+use wgc::device::DeviceError;
+use wgc::pipeline::{CreateComputePipelineError, CreatePipelineCacheError, CreateRenderPipelineError, CreateShaderModuleError};
+use wgc::resource::{CreateBufferError, CreateQuerySetError, CreateSamplerError, CreateTextureError};
 
 use crate::context::DynContext;
 use crate::*;
@@ -75,17 +79,17 @@ impl Device {
     ///
     /// </div>
     #[must_use]
-    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor<'_>) -> ShaderModule {
+    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor<'_>) -> Result<ShaderModule, CreateShaderModuleError> {
         let data = DynContext::device_create_shader_module(
             &*self.context,
             self.data.as_ref(),
             desc,
             wgt::ShaderBoundChecks::new(),
-        );
-        ShaderModule {
+        )?;
+        Ok(ShaderModule {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code without runtime checks.
@@ -102,17 +106,17 @@ impl Device {
     pub unsafe fn create_shader_module_unchecked(
         &self,
         desc: ShaderModuleDescriptor<'_>,
-    ) -> ShaderModule {
+    ) -> Result<ShaderModule, CreateShaderModuleError> {
         let data = DynContext::device_create_shader_module(
             &*self.context,
             self.data.as_ref(),
             desc,
             unsafe { wgt::ShaderBoundChecks::unchecked() },
-        );
-        ShaderModule {
+        )?;
+        Ok(ShaderModule {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 
     /// Creates a shader module from SPIR-V binary directly.
@@ -127,25 +131,25 @@ impl Device {
     pub unsafe fn create_shader_module_spirv(
         &self,
         desc: &ShaderModuleDescriptorSpirV<'_>,
-    ) -> ShaderModule {
+    ) -> Result<ShaderModule, CreateShaderModuleError> {
         let data = unsafe {
             DynContext::device_create_shader_module_spirv(&*self.context, self.data.as_ref(), desc)
-        };
-        ShaderModule {
+        }?;
+        Ok(ShaderModule {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 
     /// Creates an empty [`CommandEncoder`].
     #[must_use]
-    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor<'_>) -> CommandEncoder {
+    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor<'_>) -> Result<CommandEncoder, DeviceError> {
         let data =
-            DynContext::device_create_command_encoder(&*self.context, self.data.as_ref(), desc);
-        CommandEncoder {
+            DynContext::device_create_command_encoder(&*self.context, self.data.as_ref(), desc)?;
+        Ok(CommandEncoder {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 
     /// Creates an empty [`RenderBundleEncoder`].
@@ -169,12 +173,12 @@ impl Device {
 
     /// Creates a new [`BindGroup`].
     #[must_use]
-    pub fn create_bind_group(&self, desc: &BindGroupDescriptor<'_>) -> BindGroup {
-        let data = DynContext::device_create_bind_group(&*self.context, self.data.as_ref(), desc);
-        BindGroup {
+    pub fn create_bind_group(&self, desc: &BindGroupDescriptor<'_>) -> Result<BindGroup, CreateBindGroupError> {
+        let data = DynContext::device_create_bind_group(&*self.context, self.data.as_ref(), desc)?;
+        Ok(BindGroup {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 
     /// Creates a [`BindGroupLayout`].
@@ -182,74 +186,74 @@ impl Device {
     pub fn create_bind_group_layout(
         &self,
         desc: &BindGroupLayoutDescriptor<'_>,
-    ) -> BindGroupLayout {
+    ) -> Result<BindGroupLayout, CreateBindGroupLayoutError> {
         let data =
-            DynContext::device_create_bind_group_layout(&*self.context, self.data.as_ref(), desc);
-        BindGroupLayout {
+            DynContext::device_create_bind_group_layout(&*self.context, self.data.as_ref(), desc)?;
+        Ok(BindGroupLayout {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 
     /// Creates a [`PipelineLayout`].
     #[must_use]
-    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor<'_>) -> PipelineLayout {
+    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor<'_>) -> Result<PipelineLayout, CreatePipelineLayoutError> {
         let data =
-            DynContext::device_create_pipeline_layout(&*self.context, self.data.as_ref(), desc);
-        PipelineLayout {
+            DynContext::device_create_pipeline_layout(&*self.context, self.data.as_ref(), desc)?;
+        Ok(PipelineLayout {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 
     /// Creates a [`RenderPipeline`].
     #[must_use]
-    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor<'_>) -> RenderPipeline {
+    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor<'_>) -> Result<RenderPipeline, CreateRenderPipelineError> {
         let data =
-            DynContext::device_create_render_pipeline(&*self.context, self.data.as_ref(), desc);
-        RenderPipeline {
+            DynContext::device_create_render_pipeline(&*self.context, self.data.as_ref(), desc)?;
+        Ok(RenderPipeline {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 
     /// Creates a [`ComputePipeline`].
     #[must_use]
-    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> ComputePipeline {
+    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> Result<ComputePipeline, CreateComputePipelineError> {
         let data =
-            DynContext::device_create_compute_pipeline(&*self.context, self.data.as_ref(), desc);
-        ComputePipeline {
+            DynContext::device_create_compute_pipeline(&*self.context, self.data.as_ref(), desc)?;
+        Ok(ComputePipeline {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 
     /// Creates a [`Buffer`].
     #[must_use]
-    pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
+    pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Result<Buffer, CreateBufferError> {
         let mut map_context = MapContext::new(desc.size);
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
         }
 
-        let data = DynContext::device_create_buffer(&*self.context, self.data.as_ref(), desc);
+        let data = DynContext::device_create_buffer(&*self.context, self.data.as_ref(), desc)?;
 
-        Buffer {
+        Ok(Buffer {
             context: Arc::clone(&self.context),
             data,
             map_context: Mutex::new(map_context),
             size: desc.size,
             usage: desc.usage,
-        }
+        })
     }
 
     /// Creates a new [`Texture`].
     ///
     /// `desc` specifies the general format of the texture.
     #[must_use]
-    pub fn create_texture(&self, desc: &TextureDescriptor<'_>) -> Texture {
-        let data = DynContext::device_create_texture(&*self.context, self.data.as_ref(), desc);
-        Texture {
+    pub fn create_texture(&self, desc: &TextureDescriptor<'_>) -> Result<Texture, CreateTextureError> {
+        let data = DynContext::device_create_texture(&*self.context, self.data.as_ref(), desc)?;
+        Ok(Texture {
             context: Arc::clone(&self.context),
             data,
             descriptor: TextureDescriptor {
@@ -257,7 +261,7 @@ impl Device {
                 view_formats: &[],
                 ..desc.clone()
             },
-        }
+        })
     }
 
     /// Creates a [`Texture`] from a wgpu-hal Texture.
@@ -344,39 +348,22 @@ impl Device {
     ///
     /// `desc` specifies the behavior of the sampler.
     #[must_use]
-    pub fn create_sampler(&self, desc: &SamplerDescriptor<'_>) -> Sampler {
-        let data = DynContext::device_create_sampler(&*self.context, self.data.as_ref(), desc);
-        Sampler {
+    pub fn create_sampler(&self, desc: &SamplerDescriptor<'_>) -> Result<Sampler, CreateSamplerError> {
+        let data = DynContext::device_create_sampler(&*self.context, self.data.as_ref(), desc)?;
+        Ok(Sampler {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 
     /// Creates a new [`QuerySet`].
     #[must_use]
-    pub fn create_query_set(&self, desc: &QuerySetDescriptor<'_>) -> QuerySet {
-        let data = DynContext::device_create_query_set(&*self.context, self.data.as_ref(), desc);
-        QuerySet {
+    pub fn create_query_set(&self, desc: &QuerySetDescriptor<'_>) -> Result<QuerySet, CreateQuerySetError> {
+        let data = DynContext::device_create_query_set(&*self.context, self.data.as_ref(), desc)?;
+        Ok(QuerySet {
             context: Arc::clone(&self.context),
             data,
-        }
-    }
-
-    /// Set a callback for errors that are not handled in error scopes.
-    pub fn on_uncaptured_error(&self, handler: Box<dyn UncapturedErrorHandler>) {
-        self.context
-            .device_on_uncaptured_error(self.data.as_ref(), handler);
-    }
-
-    /// Push an error scope.
-    pub fn push_error_scope(&self, filter: ErrorFilter) {
-        self.context
-            .device_push_error_scope(self.data.as_ref(), filter);
-    }
-
-    /// Pop an error scope.
-    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + WasmNotSend {
-        self.context.device_pop_error_scope(self.data.as_ref())
+        })
     }
 
     /// Starts frame capture.
@@ -503,14 +490,14 @@ impl Device {
     pub unsafe fn create_pipeline_cache(
         &self,
         desc: &PipelineCacheDescriptor<'_>,
-    ) -> PipelineCache {
+    ) -> Result<PipelineCache, CreatePipelineCacheError> {
         let data = unsafe {
             DynContext::device_create_pipeline_cache(&*self.context, self.data.as_ref(), desc)
-        };
-        PipelineCache {
+        }?;
+        Ok(PipelineCache {
             context: Arc::clone(&self.context),
             data,
-        }
+        })
     }
 }
 

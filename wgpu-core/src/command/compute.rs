@@ -365,19 +365,16 @@ impl Global {
             push_constant_data,
         } = base;
 
-        let (mut compute_pass, encoder_error) = self.command_encoder_create_compute_pass(
+        let mut compute_pass = self.command_encoder_create_compute_pass(
             encoder_id,
             &ComputePassDescriptor {
                 label: label.as_deref().map(std::borrow::Cow::Borrowed),
                 timestamp_writes,
             },
-        );
-        if let Some(err) = encoder_error {
-            return Err(ComputePassError {
-                scope: pass_scope,
-                inner: err.into(),
-            });
-        };
+        ).map_err(|err|ComputePassError {
+            scope: pass_scope,
+            inner: err.into(),
+        })?;
 
         compute_pass.base = Some(BasePass {
             label,

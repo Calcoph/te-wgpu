@@ -7,12 +7,31 @@ use crate::*;
 pub(crate) struct RenderPassInner {
     pub(crate) data: Box<Data>,
     pub(crate) context: Arc<C>,
+    pub(crate) encoded: bool,
+}
+
+impl RenderPassInner {
+    fn end(&mut self) -> Result<(), wgc::command::RenderPassError> {
+        if !self.encoded {
+            self.encoded = true;
+            self.context.render_pass_end(self.data.as_mut())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl<'encoder> RenderPass<'encoder> {
+    /// Drops the render pass with a chance to handle the error
+    pub fn end(mut self) -> Result<(), wgc::command::RenderPassError> {
+        self.inner.end()
+    }
 }
 
 impl Drop for RenderPassInner {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.render_pass_end(self.data.as_mut());
+            self.end().expect("Call RenderPass::end() to handle this error.");
         }
     }
 }
@@ -79,7 +98,7 @@ impl<'encoder> RenderPass<'encoder> {
         index: u32,
         bind_group: impl Into<Option<&'a BindGroup>>,
         offsets: &[DynamicOffset],
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let bg = bind_group.into().map(|x| x.data.as_ref());
         DynContext::render_pass_set_bind_group(
             &*self.inner.context,
@@ -93,7 +112,7 @@ impl<'encoder> RenderPass<'encoder> {
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
-    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_set_pipeline(
             &*self.inner.context,
             self.inner.data.as_mut(),
@@ -106,7 +125,7 @@ impl<'encoder> RenderPass<'encoder> {
     /// Subsequent blending tests will test against this value.
     /// If this method has not been called, the blend constant defaults to [`Color::TRANSPARENT`]
     /// (all components zero).
-    pub fn set_blend_constant(&mut self, color: Color) {
+    pub fn set_blend_constant(&mut self, color: Color) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_set_blend_constant(
             &*self.inner.context,
             self.inner.data.as_mut(),
@@ -118,7 +137,7 @@ impl<'encoder> RenderPass<'encoder> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_set_index_buffer(
             &*self.inner.context,
             self.inner.data.as_mut(),
@@ -139,7 +158,7 @@ impl<'encoder> RenderPass<'encoder> {
     ///
     /// [`draw`]: RenderPass::draw
     /// [`draw_indexed`]: RenderPass::draw_indexed
-    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) {
+    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_set_vertex_buffer(
             &*self.inner.context,
             self.inner.data.as_mut(),
@@ -159,7 +178,7 @@ impl<'encoder> RenderPass<'encoder> {
     ///
     /// The function of the scissor rectangle resembles [`set_viewport()`](Self::set_viewport),
     /// but it does not affect the coordinate system, only which fragments are discarded.
-    pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
+    pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_set_scissor_rect(
             &*self.inner.context,
             self.inner.data.as_mut(),
@@ -167,7 +186,7 @@ impl<'encoder> RenderPass<'encoder> {
             y,
             width,
             height,
-        );
+        )
     }
 
     /// Sets the viewport used during the rasterization stage to linearly map
@@ -176,7 +195,7 @@ impl<'encoder> RenderPass<'encoder> {
     /// Subsequent draw calls will only draw within this region.
     /// If this method has not been called, the viewport defaults to the entire bounds of the render
     /// targets.
-    pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
+    pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_set_viewport(
             &*self.inner.context,
             self.inner.data.as_mut(),
@@ -186,42 +205,42 @@ impl<'encoder> RenderPass<'encoder> {
             h,
             min_depth,
             max_depth,
-        );
+        )
     }
 
     /// Sets the stencil reference.
     ///
     /// Subsequent stencil tests will test against this value.
     /// If this method has not been called, the stencil reference value defaults to `0`.
-    pub fn set_stencil_reference(&mut self, reference: u32) {
+    pub fn set_stencil_reference(&mut self, reference: u32) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_set_stencil_reference(
             &*self.inner.context,
             self.inner.data.as_mut(),
             reference,
-        );
+        )
     }
 
     /// Inserts debug marker.
-    pub fn insert_debug_marker(&mut self, label: &str) {
+    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_insert_debug_marker(
             &*self.inner.context,
             self.inner.data.as_mut(),
             label,
-        );
+        )
     }
 
     /// Start record commands and group it into debug marker group.
-    pub fn push_debug_group(&mut self, label: &str) {
+    pub fn push_debug_group(&mut self, label: &str) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_push_debug_group(
             &*self.inner.context,
             self.inner.data.as_mut(),
             label,
-        );
+        )
     }
 
     /// Stops command recording and creates debug group.
-    pub fn pop_debug_group(&mut self) {
-        DynContext::render_pass_pop_debug_group(&*self.inner.context, self.inner.data.as_mut());
+    pub fn pop_debug_group(&mut self) -> Result<(), wgc::command::RenderPassError> {
+        DynContext::render_pass_pop_debug_group(&*self.inner.context, self.inner.data.as_mut())
     }
 
     /// Draws primitives from the active vertex buffer(s).
@@ -245,7 +264,7 @@ impl<'encoder> RenderPass<'encoder> {
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.
-    pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
+    pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_draw(
             &*self.inner.context,
             self.inner.data.as_mut(),
@@ -278,14 +297,14 @@ impl<'encoder> RenderPass<'encoder> {
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.
-    pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
+    pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_draw_indexed(
             &*self.inner.context,
             self.inner.data.as_mut(),
             indices,
             base_vertex,
             instances,
-        );
+        )
     }
 
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
@@ -301,13 +320,13 @@ impl<'encoder> RenderPass<'encoder> {
     ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
     /// See details on the individual flags for more information.
-    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
+    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_draw_indirect(
             &*self.inner.context,
             self.inner.data.as_mut(),
             indirect_buffer.data.as_ref(),
             indirect_offset,
-        );
+        )
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
@@ -328,13 +347,13 @@ impl<'encoder> RenderPass<'encoder> {
         &mut self,
         indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_draw_indexed_indirect(
             &*self.inner.context,
             self.inner.data.as_mut(),
             indirect_buffer.data.as_ref(),
             indirect_offset,
-        );
+        )
     }
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
@@ -345,7 +364,7 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn execute_bundles<'a, I: IntoIterator<Item = &'a RenderBundle>>(
         &mut self,
         render_bundles: I,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         let mut render_bundles = render_bundles.into_iter().map(|rb| rb.data.as_ref());
 
         DynContext::render_pass_execute_bundles(
@@ -373,14 +392,14 @@ impl<'encoder> RenderPass<'encoder> {
         indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
         count: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_multi_draw_indirect(
             &*self.inner.context,
             self.inner.data.as_mut(),
             indirect_buffer.data.as_ref(),
             indirect_offset,
             count,
-        );
+        )
     }
 
     /// Dispatches multiple draw calls from the active index buffer and the active vertex buffers,
@@ -399,14 +418,14 @@ impl<'encoder> RenderPass<'encoder> {
         indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
         count: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_multi_draw_indexed_indirect(
             &*self.inner.context,
             self.inner.data.as_mut(),
             indirect_buffer.data.as_ref(),
             indirect_offset,
             count,
-        );
+        )
     }
 }
 
@@ -441,7 +460,7 @@ impl<'encoder> RenderPass<'encoder> {
         count_buffer: &Buffer,
         count_offset: BufferAddress,
         max_count: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_multi_draw_indirect_count(
             &*self.inner.context,
             self.inner.data.as_mut(),
@@ -450,7 +469,7 @@ impl<'encoder> RenderPass<'encoder> {
             count_buffer.data.as_ref(),
             count_offset,
             max_count,
-        );
+        )
     }
 
     /// Dispatches multiple draw calls from the active index buffer and the active vertex buffers,
@@ -485,7 +504,7 @@ impl<'encoder> RenderPass<'encoder> {
         count_buffer: &Buffer,
         count_offset: BufferAddress,
         max_count: u32,
-    ) {
+    ) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_multi_draw_indexed_indirect_count(
             &*self.inner.context,
             self.inner.data.as_mut(),
@@ -494,7 +513,7 @@ impl<'encoder> RenderPass<'encoder> {
             count_buffer.data.as_ref(),
             count_offset,
             max_count,
-        );
+        )
     }
 }
 
@@ -540,14 +559,14 @@ impl<'encoder> RenderPass<'encoder> {
     /// for each range, each passing the matching `stages` mask.
     ///
     /// [`PushConstant`]: https://docs.rs/naga/latest/naga/enum.StorageClass.html#variant.PushConstant
-    pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
+    pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_set_push_constants(
             &*self.inner.context,
             self.inner.data.as_mut(),
             stages,
             offset,
             data,
-        );
+        )
     }
 }
 
@@ -560,7 +579,7 @@ impl<'encoder> RenderPass<'encoder> {
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
+    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::RenderPassError>{
         DynContext::render_pass_write_timestamp(
             &*self.inner.context,
             self.inner.data.as_mut(),
@@ -573,18 +592,18 @@ impl<'encoder> RenderPass<'encoder> {
 impl<'encoder> RenderPass<'encoder> {
     /// Start a occlusion query on this render pass. It can be ended with
     /// `end_occlusion_query`. Occlusion queries may not be nested.
-    pub fn begin_occlusion_query(&mut self, query_index: u32) {
+    pub fn begin_occlusion_query(&mut self, query_index: u32) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_begin_occlusion_query(
             &*self.inner.context,
             self.inner.data.as_mut(),
             query_index,
-        );
+        )
     }
 
     /// End the occlusion query on this render pass. It can be started with
     /// `begin_occlusion_query`. Occlusion queries may not be nested.
-    pub fn end_occlusion_query(&mut self) {
-        DynContext::render_pass_end_occlusion_query(&*self.inner.context, self.inner.data.as_mut());
+    pub fn end_occlusion_query(&mut self) -> Result<(), wgc::command::RenderPassError> {
+        DynContext::render_pass_end_occlusion_query(&*self.inner.context, self.inner.data.as_mut())
     }
 }
 
@@ -592,22 +611,22 @@ impl<'encoder> RenderPass<'encoder> {
 impl<'encoder> RenderPass<'encoder> {
     /// Start a pipeline statistics query on this render pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
-    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
+    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_begin_pipeline_statistics_query(
             &*self.inner.context,
             self.inner.data.as_mut(),
             query_set.data.as_ref(),
             query_index,
-        );
+        )
     }
 
     /// End the pipeline statistics query on this render pass. It can be started with
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
-    pub fn end_pipeline_statistics_query(&mut self) {
+    pub fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::RenderPassError> {
         DynContext::render_pass_end_pipeline_statistics_query(
             &*self.inner.context,
             self.inner.data.as_mut(),
-        );
+        )
     }
 }
 

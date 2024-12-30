@@ -459,7 +459,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // Creating a bind group layout should fail.
         fail(
             || {
-                let _ = ctx
+                ctx
                     .device
                     .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                         label: None,
@@ -472,7 +472,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // Creating a bind group should fail.
         fail(
             || {
-                let _ = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: None,
                     layout: &bind_group_layout,
                     entries: &[wgpu::BindGroupEntry {
@@ -489,7 +489,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // Creating a pipeline layout should fail.
         fail(
             || {
-                let _ = ctx
+                ctx
                     .device
                     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: None,
@@ -503,7 +503,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // Creating a shader module should fail.
         fail(
             || {
-                let _ = ctx
+                ctx
                     .device
                     .create_shader_module(wgpu::ShaderModuleDescriptor {
                         label: None,
@@ -516,7 +516,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // Creating a shader module spirv should fail.
         fail(
             || unsafe {
-                let _ = ctx
+                ctx
                     .device
                     .create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
                         label: None,
@@ -529,7 +529,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // Creating a render pipeline should fail.
         fail(
             || {
-                let _ = ctx
+                ctx
                     .device
                     .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                         label: None,
@@ -554,7 +554,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // Creating a compute pipeline should fail.
         fail(
             || {
-                let _ = ctx
+                ctx
                     .device
                     .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                         label: None,
@@ -571,7 +571,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // Creating a compute pipeline should fail.
         fail(
             || {
-                let _ = ctx
+                ctx
                     .device
                     .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                         label: None,

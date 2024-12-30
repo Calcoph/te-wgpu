@@ -21,7 +21,7 @@ static NON_FATAL_ERRORS_IN_QUEUE_SUBMIT: GpuTestConfiguration = GpuTestConfigura
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(shader_with_trivial_bind_group.into()),
-            });
+            }).unwrap();
 
         let compute_pipeline =
             ctx.device
@@ -32,27 +32,27 @@ static NON_FATAL_ERRORS_IN_QUEUE_SUBMIT: GpuTestConfiguration = GpuTestConfigura
                     entry_point: None,
                     compilation_options: Default::default(),
                     cache: Default::default(),
-                });
+                }).unwrap();
 
         fail(
-            &ctx.device,
-            || {
-                let mut command_encoder = ctx.device.create_command_encoder(&Default::default());
+            || -> Result<(), String> {
+                let mut command_encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
                 {
-                    let mut render_pass = command_encoder.begin_compute_pass(&Default::default());
-                    render_pass.set_pipeline(&compute_pipeline);
+                    let mut render_pass = command_encoder.begin_compute_pass(&Default::default()).unwrap();
+                    render_pass.set_pipeline(&compute_pipeline).map_err(|err| err.to_string())?;
 
                     // NOTE: We deliberately don't set a bind group here, to provoke a validation
                     // error.
 
-                    render_pass.dispatch_workgroups(1, 1, 1);
+                    render_pass.dispatch_workgroups(1, 1, 1).map_err(|err| err.to_string())?;
                 }
 
-                let _idx = ctx.queue.submit([command_encoder.finish()]);
+                ctx.queue.submit([command_encoder.finish().map_err(|err| err.to_string())?]);
+                Ok(())
             },
             Some(concat!(
                 "The current set ComputePipeline with '' label ",
                 "expects a BindGroup to be set at index 0"
             )),
-        )
+        );
     });

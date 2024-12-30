@@ -467,15 +467,6 @@ impl CommandBuffer {
         }
     }
 
-    pub(crate) fn new_invalid(device: &Arc<Device>, label: &Label) -> Self {
-        CommandBuffer {
-            device: device.clone(),
-            support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
-            label: label.to_string(),
-            data: Mutex::new(rank::COMMAND_BUFFER_DATA, None),
-        }
-    }
-
     pub(crate) fn insert_barriers_from_tracker(
         raw: &mut dyn hal::DynCommandEncoder,
         base: &mut Tracker,
@@ -656,14 +647,10 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
-        let error = match cmd_buf
+        cmd_buf
             .try_get()
             .map_err(|e| e.into())
-            .and_then(|mut cmd_buf_data| cmd_buf_data.finish(&cmd_buf.device))
-        {
-            Ok(_) => None,
-            Err(e) => Some(e),
-        };
+            .and_then(|mut cmd_buf_data| cmd_buf_data.finish(&cmd_buf.device))?;
 
         Ok(encoder_id.into_command_buffer_id())
     }

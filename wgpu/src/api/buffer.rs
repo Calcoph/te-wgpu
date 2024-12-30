@@ -251,14 +251,14 @@ impl Buffer {
     }
 
     /// Flushes any pending write operations and unmaps the buffer from host memory.
-    pub fn unmap(&self) {
+    pub fn unmap(&self) -> Result<(), wgc::resource::BufferAccessError> {
         self.map_context.lock().reset();
-        DynContext::buffer_unmap(&*self.context, self.data.as_ref());
+        DynContext::buffer_unmap(&*self.context, self.data.as_ref())
     }
 
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        DynContext::buffer_destroy(&*self.context, self.data.as_ref());
+        DynContext::buffer_destroy(&*self.context, self.data.as_ref())
     }
 
     /// Returns the length of the buffer allocation in bytes.
@@ -338,7 +338,7 @@ impl<'a> BufferSlice<'a> {
         &self,
         mode: MapMode,
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
-    ) {
+    ) -> Result<(), wgc::resource::BufferAccessError> {
         let mut mc = self.buffer.map_context.lock();
         assert_eq!(mc.initial_range, 0..0, "Buffer is already mapped");
         let end = match self.size {

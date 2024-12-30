@@ -228,7 +228,7 @@ static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration =
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
-        });
+        }).unwrap();
         let data = vec![1u8; size as usize * 2 + 100]; // check that we don't attempt to copy OOB internally by adding 100 bytes here
         ctx.queue.write_texture(
             wgpu::ImageCopyTexture {
@@ -248,5 +248,5 @@ static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration =
                 height: 2,
                 depth_or_array_layers: 1,
             },
-        );
+        ).unwrap();
     });

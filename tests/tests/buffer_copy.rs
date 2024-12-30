@@ -13,7 +13,7 @@ fn try_copy(
     let buffer = ctx.device.create_buffer(&BUFFER_DESCRIPTOR).unwrap();
     let data = vec![255; size as usize];
 
-    fail_if(
+    let _ = fail_if(
         error_message.is_some(),
         || ctx.queue.write_buffer(&buffer, offset, &data),
         error_message,

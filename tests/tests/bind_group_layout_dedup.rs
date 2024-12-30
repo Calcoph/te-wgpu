@@ -101,7 +101,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
 
     drop(pass);
 
-    ctx.queue.submit(Some(encoder.finish()));
+    ctx.queue.submit(Some(encoder.finish().unwrap()));
 }
 
 #[gpu_test]
@@ -436,7 +436,7 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
             pass.end()
         },
         Some("label at index 0 is not compatible with the corresponding bindgrouplayout"),
-    )
+    );
 }
 
 #[gpu_test]
@@ -461,7 +461,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(src.into()),
-        });
+        }).unwrap();
 
     let pipeline = ctx
         .device
@@ -472,7 +472,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
             entry_point: None,
             compilation_options: Default::default(),
             cache: None,
-        });
+        }).unwrap();
 
     let bind_group_layout_0 = pipeline.get_bind_group_layout(0);
     let bind_group_layout_1 = pipeline.get_bind_group_layout(1);
@@ -482,7 +482,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
         size: 16,
         usage: wgpu::BufferUsages::UNIFORM,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let bind_group_0 = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
@@ -495,7 +495,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
                 size: None,
             }),
         }],
-    });
+    }).unwrap();
     let bind_group_1 = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &bind_group_layout_0,
@@ -507,22 +507,23 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
                 size: None,
             }),
         }],
-    });
+    }).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+        .unwrap();
 
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    });
-    pass.set_pipeline(&pipeline);
-    pass.set_bind_group(0, &bind_group_0, &[]);
-    pass.set_bind_group(1, &bind_group_1, &[]);
-    pass.dispatch_workgroups(1, 1, 1);
+    }).unwrap();
+    pass.set_pipeline(&pipeline).unwrap();
+    pass.set_bind_group(0, &bind_group_0, &[]).unwrap();
+    pass.set_bind_group(1, &bind_group_1, &[]).unwrap();
+    pass.dispatch_workgroups(1, 1, 1).unwrap();
 
     drop(pass);
 
-    ctx.queue.submit(Some(encoder.finish()));
+    ctx.queue.submit(Some(encoder.finish().unwrap()));
 }

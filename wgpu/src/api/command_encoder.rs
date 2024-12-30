@@ -37,6 +37,7 @@ impl Drop for CommandEncoder {
 pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CommandEncoderDescriptor<'_>: Send, Sync);
 
+use wgc::command::CommandEncoderError;
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// View of a buffer which can be used to copy to/from a texture.
 ///
@@ -67,12 +68,12 @@ static_assertions::assert_impl_all!(ImageCopyTexture<'_>: Send, Sync);
 
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
-    pub fn finish(mut self) -> CommandBuffer {
-        let data = DynContext::command_encoder_finish(&*self.context, self.data.as_mut());
-        CommandBuffer {
+    pub fn finish(mut self) -> Result<CommandBuffer, CommandEncoderError> {
+        let data = DynContext::command_encoder_finish(&*self.context, self.data.as_mut())?;
+        Ok(CommandBuffer {
             context: Arc::clone(&self.context),
             data: Some(data),
-        }
+        })
     }
 
     /// Begins recording of a render pass.
@@ -88,16 +89,17 @@ impl CommandEncoder {
     pub fn begin_render_pass<'encoder>(
         &'encoder mut self,
         desc: &RenderPassDescriptor<'_>,
-    ) -> RenderPass<'encoder> {
+    ) -> Result<RenderPass<'encoder>, CommandEncoderError> {
         let data =
-            DynContext::command_encoder_begin_render_pass(&*self.context, self.data.as_ref(), desc);
-        RenderPass {
+            DynContext::command_encoder_begin_render_pass(&*self.context, self.data.as_ref(), desc)?;
+        Ok(RenderPass {
             inner: RenderPassInner {
                 data,
                 context: self.context.clone(),
+                encoded: false,
             },
             encoder_guard: PhantomData,
-        }
+        })
     }
 
     /// Begins recording of a compute pass.
@@ -113,19 +115,20 @@ impl CommandEncoder {
     pub fn begin_compute_pass<'encoder>(
         &'encoder mut self,
         desc: &ComputePassDescriptor<'_>,
-    ) -> ComputePass<'encoder> {
+    ) -> Result<ComputePass<'encoder>, CommandEncoderError> {
         let data = DynContext::command_encoder_begin_compute_pass(
             &*self.context,
             self.data.as_ref(),
             desc,
-        );
-        ComputePass {
+        )?;
+        Ok(ComputePass {
             inner: ComputePassInner {
                 data,
                 context: self.context.clone(),
+                encoded: false,
             },
             encoder_guard: PhantomData,
-        }
+        })
     }
 
     /// Copy data from one buffer to another.
@@ -142,7 +145,7 @@ impl CommandEncoder {
         destination: &Buffer,
         destination_offset: BufferAddress,
         copy_size: BufferAddress,
-    ) {
+    ) -> Result<(), wgc::command::CopyError> {
         DynContext::command_encoder_copy_buffer_to_buffer(
             &*self.context,
             self.data.as_ref(),
@@ -151,7 +154,7 @@ impl CommandEncoder {
             destination.data.as_ref(),
             destination_offset,
             copy_size,
-        );
+        )
     }
 
     /// Copy data from a buffer to a texture.
@@ -160,14 +163,14 @@ impl CommandEncoder {
         source: ImageCopyBuffer<'_>,
         destination: ImageCopyTexture<'_>,
         copy_size: Extent3d,
-    ) {
+    ) -> Result<(), wgc::command::CopyError> {
         DynContext::command_encoder_copy_buffer_to_texture(
             &*self.context,
             self.data.as_ref(),
             source,
             destination,
             copy_size,
-        );
+        )
     }
 
     /// Copy data from a texture to a buffer.
@@ -176,14 +179,14 @@ impl CommandEncoder {
         source: ImageCopyTexture<'_>,
         destination: ImageCopyBuffer<'_>,
         copy_size: Extent3d,
-    ) {
+    ) -> Result<(), wgc::command::CopyError> {
         DynContext::command_encoder_copy_texture_to_buffer(
             &*self.context,
             self.data.as_ref(),
             source,
             destination,
             copy_size,
-        );
+        )
     }
 
     /// Copy data from one texture to another.
@@ -198,14 +201,14 @@ impl CommandEncoder {
         source: ImageCopyTexture<'_>,
         destination: ImageCopyTexture<'_>,
         copy_size: Extent3d,
-    ) {
+    ) -> Result<(), wgc::command::CopyError> {
         DynContext::command_encoder_copy_texture_to_texture(
             &*self.context,
             self.data.as_ref(),
             source,
             destination,
             copy_size,
-        );
+        )
     }
 
     /// Clears texture to zero.
@@ -221,13 +224,13 @@ impl CommandEncoder {
     ///
     /// - `CLEAR_TEXTURE` extension not enabled
     /// - Range is out of bounds
-    pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
+    pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) -> Result<(), wgc::command::ClearError> {
         DynContext::command_encoder_clear_texture(
             &*self.context,
             self.data.as_ref(),
             texture.data.as_ref(),
             subresource_range,
-        );
+        )
     }
 
     /// Clears buffer to zero.
@@ -241,29 +244,29 @@ impl CommandEncoder {
         buffer: &Buffer,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-    ) {
+    ) -> Result<(), wgc::command::ClearError> {
         DynContext::command_encoder_clear_buffer(
             &*self.context,
             self.data.as_ref(),
             buffer.data.as_ref(),
             offset,
             size,
-        );
+        )
     }
 
     /// Inserts debug marker.
-    pub fn insert_debug_marker(&mut self, label: &str) {
-        DynContext::command_encoder_insert_debug_marker(&*self.context, self.data.as_ref(), label);
+    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), CommandEncoderError> {
+        DynContext::command_encoder_insert_debug_marker(&*self.context, self.data.as_ref(), label)
     }
 
     /// Start record commands and group it into debug marker group.
-    pub fn push_debug_group(&mut self, label: &str) {
-        DynContext::command_encoder_push_debug_group(&*self.context, self.data.as_ref(), label);
+    pub fn push_debug_group(&mut self, label: &str) -> Result<(), CommandEncoderError> {
+        DynContext::command_encoder_push_debug_group(&*self.context, self.data.as_ref(), label)
     }
 
     /// Stops command recording and creates debug group.
-    pub fn pop_debug_group(&mut self) {
-        DynContext::command_encoder_pop_debug_group(&*self.context, self.data.as_ref());
+    pub fn pop_debug_group(&mut self) -> Result<(), CommandEncoderError> {
+        DynContext::command_encoder_pop_debug_group(&*self.context, self.data.as_ref())
     }
 
     /// Resolves a query set, writing the results into the supplied destination buffer.
@@ -276,7 +279,7 @@ impl CommandEncoder {
         query_range: Range<u32>,
         destination: &Buffer,
         destination_offset: BufferAddress,
-    ) {
+    ) -> Result<(), wgc::command::QueryError> {
         DynContext::command_encoder_resolve_query_set(
             &*self.context,
             self.data.as_ref(),
@@ -331,7 +334,7 @@ impl CommandEncoder {
     /// there is no strict guarantee that timestamps are taken after all commands
     /// recorded so far and all before all commands recorded after.
     /// This may depend both on the backend and the driver.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
+    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::QueryError> {
         DynContext::command_encoder_write_timestamp(
             &*self.context,
             self.data.as_mut(),

@@ -3,7 +3,7 @@ use std::{any::Any, fmt::Debug, future::Future, ops::Range, pin::Pin, sync::Arc}
 use wgc::{
     binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError},
     command::{CommandEncoderError, ComputePassError, RenderPassError},
-    device::{queue::QueueWriteError, DeviceError},
+    device::{queue::{QueueSubmitError, QueueWriteError}, DeviceError},
     pipeline::{CreateComputePipelineError, CreatePipelineCacheError, CreateRenderPipelineError, CreateShaderModuleError},
     resource::{
         BufferAccessResult, CreateBufferError, CreateQuerySetError, CreateSamplerError,
@@ -406,7 +406,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         queue_data: &Self::QueueData,
         command_buffers: I,
-    ) -> Self::SubmissionIndexData;
+    ) -> Result<Self::SubmissionIndexData, (Self::SubmissionIndexData, QueueSubmitError)>;
     fn queue_get_timestamp_period(&self, queue_data: &Self::QueueData) -> f32;
     fn queue_on_submitted_work_done(
         &self,
@@ -640,8 +640,8 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         count_buffer_data: &Self::BufferData,
         count_buffer_offset: BufferAddress,
         max_count: u32,
-    ) -> Result<(), ComputePassError>;
-    fn render_pass_set_blend_constant(&self, pass_data: &mut Self::RenderPassData, color: Color) -> Result<(), ComputePassError>;
+    ) -> Result<(), wgc::command::RenderPassError>;
+    fn render_pass_set_blend_constant(&self, pass_data: &mut Self::RenderPassData, color: Color) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_set_scissor_rect(
         &self,
         pass_data: &mut Self::RenderPassData,
@@ -890,13 +890,6 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn device_destroy(&self, device_data: &crate::Data);
     fn queue_drop(&self, queue_data: &crate::Data);
     fn device_poll(&self, device_data: &crate::Data, maintain: Maintain) -> MaintainResult;
-    fn device_on_uncaptured_error(
-        &self,
-        device_data: &crate::Data,
-        handler: Box<dyn UncapturedErrorHandler>,
-    );
-    fn device_push_error_scope(&self, device_data: &crate::Data, filter: ErrorFilter);
-    fn device_pop_error_scope(&self, device_data: &crate::Data) -> Pin<DevicePopErrorFuture>;
     fn buffer_map_async(
         &self,
         buffer_data: &crate::Data,
@@ -1111,7 +1104,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         pass_data: &mut crate::Data,
         offset: u32,
         data: &[u8],
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_insert_debug_marker(&self, pass_data: &mut crate::Data, label: &str) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_push_debug_group(&self, pass_data: &mut crate::Data, group_label: &str) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_pop_debug_group(&self, pass_data: &mut crate::Data) -> Result<(), wgc::command::ComputePassError>;
@@ -1126,7 +1119,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         pass_data: &mut crate::Data,
         query_set_data: &crate::Data,
         query_index: u32,
-    );
+    ) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_end_pipeline_statistics_query(&self, pass_data: &mut crate::Data) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_dispatch_workgroups(&self, pass_data: &mut crate::Data, x: u32, y: u32, z: u32) -> Result<(), wgc::command::ComputePassError>;
     fn compute_pass_dispatch_workgroups_indirect(
@@ -1311,7 +1304,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         height: f32,
         min_depth: f32,
         max_depth: f32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_set_stencil_reference(&self, pass_data: &mut crate::Data, reference: u32) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_insert_debug_marker(&self, pass_data: &mut crate::Data, label: &str) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_push_debug_group(&self, pass_data: &mut crate::Data, group_label: &str) -> Result<(), wgc::command::RenderPassError>;
@@ -1321,7 +1314,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         pass_data: &mut crate::Data,
         query_set_data: &crate::Data,
         query_index: u32,
-    );
+    ) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_begin_occlusion_query(&self, pass_data: &mut crate::Data, query_index: u32) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_end_occlusion_query(&self, pass_data: &mut crate::Data) -> Result<(), wgc::command::RenderPassError>;
     fn render_pass_begin_pipeline_statistics_query(
@@ -1897,8 +1890,8 @@ where
         desc: &ComputePassDescriptor<'_>,
     ) -> Result<Box<crate::Data>, CommandEncoderError> {
         let encoder_data = downcast_ref(encoder_data);
-        let data = Context::command_encoder_begin_compute_pass(self, encoder_data, desc);
-        Box::new(data) as _
+        let data = Context::command_encoder_begin_compute_pass(self, encoder_data, desc)?;
+        Ok(Box::new(data) as _)
     }
 
     fn command_encoder_begin_render_pass(
@@ -1912,8 +1905,8 @@ where
     }
 
     fn command_encoder_finish(&self, encoder_data: &mut crate::Data) -> Result<Box<crate::Data>, CommandEncoderError> {
-        let data = Context::command_encoder_finish(self, downcast_mut(encoder_data));
-        Box::new(data) as _
+        let data = Context::command_encoder_finish(self, downcast_mut(encoder_data))?;
+        Ok(Box::new(data) as _)
     }
 
     fn command_encoder_clear_texture(

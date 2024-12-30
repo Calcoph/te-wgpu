@@ -50,7 +50,7 @@ impl<'encoder> ComputePass<'encoder> {
         index: u32,
         bind_group: impl Into<Option<&'a BindGroup>>,
         offsets: &[DynamicOffset],
-    ) {
+    ) -> Result<(), wgc::command::ComputePassError> {
         let bg = bind_group.into().map(|x| x.data.as_ref());
         DynContext::compute_pass_set_bind_group(
             &*self.inner.context,
@@ -58,52 +58,52 @@ impl<'encoder> ComputePass<'encoder> {
             index,
             bg,
             offsets,
-        );
+        )
     }
 
     /// Sets the active compute pipeline.
-    pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) -> Result<(), wgc::command::ComputePassError> {
         DynContext::compute_pass_set_pipeline(
             &*self.inner.context,
             self.inner.data.as_mut(),
             pipeline.data.as_ref(),
-        );
+        )
     }
 
     /// Inserts debug marker.
-    pub fn insert_debug_marker(&mut self, label: &str) {
+    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::ComputePassError> {
         DynContext::compute_pass_insert_debug_marker(
             &*self.inner.context,
             self.inner.data.as_mut(),
             label,
-        );
+        )
     }
 
     /// Start record commands and group it into debug marker group.
-    pub fn push_debug_group(&mut self, label: &str) {
+    pub fn push_debug_group(&mut self, label: &str) -> Result<(), wgc::command::ComputePassError> {
         DynContext::compute_pass_push_debug_group(
             &*self.inner.context,
             self.inner.data.as_mut(),
             label,
-        );
+        )
     }
 
     /// Stops command recording and creates debug group.
-    pub fn pop_debug_group(&mut self) {
-        DynContext::compute_pass_pop_debug_group(&*self.inner.context, self.inner.data.as_mut());
+    pub fn pop_debug_group(&mut self) -> Result<(), wgc::command::ComputePassError> {
+        DynContext::compute_pass_pop_debug_group(&*self.inner.context, self.inner.data.as_mut())
     }
 
     /// Dispatches compute work operations.
     ///
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
-    pub fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
+    pub fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) -> Result<(), wgc::command::ComputePassError> {
         DynContext::compute_pass_dispatch_workgroups(
             &*self.inner.context,
             self.inner.data.as_mut(),
             x,
             y,
             z,
-        );
+        )
     }
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
@@ -113,13 +113,13 @@ impl<'encoder> ComputePass<'encoder> {
         &mut self,
         indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
-    ) {
+    ) -> Result<(), wgc::command::ComputePassError> {
         DynContext::compute_pass_dispatch_workgroups_indirect(
             &*self.inner.context,
             self.inner.data.as_mut(),
             indirect_buffer.data.as_ref(),
             indirect_offset,
-        );
+        )
     }
 }
 
@@ -133,13 +133,13 @@ impl<'encoder> ComputePass<'encoder> {
     ///
     /// For example, if `offset` is `4` and `data` is eight bytes long, this
     /// call will write `data` to bytes `4..12` of push constant storage.
-    pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
+    pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) -> Result<(), wgc::command::ComputePassError> {
         DynContext::compute_pass_set_push_constants(
             &*self.inner.context,
             self.inner.data.as_mut(),
             offset,
             data,
-        );
+        )
     }
 }
 
@@ -151,7 +151,7 @@ impl<'encoder> ComputePass<'encoder> {
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
+    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::ComputePassError> {
         DynContext::compute_pass_write_timestamp(
             &*self.inner.context,
             self.inner.data.as_mut(),
@@ -165,22 +165,29 @@ impl<'encoder> ComputePass<'encoder> {
 impl<'encoder> ComputePass<'encoder> {
     /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
-    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
+    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::ComputePassError> {
         DynContext::compute_pass_begin_pipeline_statistics_query(
             &*self.inner.context,
             self.inner.data.as_mut(),
             query_set.data.as_ref(),
             query_index,
-        );
+        )
     }
 
     /// End the pipeline statistics query on this compute pass. It can be started with
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
-    pub fn end_pipeline_statistics_query(&mut self) {
+    pub fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::ComputePassError> {
         DynContext::compute_pass_end_pipeline_statistics_query(
             &*self.inner.context,
             self.inner.data.as_mut(),
-        );
+        )
+    }
+}
+
+impl<'encoder> ComputePass<'encoder> {
+    /// Drops the compute pass with a chance to handle the error
+    pub fn end(mut self) -> Result<(), wgc::command::ComputePassError> {
+        self.inner.end()
     }
 }
 
@@ -188,12 +195,24 @@ impl<'encoder> ComputePass<'encoder> {
 pub(crate) struct ComputePassInner {
     pub(crate) data: Box<Data>,
     pub(crate) context: Arc<C>,
+    pub(crate) encoded: bool,
+}
+
+impl ComputePassInner {
+    fn end(&mut self) -> Result<(), wgc::command::ComputePassError> {
+        if !self.encoded {
+            self.encoded = true;
+            self.context.compute_pass_end(self.data.as_mut())
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl Drop for ComputePassInner {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.compute_pass_end(self.data.as_mut());
+            self.end().expect("Call ComputePass::end() to handle this error");
         }
     }
 }

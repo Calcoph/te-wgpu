@@ -410,7 +410,7 @@ impl crate::framework::Example for Example {
             label: Some("global"),
             contents: bytemuck::bytes_of(&globals),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-        });
+        }).unwrap();
 
         let global_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.global_bind_group_layout,
@@ -429,7 +429,7 @@ impl crate::framework::Example for Example {
                 },
             ],
             label: None,
-        });
+        }).unwrap();
         self.global_group = global_group;
         Ok(())
     }

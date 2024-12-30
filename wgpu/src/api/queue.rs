@@ -44,6 +44,7 @@ pub struct SubmissionIndex {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
+use wgc::device::queue::QueueWriteError;
 pub use wgt::Maintain as MaintainBase;
 /// Passed to [`Device::poll`] to control how and if it should block.
 pub type Maintain = wgt::Maintain<SubmissionIndex>;
@@ -93,7 +94,7 @@ impl<'a> Drop for QueueWriteBufferView<'a> {
             self.buffer.data.as_ref(),
             self.offset,
             &*self.inner,
-        );
+        ).expect("There is not yet any way to handle this error")
     }
 }
 
@@ -118,7 +119,7 @@ impl Queue {
     /// If possible, consider using [`Queue::write_buffer_with`] instead. That
     /// method avoids an intermediate copy and is often able to transfer data
     /// more efficiently than this one.
-    pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
+    pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) -> Result<(), wgc::device::queue::QueueWriteError> {
         DynContext::queue_write_buffer(
             &*self.context,
             self.data.as_ref(),
@@ -162,7 +163,7 @@ impl Queue {
         buffer: &'a Buffer,
         offset: BufferAddress,
         size: BufferSize,
-    ) -> Option<QueueWriteBufferView<'a>> {
+    ) -> Result<QueueWriteBufferView<'a>, QueueWriteError> {
         profiling::scope!("Queue::write_buffer_with");
         DynContext::queue_validate_write_buffer(
             &*self.context,
@@ -173,7 +174,7 @@ impl Queue {
         )?;
         let staging_buffer =
             DynContext::queue_create_staging_buffer(&*self.context, self.data.as_ref(), size)?;
-        Some(QueueWriteBufferView {
+        Ok(QueueWriteBufferView {
             queue: self,
             buffer,
             offset,
@@ -211,7 +212,7 @@ impl Queue {
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
-    ) {
+    ) -> Result<(), wgc::device::queue::QueueWriteError> {
         DynContext::queue_write_texture(
             &*self.context,
             self.data.as_ref(),

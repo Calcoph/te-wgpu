@@ -6,7 +6,7 @@ use crate::{
         self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
     },
-    command::{self, CommandBuffer},
+    command,
     conv,
     device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure, DeviceLostReason},
     global::Global,
@@ -23,7 +23,7 @@ use crate::{
         Fallible,
     },
     storage::Storage,
-    Label, LabelHelpers,
+    Label,
 };
 
 use wgt::{BufferAddress, TextureFormat};
@@ -345,12 +345,12 @@ impl Global {
             trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
         }
 
-        let (buffer, err) = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
+        let buffer = device.create_buffer_from_hal(Box::new(hal_buffer), desc)?;
 
         let id = fid.assign(buffer);
         api_log!("Device::create_buffer -> {id:?}");
 
-        (id, err)
+        Ok(id)
     }
 
     pub fn texture_destroy(&self, texture_id: id::TextureId) -> Result<(), resource::DestroyError> {
@@ -1255,8 +1255,6 @@ impl Global {
             return Ok(id);
         };
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-
         // We also need to assign errors to the implicit pipeline layout and the
         // implicit bind group layouts.
         if let Some(ids) = implicit_context {
@@ -1432,8 +1430,6 @@ impl Global {
             return Ok(id);
         };
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-
         // We also need to assign errors to the implicit pipeline layout and the
         // implicit bind group layouts.
         if let Some(ids) = implicit_context {
@@ -1445,7 +1441,7 @@ impl Global {
             }
         }
 
-        (id, Some(error))
+        Err(error)
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,

@@ -735,7 +735,7 @@ impl Device {
         self: &Arc<Self>,
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
-    ) -> (Fallible<Buffer>, Option<resource::CreateBufferError>) {
+    ) -> Result<Fallible<Buffer>, resource::CreateBufferError> {
         #[cfg(feature = "indirect-validation")]
         let raw_indirect_validation_bind_group = match self.create_indirect_validation_bind_group(
             hal_buffer.as_ref(),
@@ -743,7 +743,7 @@ impl Device {
             desc.usage,
         ) {
             Ok(ok) => ok,
-            Err(e) => return (Fallible::Invalid(Arc::new(desc.label.to_string())), Some(e)),
+            Err(e) => return Err(e),
         };
 
         unsafe { self.raw().add_raw_buffer(&*hal_buffer) };
@@ -772,7 +772,7 @@ impl Device {
             .buffers
             .insert_single(&buffer, hal::BufferUses::empty());
 
-        (Fallible::Valid(buffer), None)
+        Ok(Fallible::Valid(buffer))
     }
 
     #[cfg(feature = "indirect-validation")]
