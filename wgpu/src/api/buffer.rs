@@ -679,22 +679,25 @@ fn check_buffer_bounds(
     offset: BufferAddress,
     size: Option<BufferSize>,
 ) {
-    // A slice of length 0 is invalid, so the offset must not be equal to or greater than the buffer size.
-    if offset >= buffer_size {
-        panic!(
-            "slice offset {} is out of range for buffer of size {}",
-            offset, buffer_size
-        );
-    }
-
-    if let Some(size) = size {
-        // Detect integer overflow.
-        let end = offset.checked_add(size.get());
-        if end.map_or(true, |end| end > buffer_size) {
+    #[cfg(not(feature="skip_check_buffer_bounds"))]
+    {
+        // A slice of length 0 is invalid, so the offset must not be equal to or greater than the buffer size.
+        if offset >= buffer_size {
             panic!(
-                "slice offset {} size {} is out of range for buffer of size {}",
-                offset, size, buffer_size
+                "slice offset {} is out of range for buffer of size {}",
+                offset, buffer_size
             );
+        }
+
+        if let Some(size) = size {
+            // Detect integer overflow.
+            let end = offset.checked_add(size.get());
+            if end.map_or(true, |end| end > buffer_size) {
+                panic!(
+                    "slice offset {} size {} is out of range for buffer of size {}",
+                    offset, size, buffer_size
+                );
+            }
         }
     }
 }
