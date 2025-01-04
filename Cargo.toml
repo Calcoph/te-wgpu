@@ -205,7 +205,3 @@ debug = true
 # Speed up image comparison even in debug builds
 [profile.dev.package."nv-flip-sys"]
 opt-level = 3
-
-[features]
-default = []
-skip_check_buffer_bounds = []

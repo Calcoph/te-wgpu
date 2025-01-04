@@ -117,6 +117,8 @@ fragile-send-sync-non-atomic-wasm = [
     "wgt/fragile-send-sync-non-atomic-wasm",
 ]
 
+skip_check_buffer_bounds = []
+
 # wgpu-core is always available as an optional dependency, "wgc".
 # Whenever wgpu-core is selected, we want raw window handle support.
 [dependencies.wgc]
