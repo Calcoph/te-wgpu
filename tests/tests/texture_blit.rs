@@ -50,7 +50,7 @@ static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfi
             &mut encoder,
             &source.create_view(&wgpu::TextureViewDescriptor::default()).unwrap(),
             &target.create_view(&wgpu::TextureViewDescriptor::default()).unwrap(),
-        );
+        ).unwrap();
     });
 
 #[gpu_test]
@@ -104,5 +104,5 @@ static TEXTURE_BLIT_WITH_NEAREST_FILTER_TEST: GpuTestConfiguration = GpuTestConf
             &mut encoder,
             &source.create_view(&wgpu::TextureViewDescriptor::default()).unwrap(),
             &target.create_view(&wgpu::TextureViewDescriptor::default()).unwrap(),
-        );
+        ).unwrap();
     });

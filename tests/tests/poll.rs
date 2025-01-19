@@ -57,7 +57,7 @@ fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
 static WAIT: GpuTestConfiguration = GpuTestConfiguration::new().run_async(|ctx| async move {
     let cmd_buf = generate_dummy_work(&ctx);
 
-    ctx.queue.submit(Some(cmd_buf));
+    ctx.queue.submit(Some(cmd_buf)).unwrap();
     ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 });
 
@@ -66,7 +66,7 @@ static DOUBLE_WAIT: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         let cmd_buf = generate_dummy_work(&ctx);
 
-        ctx.queue.submit(Some(cmd_buf));
+        ctx.queue.submit(Some(cmd_buf)).unwrap();
         ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
         ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
     });
@@ -136,7 +136,7 @@ async fn wait_after_bad_submission(ctx: TestingContext) {
     // This should panic, since the command buffer belongs to the wrong
     // device, and queue submission errors seem to be fatal errors?
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        queue2.submit([command_buffer1]);
+        queue2.submit([command_buffer1]).unwrap();
     }));
     assert!(result.is_err());
 

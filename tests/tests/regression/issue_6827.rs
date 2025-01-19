@@ -72,7 +72,7 @@ async fn run_test(ctx: TestingContext, use_many_writes: bool) {
         temp_buffer.slice(..).map_async(wgpu::MapMode::Read, {
             let result_cell = result_cell.clone();
             move |result| result_cell.set(result).unwrap()
-        });
+        }).unwrap();
         device.poll(wgpu::Maintain::Wait);
         result_cell
             .get()
@@ -192,11 +192,11 @@ pub fn many_writes(texture: &wgpu::Texture, device: &wgpu::Device, queue: &wgpu:
                 height: 1,
                 depth_or_array_layers: 1,
             },
-        );
+        ).unwrap();
     }
 
-    queue.write_buffer(&copy_buffer_2, 0, data.as_flattened());
-    queue.submit([encoder.finish().unwrap()]);
+    queue.write_buffer(&copy_buffer_2, 0, data.as_flattened()).unwrap();
+    queue.submit([encoder.finish().unwrap()]).unwrap();
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -267,8 +267,8 @@ impl TextureCopyParameters {
                     },
                 },
                 texture.size(),
-            );
-            queue.submit(Some(encoder.finish().unwrap()));
+            ).unwrap();
+            queue.submit(Some(encoder.finish().unwrap())).unwrap();
         }
 
         temp_buffer

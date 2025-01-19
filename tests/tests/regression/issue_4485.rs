@@ -98,7 +98,7 @@ async fn test_impl(ctx: &TestingContext) {
             render_pass.draw(0..3, 0..1).unwrap();
         }
         readback_buffer.copy_from(&ctx.device, &mut encoder, &texture);
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
     }
 
     let expected_data = [255; BUFFER_SIZE];

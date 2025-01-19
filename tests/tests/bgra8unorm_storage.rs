@@ -156,7 +156,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             )
             .unwrap();
 
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         let buffer_slice = readback_buffer.slice(..);
         buffer_slice

@@ -48,7 +48,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
             },
         ).unwrap();
 
-        ctx.queue.submit(None);
+        ctx.queue.submit(None).unwrap();
 
         let read_buffer = ctx
             .device
@@ -89,7 +89,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
             )
             .unwrap();
 
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         let slice = read_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
@@ -152,7 +152,7 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
             },
         ).unwrap();
 
-        ctx.queue.submit(None);
+        ctx.queue.submit(None).unwrap();
 
         let read_buffer = ctx
             .device
@@ -193,7 +193,7 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
             )
             .unwrap();
 
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         let slice = read_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();

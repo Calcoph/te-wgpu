@@ -379,11 +379,11 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
 
         // See https://github.com/gfx-rs/wgpu/issues/4732 for why this is split between two submissions
         // with a hard wait in between.
-        ctx.queue.submit([encoder1.finish().unwrap()]);
+        ctx.queue.submit([encoder1.finish().unwrap()]).unwrap();
         ctx.async_poll(wgpu::Maintain::wait())
             .await
             .panic_on_timeout();
-        ctx.queue.submit([encoder2.finish().unwrap()]);
+        ctx.queue.submit([encoder2.finish().unwrap()]).unwrap();
         let slice = cpu_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
         ctx.async_poll(wgpu::Maintain::wait())

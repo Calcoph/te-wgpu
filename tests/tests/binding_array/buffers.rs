@@ -148,7 +148,7 @@ async fn binding_array_buffers(
             mapped_at_creation: true,
         }).unwrap();
         buffer.slice(..).get_mapped_range_mut()[0..4].copy_from_slice(&data.0);
-        buffer.unmap();
+        buffer.unmap().unwrap();
         buffers.push(buffer);
     }
 
@@ -240,9 +240,9 @@ async fn binding_array_buffers(
             label: None,
             timestamp_writes: None,
         }).unwrap();
-        render_pass.set_pipeline(&pipeline);
-        render_pass.set_bind_group(0, &bind_group, &[]);
-        render_pass.dispatch_workgroups(1, 1, 1);
+        render_pass.set_pipeline(&pipeline).unwrap();
+        render_pass.set_bind_group(0, &bind_group, &[]).unwrap();
+        render_pass.dispatch_workgroups(1, 1, 1).unwrap();
     }
 
     let readback_buffer = ctx.device.create_buffer(&BufferDescriptor {
@@ -252,12 +252,12 @@ async fn binding_array_buffers(
         mapped_at_creation: false,
     }).unwrap();
 
-    encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback_buffer, 0, 4 * 4 * 4);
+    encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback_buffer, 0, 4 * 4 * 4).unwrap();
 
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     let slice = readback_buffer.slice(..);
-    slice.map_async(MapMode::Read, |_| {});
+    slice.map_async(MapMode::Read, |_| {}).unwrap();
 
     ctx.device.poll(Maintain::Wait);
 

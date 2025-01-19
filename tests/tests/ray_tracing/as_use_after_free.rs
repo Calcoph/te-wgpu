@@ -85,8 +85,8 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
             }]),
         }),
         iter::empty(),
-    );
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ).unwrap();
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     // Drop the blas and ensure that if it was going to die, it is dead.
     drop(blas);
@@ -97,8 +97,8 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default())
         .unwrap();
-    encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package));
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package)).unwrap();
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     // Create a compute shader that uses an AS.
     let shader = ctx
@@ -144,7 +144,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
         pass.set_bind_group(0, Some(&bind_group), &[]).unwrap();
         pass.dispatch_workgroups(1, 1, 1).unwrap()
     }
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 }
 
 #[gpu_test]

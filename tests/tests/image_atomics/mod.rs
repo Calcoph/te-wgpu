@@ -147,7 +147,7 @@ async fn test_format(
     let readback_buffers = ReadbackBuffers::new(&ctx.device, &tex);
     readback_buffers.copy_from(&ctx.device, &mut encoder, &tex);
 
-    ctx.queue.submit([encoder.finish().unwrap()]);
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
 
     let padding = [0].repeat(pixel_bytes as usize - size_of::<u32>());
     let data: Vec<u8> = (0..size.width as usize * size.height as usize)

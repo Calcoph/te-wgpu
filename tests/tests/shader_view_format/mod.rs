@@ -163,7 +163,7 @@ async fn reinterpret(
     rpass.set_bind_group(0, &bind_group, &[]).unwrap();
     rpass.draw(0..3, 0..1).unwrap();
     drop(rpass);
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     let read_buffer = ctx
         .device
@@ -198,7 +198,7 @@ async fn reinterpret(
             size,
         )
         .unwrap();
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     let slice = read_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();

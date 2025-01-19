@@ -47,7 +47,7 @@ static NON_FATAL_ERRORS_IN_QUEUE_SUBMIT: GpuTestConfiguration = GpuTestConfigura
                     render_pass.dispatch_workgroups(1, 1, 1).map_err(|err| err.to_string())?;
                 }
 
-                ctx.queue.submit([command_encoder.finish().map_err(|err| err.to_string())?]);
+                ctx.queue.submit([command_encoder.finish().map_err(|err| err.to_string())?]).unwrap();
                 Ok(())
             },
             Some(concat!(

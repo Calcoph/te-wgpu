@@ -126,7 +126,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
             .copy_buffer_to_buffer(&query_buffer, 0, &mapping_buffer, 0, query_buffer.size())
             .unwrap();
 
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         mapping_buffer
             .slice(..)

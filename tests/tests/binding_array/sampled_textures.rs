@@ -115,7 +115,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
                 height: 1,
                 depth_or_array_layers: 1,
             },
-        );
+        ).unwrap();
 
         input_views.push(texture.create_view(&TextureViewDescriptor::default()).unwrap());
     }

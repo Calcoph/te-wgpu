@@ -58,7 +58,7 @@ static ZERO_WORKGROUP_COUNT: GpuTestConfiguration = GpuTestConfiguration::new()
                 label: None,
                 timestamp_writes: None,
             }).unwrap();
-            cpass.set_pipeline(&compute_pipeline);
+            cpass.set_pipeline(&compute_pipeline).unwrap();
             let bind_group_layout = compute_pipeline.get_bind_group_layout(0).unwrap();
             let bind_group_entries = [wgpu::BindGroupEntry {
                 binding: 0,
@@ -69,8 +69,8 @@ static ZERO_WORKGROUP_COUNT: GpuTestConfiguration = GpuTestConfiguration::new()
                 layout: &bind_group_layout,
                 entries: &bind_group_entries,
             }).unwrap();
-            cpass.set_bind_group(0, &bind_group, &[]);
-            cpass.dispatch_workgroups(1, 0, 1);
+            cpass.set_bind_group(0, &bind_group, &[]).unwrap();
+            cpass.dispatch_workgroups(1, 0, 1).unwrap();
         }
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
     });

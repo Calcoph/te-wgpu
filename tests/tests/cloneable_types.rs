@@ -21,10 +21,10 @@ fn cloneable_buffers(ctx: TestingContext) {
         .get_mapped_range_mut()
         .copy_from_slice(&buffer_contents);
 
-    buffer.unmap();
+    buffer.unmap().unwrap();
 
     // This is actually a bug, we should not need to call submit to make the buffer contents visible.
-    ctx.queue.submit([]);
+    ctx.queue.submit([]).unwrap();
 
     let cloned_buffer = buffer.clone();
     let cloned_buffer_contents = buffer_contents.clone();
@@ -33,7 +33,7 @@ fn cloneable_buffers(ctx: TestingContext) {
         let data = cloned_buffer.slice(..).get_mapped_range();
 
         assert_eq!(&*data, &cloned_buffer_contents);
-    });
+    }).unwrap();
 
     ctx.device.poll(wgpu::Maintain::Wait);
 

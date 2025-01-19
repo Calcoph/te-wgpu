@@ -92,9 +92,9 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
             }]),
         }),
         iter::once(&tlas_package),
-    );
+    ).unwrap();
 
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     ctx.device.poll(wgpu::Maintain::Wait);
 }

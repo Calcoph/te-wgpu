@@ -139,7 +139,7 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
         rpass.set_bind_group(0, &bind_group, &[]).unwrap();
         rpass.draw(0..4, 0..1).unwrap();
         drop(rpass);
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
     });
 
 #[gpu_test]

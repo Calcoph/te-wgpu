@@ -111,7 +111,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
                 height: 1,
                 depth_or_array_layers: 1,
             },
-        );
+        ).unwrap();
 
         input_views.push(texture.create_view(&TextureViewDescriptor::default()).unwrap());
     }
@@ -202,7 +202,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
     let readback_buffers = ReadbackBuffers::new(&ctx.device, &output_texture);
     readback_buffers.copy_from(&ctx.device, &mut encoder, &output_texture);
 
-    ctx.queue.submit(Some(encoder.finish()).unwrap());
+    ctx.queue.submit(Some(encoder.finish()).unwrap()).unwrap();
 
     readback_buffers.assert_buffer_contents(&ctx, &image).await;
 }

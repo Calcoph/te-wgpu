@@ -83,7 +83,7 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
             // compute_pass.set_bind_group(0, &test_resources.bind_group, &[]);
             compute_pass.dispatch_workgroups_indirect(&indirect_buffer, 0).unwrap();
         }
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         //assert!(error.is_some_and(|error| {
         //    format!("{error}").contains("The current set ComputePipeline with '' label expects a BindGroup to be set at index 0")
@@ -122,7 +122,7 @@ static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
             compute_pass.set_bind_group(0, &test_resources.bind_group, &[]).unwrap();
             compute_pass.dispatch_workgroups_indirect(&indirect_buffer, 0).unwrap();
         }
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         //assert!(error.is_some_and(|error| {
         //    format!("{error}").contains(
@@ -287,7 +287,7 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
             12,
         ).unwrap();
 
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         test_resources
             .readback_buffer

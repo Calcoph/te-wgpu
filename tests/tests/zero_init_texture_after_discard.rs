@@ -171,7 +171,7 @@ impl<'ctx> TestCase<'ctx> {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             }).unwrap();
-            ctx.queue.submit([encoder.finish().unwrap()]);
+            ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
         } else {
             let block_size = format.block_copy_size(None).unwrap();
             let bytes_per_row = texture.width() * block_size;
@@ -224,7 +224,7 @@ impl<'ctx> TestCase<'ctx> {
     pub fn submit_command_encoder(&mut self) {
         self.ctx
             .queue
-            .submit([self.encoder.take().unwrap().finish().unwrap()]);
+            .submit([self.encoder.take().unwrap().finish().unwrap()]).unwrap();
     }
 
     pub fn discard(&mut self) {

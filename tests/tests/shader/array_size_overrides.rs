@@ -105,7 +105,7 @@ async fn array_size_overrides(
             label: None,
             timestamp_writes: None,
         }).unwrap();
-        cpass.set_pipeline(&compute_pipeline);
+        cpass.set_pipeline(&compute_pipeline).unwrap();
         let bind_group_layout = compute_pipeline.get_bind_group_layout(0).unwrap();
         let bind_group_entries = [wgpu::BindGroupEntry {
             binding: 0,
@@ -116,13 +116,13 @@ async fn array_size_overrides(
             layout: &bind_group_layout,
             entries: &bind_group_entries,
         }).unwrap();
-        cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.dispatch_workgroups(1, 1, 1);
+        cpass.set_bind_group(0, &bind_group, &[]).unwrap();
+        cpass.dispatch_workgroups(1, 1, 1).unwrap();
     }
-    encoder.copy_buffer_to_buffer(&buffer, 0, &mapping_buffer, 0, init_size);
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    encoder.copy_buffer_to_buffer(&buffer, 0, &mapping_buffer, 0, init_size).unwrap();
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
-    mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
+    mapping_buffer.slice(..).map_async(MapMode::Read, |_| ()).unwrap();
     ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 
     let mapped = mapping_buffer.slice(..).get_mapped_range();

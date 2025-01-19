@@ -103,7 +103,7 @@ fn unbuilt_blas(ctx: TestingContext) {
         .create_command_encoder(&CommandEncoderDescriptor::default())
         .unwrap();
 
-    encoder.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
 
     fail(
         || {
@@ -138,7 +138,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
 
     let mut encoder_blas = ctx
         .device
@@ -147,10 +147,10 @@ fn out_of_order_as_build(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []).unwrap();
 
     ctx.queue
-        .submit([encoder_blas.finish().unwrap(), encoder_tlas.finish().unwrap()]);
+        .submit([encoder_blas.finish().unwrap(), encoder_tlas.finish().unwrap()]).unwrap();
 
     drop(as_ctx);
 
@@ -171,7 +171,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []).unwrap();
 
     let mut encoder_tlas = ctx
         .device
@@ -180,7 +180,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
 
     fail(
         || {
@@ -223,7 +223,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []).unwrap();
 
     let mut encoder_tlas = ctx
         .device
@@ -232,7 +232,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
 
     let mut encoder_blas2 = ctx
         .device
@@ -240,13 +240,13 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
             label: Some("BLAS 2"),
         }).unwrap();
 
-    encoder_blas2.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+    encoder_blas2.build_acceleration_structures([&as_ctx.blas_build_entry()], []).unwrap();
 
     ctx.queue.submit([
         encoder_blas.finish().unwrap(),
         encoder_tlas.finish().unwrap(),
         encoder_blas2.finish().unwrap(),
-    ]);
+    ]).unwrap();
 
     //
     // Create shader to use tlas with
@@ -319,7 +319,7 @@ fn empty_build(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_safe.build_acceleration_structures(iter::empty(), iter::empty());
+    encoder_safe.build_acceleration_structures(iter::empty(), iter::empty()).unwrap();
 
     let mut encoder_unsafe = ctx
         .device
@@ -331,11 +331,11 @@ fn empty_build(ctx: TestingContext) {
     // # SAFETY:
     // we don't actually do anything so all the requirements are satisfied
     unsafe {
-        encoder_unsafe.build_acceleration_structures_unsafe_tlas(iter::empty(), iter::empty());
+        encoder_unsafe.build_acceleration_structures_unsafe_tlas(iter::empty(), iter::empty()).unwrap();
     }
 
     ctx.queue
-        .submit([encoder_safe.finish().unwrap(), encoder_unsafe.finish().unwrap()]);
+        .submit([encoder_safe.finish().unwrap(), encoder_unsafe.finish().unwrap()]).unwrap();
 }
 
 #[gpu_test]
@@ -423,6 +423,6 @@ fn build_with_transform(ctx: TestingContext) {
             }]),
         }],
         [&tlas_package],
-    );
-    ctx.queue.submit([encoder_build.finish().unwrap()]);
+    ).unwrap();
+    ctx.queue.submit([encoder_build.finish().unwrap()]).unwrap();
 }

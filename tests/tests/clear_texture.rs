@@ -262,7 +262,7 @@ async fn single_texture_clear_test(
 
     readback_buffers.copy_from(&ctx.device, &mut encoder, &texture);
 
-    ctx.queue.submit([encoder.finish().unwrap()]);
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
 
     assert!(
         readback_buffers.are_zero(ctx).await,

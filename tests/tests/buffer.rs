@@ -169,7 +169,7 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_async(
         .copy_buffer_to_buffer(&write_buf, 0, &read_buf, 0, 256)
         .unwrap();
 
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     read_buf
         .slice(..)

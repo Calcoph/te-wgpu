@@ -98,7 +98,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             cpass.set_bind_group(0, &bind_group, &[]).unwrap();
             cpass.dispatch_workgroups(1, 1, 1).unwrap();
         }
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         wgpu::util::DownloadBuffer::read_buffer(
             device,

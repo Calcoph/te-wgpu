@@ -101,7 +101,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
 
     drop(pass);
 
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 }
 
 #[gpu_test]
@@ -199,7 +199,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
 
     drop(pass);
 
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 }
 
 #[gpu_test]
@@ -283,7 +283,7 @@ fn get_derived_bgl(ctx: TestingContext) {
 
     drop(pass);
 
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 }
 
 #[gpu_test]
@@ -525,5 +525,5 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
 
     drop(pass);
 
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 }

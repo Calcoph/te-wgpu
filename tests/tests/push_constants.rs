@@ -157,7 +157,7 @@ async fn partial_update_test(ctx: TestingContext) {
     encoder
         .copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, 32)
         .unwrap();
-    ctx.queue.submit([encoder.finish().unwrap()]);
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
     cpu_buffer
         .slice(..)
         .map_async(wgpu::MapMode::Read, |_| ())
@@ -348,10 +348,10 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         data: &'a Vec<i32>,
     ) {
         let data_as_u8: &[u8] = bytemuck::cast_slice(data.as_slice());
-        encoder.set_pipeline(pipeline);
-        encoder.set_push_constants(ShaderStages::VERTEX_FRAGMENT, 0, data_as_u8);
-        encoder.set_bind_group(0, Some(bind_group), &[]);
-        encoder.draw(0..4, 0..1);
+        encoder.set_pipeline(pipeline).unwrap();
+        encoder.set_push_constants(ShaderStages::VERTEX_FRAGMENT, 0, data_as_u8).unwrap();
+        encoder.set_bind_group(0, Some(bind_group), &[]).unwrap();
+        encoder.draw(0..4, 0..1).unwrap();
     }
 
     let mut command_encoder = ctx
@@ -371,23 +371,23 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
                     });
             do_encoding(&mut render_bundle_encoder, &pipeline, &bind_group, &data);
             let render_bundle = render_bundle_encoder.finish(&RenderBundleDescriptor::default()).unwrap();
-            render_pass.execute_bundles([&render_bundle]);
+            render_pass.execute_bundles([&render_bundle]).unwrap();
         } else {
             // Execute the commands directly.
             do_encoding(&mut render_pass, &pipeline, &bind_group, &data);
         }
     }
     // Move the result to the cpu buffer, so that we can read them.
-    command_encoder.copy_buffer_to_buffer(&output_buffer, 0, &cpu_buffer, 0, output_buffer.size());
+    command_encoder.copy_buffer_to_buffer(&output_buffer, 0, &cpu_buffer, 0, output_buffer.size()).unwrap();
     let command_buffer = command_encoder.finish().unwrap();
-    ctx.queue.submit([command_buffer]);
-    cpu_buffer.slice(..).map_async(MapMode::Read, |_| ());
+    ctx.queue.submit([command_buffer]).unwrap();
+    cpu_buffer.slice(..).map_async(MapMode::Read, |_| ()).unwrap();
     ctx.async_poll(wgpu::Maintain::wait())
         .await
         .panic_on_timeout();
     let mapped_data = cpu_buffer.slice(..).get_mapped_range();
     let result = bytemuck::cast_slice::<u8, i32>(&mapped_data).to_vec();
     drop(mapped_data);
-    cpu_buffer.unmap();
+    cpu_buffer.unmap().unwrap();
     assert_eq!(&result, &data);
 }
