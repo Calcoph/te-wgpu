@@ -77,17 +77,17 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_KHR_buffer_device_address`, promoted to Vulkan 1.2.
     ///
     /// We only use this feature for
-    /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`], which requires
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`], which requires
     /// `VK_KHR_acceleration_structure`, which depends on
     /// `VK_KHR_buffer_device_address`, so [`Instance::expose_adapter`] only
     /// bothers to check if `VK_KHR_acceleration_structure` is available,
     /// leaving this `None`.
     ///
     /// However, we do populate this when creating a device if
-    /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`] is requested.
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] is requested.
     ///
     /// [`Instance::expose_adapter`]: super::Instance::expose_adapter
-    /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR<'static>>,
 
     /// Features provided by `VK_KHR_ray_query`,
@@ -108,6 +108,12 @@ pub struct PhysicalDeviceFeatures {
 
     /// Features provided by `VK_KHR_shader_atomic_int64`, promoted to Vulkan 1.2.
     shader_atomic_int64: Option<vk::PhysicalDeviceShaderAtomicInt64Features<'static>>,
+
+    /// Features provided by `VK_EXT_shader_image_atomic_int64`
+    shader_image_atomic_int64: Option<vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT<'static>>,
+
+    /// Features provided by `VK_EXT_shader_atomic_float`.
+    shader_atomic_float: Option<vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT<'static>>,
 
     /// Features provided by `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3.
     subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlFeatures<'static>>,
@@ -155,6 +161,12 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_atomic_int64 {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.shader_image_atomic_int64 {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.shader_atomic_float {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.subgroup_size_control {
@@ -438,6 +450,27 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            shader_image_atomic_int64: if enabled_extensions
+                .contains(&ext::shader_image_atomic_int64::NAME)
+            {
+                let needed = requested_features.intersects(wgt::Features::TEXTURE_INT64_ATOMIC);
+                Some(
+                    vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT::default()
+                        .shader_image_int64_atomics(needed),
+                )
+            } else {
+                None
+            },
+            shader_atomic_float: if enabled_extensions.contains(&ext::shader_atomic_float::NAME) {
+                let needed = requested_features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC);
+                Some(
+                    vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT::default()
+                        .shader_buffer_float32_atomics(needed)
+                        .shader_buffer_float32_atomic_add(needed),
+                )
+            } else {
+                None
+            },
             subgroup_size_control: if device_api_version >= vk::API_VERSION_1_3
                 || enabled_extensions.contains(&ext::subgroup_size_control::NAME)
             {
@@ -478,7 +511,8 @@ impl PhysicalDeviceFeatures {
             | F::TIMESTAMP_QUERY_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE
-            | F::PIPELINE_CACHE;
+            | F::PIPELINE_CACHE
+            | F::TEXTURE_ATOMIC;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
@@ -560,21 +594,13 @@ impl PhysicalDeviceFeatures {
             self.core.shader_sampled_image_array_dynamic_indexing != 0,
         );
         features.set(F::SHADER_PRIMITIVE_INDEX, self.core.geometry_shader != 0);
-        if Self::all_features_supported(
-            &features,
-            &[
-                (
-                    F::BUFFER_BINDING_ARRAY,
-                    self.core.shader_storage_buffer_array_dynamic_indexing,
-                ),
-                (
-                    F::TEXTURE_BINDING_ARRAY,
-                    self.core.shader_storage_image_array_dynamic_indexing,
-                ),
-            ],
-        ) {
-            features.insert(F::STORAGE_RESOURCE_BINDING_ARRAY);
-        }
+        features.set(
+            F::STORAGE_RESOURCE_BINDING_ARRAY,
+            (features.contains(F::BUFFER_BINDING_ARRAY)
+                && self.core.shader_storage_buffer_array_dynamic_indexing != 0)
+                || (features.contains(F::TEXTURE_BINDING_ARRAY)
+                    && self.core.shader_storage_image_array_dynamic_indexing != 0),
+        );
         //if self.core.shader_storage_image_array_dynamic_indexing != 0 {
         //if self.core.shader_clip_distance != 0 {
         //if self.core.shader_cull_distance != 0 {
@@ -587,6 +613,24 @@ impl PhysicalDeviceFeatures {
                 F::SHADER_INT64_ATOMIC_ALL_OPS | F::SHADER_INT64_ATOMIC_MIN_MAX,
                 shader_atomic_int64.shader_buffer_int64_atomics != 0
                     && shader_atomic_int64.shader_shared_int64_atomics != 0,
+            );
+        }
+
+        if let Some(ref shader_image_atomic_int64) = self.shader_image_atomic_int64 {
+            features.set(
+                F::TEXTURE_INT64_ATOMIC,
+                shader_image_atomic_int64
+                    .shader_image_int64_atomics(true)
+                    .shader_image_int64_atomics
+                    != 0,
+            );
+        }
+
+        if let Some(ref shader_atomic_float) = self.shader_atomic_float {
+            features.set(
+                F::SHADER_FLOAT32_ATOMIC,
+                shader_atomic_float.shader_buffer_float32_atomics != 0
+                    && shader_atomic_float.shader_buffer_float32_atomic_add != 0,
             );
         }
 
@@ -605,36 +649,22 @@ impl PhysicalDeviceFeatures {
 
         if let Some(ref descriptor_indexing) = self.descriptor_indexing {
             const STORAGE: F = F::STORAGE_RESOURCE_BINDING_ARRAY;
-            if Self::all_features_supported(
-                &features,
-                &[
-                    (
-                        F::TEXTURE_BINDING_ARRAY,
-                        descriptor_indexing.shader_sampled_image_array_non_uniform_indexing,
-                    ),
-                    (
-                        F::BUFFER_BINDING_ARRAY | STORAGE,
-                        descriptor_indexing.shader_storage_buffer_array_non_uniform_indexing,
-                    ),
-                ],
-            ) {
-                features.insert(F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING);
-            }
-            if Self::all_features_supported(
-                &features,
-                &[
-                    (
-                        F::BUFFER_BINDING_ARRAY,
-                        descriptor_indexing.shader_uniform_buffer_array_non_uniform_indexing,
-                    ),
-                    (
-                        F::TEXTURE_BINDING_ARRAY | STORAGE,
-                        descriptor_indexing.shader_storage_image_array_non_uniform_indexing,
-                    ),
-                ],
-            ) {
-                features.insert(F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING);
-            }
+            features.set(
+                F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+                (features.contains(F::TEXTURE_BINDING_ARRAY)
+                    && descriptor_indexing.shader_sampled_image_array_non_uniform_indexing != 0)
+                    && (features.contains(F::BUFFER_BINDING_ARRAY | STORAGE)
+                        && descriptor_indexing.shader_storage_buffer_array_non_uniform_indexing
+                            != 0),
+            );
+            features.set(
+                F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                (features.contains(F::BUFFER_BINDING_ARRAY)
+                    && descriptor_indexing.shader_uniform_buffer_array_non_uniform_indexing != 0)
+                    && (features.contains(F::TEXTURE_BINDING_ARRAY | STORAGE)
+                        && descriptor_indexing.shader_storage_image_array_non_uniform_indexing
+                            != 0),
+            );
             if descriptor_indexing.descriptor_binding_partially_bound != 0 && !intel_windows {
                 features |= F::PARTIALLY_BOUND_BINDING_ARRAY;
             }
@@ -722,13 +752,16 @@ impl PhysicalDeviceFeatures {
         features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
         features.set(
-            F::RAY_TRACING_ACCELERATION_STRUCTURE,
+            F::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
             caps.supports_extension(khr::deferred_host_operations::NAME)
                 && caps.supports_extension(khr::acceleration_structure::NAME)
                 && caps.supports_extension(khr::buffer_device_address::NAME),
         );
 
-        features.set(F::RAY_QUERY, caps.supports_extension(khr::ray_query::NAME));
+        features.set(
+            F::EXPERIMENTAL_RAY_QUERY,
+            caps.supports_extension(khr::ray_query::NAME),
+        );
 
         let rg11b10ufloat_renderable = supports_format(
             instance,
@@ -773,16 +806,12 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(google::display_timing::NAME),
         );
 
-        (features, dl_flags)
-    }
+        features.set(
+            F::VULKAN_EXTERNAL_MEMORY_WIN32,
+            caps.supports_extension(khr::external_memory_win32::NAME),
+        );
 
-    fn all_features_supported(
-        features: &wgt::Features,
-        implications: &[(wgt::Features, vk::Bool32)],
-    ) -> bool {
-        implications
-            .iter()
-            .all(|&(flag, support)| !features.contains(flag) || support != 0)
+        (features, dl_flags)
     }
 }
 
@@ -983,14 +1012,16 @@ impl PhysicalDeviceProperties {
         }
 
         // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` and `VK_KHR_buffer_device_address` if the feature `RAY_TRACING` was requested
-        if requested_features.contains(wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE) {
+        if requested_features
+            .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+        {
             extensions.push(khr::deferred_host_operations::NAME);
             extensions.push(khr::acceleration_structure::NAME);
             extensions.push(khr::buffer_device_address::NAME);
         }
 
         // Require `VK_KHR_ray_query` if the associated feature was requested
-        if requested_features.contains(wgt::Features::RAY_QUERY) {
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
             extensions.push(khr::ray_query::NAME);
         }
 
@@ -1000,7 +1031,7 @@ impl PhysicalDeviceProperties {
         }
 
         // Require `VK_KHR_portability_subset` on macOS/iOS
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        #[cfg(target_vendor = "apple")]
         extensions.push(khr::portability_subset::NAME);
 
         // Require `VK_EXT_texture_compression_astc_hdr` if the associated feature was requested
@@ -1013,6 +1044,16 @@ impl PhysicalDeviceProperties {
             wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
         ) {
             extensions.push(khr::shader_atomic_int64::NAME);
+        }
+
+        // Require `VK_EXT_shader_image_atomic_int64` if the associated feature was requested
+        if requested_features.intersects(wgt::Features::TEXTURE_INT64_ATOMIC) {
+            extensions.push(ext::shader_image_atomic_int64::NAME);
+        }
+
+        // Require `VK_EXT_shader_atomic_float` if the associated feature was requested
+        if requested_features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {
+            extensions.push(ext::shader_atomic_float::NAME);
         }
 
         // Require VK_GOOGLE_display_timing if the associated feature was requested
@@ -1042,8 +1083,13 @@ impl PhysicalDeviceProperties {
 
         // TODO: programmatically determine this, if possible. It's unclear whether we can
         // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
-        // We could increase the limit when we aren't on a tiled GPU.
-        let max_color_attachment_bytes_per_sample = 32;
+        //
+        // In theory some tilers may not support this much. We can't tell however, and
+        // the driver will throw a DEVICE_REMOVED if it goes too high in usage. This is fine.
+        //
+        // 16 bytes per sample is the maximum size for a color attachment.
+        let max_color_attachment_bytes_per_sample =
+            limits.max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
@@ -1135,6 +1181,13 @@ impl PhysicalDeviceProperties {
                 };
                 wgt::BufferSize::new(alignment).unwrap()
             },
+            raw_tlas_instance_size: 64,
+            ray_tracing_scratch_buffer_alignment: self.acceleration_structure.map_or(
+                0,
+                |acceleration_structure| {
+                    acceleration_structure.min_acceleration_structure_scratch_offset_alignment
+                },
+            ),
         }
     }
 }
@@ -1298,6 +1351,18 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            if capabilities.supports_extension(ext::shader_image_atomic_int64::NAME) {
+                let next = features
+                    .shader_image_atomic_int64
+                    .insert(vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT::default());
+                features2 = features2.push_next(next);
+            }
+            if capabilities.supports_extension(ext::shader_atomic_float::NAME) {
+                let next = features
+                    .shader_atomic_float
+                    .insert(vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT::default());
+                features2 = features2.push_next(next);
+            }
             if capabilities.supports_extension(ext::image_robustness::NAME) {
                 let next = features
                     .image_robustness
@@ -1486,7 +1551,7 @@ impl super::Instance {
                 Some(features) => features.imageless_framebuffer == vk::TRUE,
                 None => phd_features
                     .imageless_framebuffer
-                    .map_or(false, |ext| ext.imageless_framebuffer != 0),
+                    .is_some_and(|ext| ext.imageless_framebuffer != 0),
             },
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(khr::maintenance2::NAME),
@@ -1494,7 +1559,7 @@ impl super::Instance {
                 Some(features) => features.timeline_semaphore == vk::TRUE,
                 None => phd_features
                     .timeline_semaphore
-                    .map_or(false, |ext| ext.timeline_semaphore != 0),
+                    .is_some_and(|ext| ext.timeline_semaphore != 0),
             },
             texture_d24: supports_format(
                 &self.shared.raw,
@@ -1525,7 +1590,7 @@ impl super::Instance {
                 Some(ref f) => f.robust_image_access2 != 0,
                 None => phd_features
                     .image_robustness
-                    .map_or(false, |ext| ext.robust_image_access != 0),
+                    .is_some_and(|ext| ext.robust_image_access != 0),
             },
             robust_buffer_access2: phd_features
                 .robustness2
@@ -1539,14 +1604,13 @@ impl super::Instance {
                 .unwrap_or_default(),
             zero_initialize_workgroup_memory: phd_features
                 .zero_initialize_workgroup_memory
-                .map_or(false, |ext| {
-                    ext.shader_zero_initialize_workgroup_memory == vk::TRUE
-                }),
+                .is_some_and(|ext| ext.shader_zero_initialize_workgroup_memory == vk::TRUE),
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(khr::image_format_list::NAME),
-            #[cfg(windows)]
-            external_memory_win32: phd_capabilities
-                .supports_extension(khr::external_memory_win32::NAME),
+            maximum_samplers: phd_capabilities
+                .properties
+                .limits
+                .max_sampler_allocation_count,
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1779,7 +1843,7 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::StorageImageWriteWithoutFormat);
             }
 
-            if features.contains(wgt::Features::RAY_QUERY) {
+            if features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
                 capabilities.push(spv::Capability::RayQueryKHR);
             }
 
@@ -1789,9 +1853,18 @@ impl super::Adapter {
 
             if features.intersects(
                 wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS
-                    | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
+                    | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX
+                    | wgt::Features::TEXTURE_INT64_ATOMIC,
             ) {
                 capabilities.push(spv::Capability::Int64Atomics);
+            }
+
+            if features.intersects(wgt::Features::TEXTURE_INT64_ATOMIC) {
+                capabilities.push(spv::Capability::Int64ImageEXT);
+            }
+
+            if features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {
+                capabilities.push(spv::Capability::AtomicFloat32AddEXT);
             }
 
             let mut flags = spv::WriterFlags::empty();
@@ -1810,6 +1883,9 @@ impl super::Adapter {
                 // But this requires cloning the `spv::Options` struct, which has heap allocations.
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
+            if features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
+                capabilities.push(spv::Capability::RayQueryKHR);
+            }
             spv::Options {
                 lang_version: if features
                     .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX)
@@ -1892,6 +1968,9 @@ impl super::Adapter {
             workarounds: self.workarounds,
             render_passes: Mutex::new(Default::default()),
             framebuffers: Mutex::new(Default::default()),
+            sampler_cache: Mutex::new(super::sampler::SamplerCache::new(
+                self.private_caps.maximum_samplers,
+            )),
             memory_allocations_counter: Default::default(),
         });
 
@@ -2100,7 +2179,10 @@ impl crate::Adapter for super::Adapter {
         //     features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
         // );
         flags.set(
-            Tfc::STORAGE | Tfc::STORAGE_READ_WRITE,
+            Tfc::STORAGE_READ_WRITE
+                | Tfc::STORAGE_WRITE_ONLY
+                | Tfc::STORAGE_READ_ONLY
+                | Tfc::STORAGE_ATOMIC,
             features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE),
         );
         flags.set(
@@ -2126,6 +2208,10 @@ impl crate::Adapter for super::Adapter {
         flags.set(
             Tfc::COPY_DST,
             features.intersects(vk::FormatFeatureFlags::TRANSFER_DST),
+        );
+        flags.set(
+            Tfc::STORAGE_ATOMIC,
+            features.intersects(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
         );
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
@@ -2254,7 +2340,8 @@ impl crate::Adapter for super::Adapter {
                 Ok(present_modes) => present_modes,
                 Err(e) => {
                     log::error!("get_physical_device_surface_present_modes: {}", e);
-                    Vec::new()
+                    // Per definition of `SurfaceCapabilities`, there must be at least one present mode.
+                    return None;
                 }
             }
         };
@@ -2269,7 +2356,8 @@ impl crate::Adapter for super::Adapter {
                 Ok(formats) => formats,
                 Err(e) => {
                     log::error!("get_physical_device_surface_formats: {}", e);
-                    Vec::new()
+                    // Per definition of `SurfaceCapabilities`, there must be at least one present format.
+                    return None;
                 }
             }
         };

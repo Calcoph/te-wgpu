@@ -7,10 +7,10 @@
 //! *   Set the primitive_topology to PrimitiveTopology::LineList.
 //! *   Vertices and Indices describe the two points that make up a line.
 
-use std::{iter, mem::size_of};
+use std::iter;
 
 use bytemuck::{Pod, Zeroable};
-use wgpu::{core::resource::CreateTextureError, util::DeviceExt};
+use wgpu::util::DeviceExt;
 
 use winit::{
     event::{ElementState, KeyEvent, WindowEvent},
@@ -93,7 +93,7 @@ impl Example {
         encoder.draw(0..vertex_count, 0..1);
         encoder.finish(&wgpu::RenderBundleDescriptor {
             label: Some("main"),
-        })
+        }).unwrap()
     }
 
     fn create_multisampled_framebuffer(
@@ -220,7 +220,7 @@ impl crate::framework::Example for Example {
         }
     }
 
-    #[allow(clippy::single_match)]
+    #[expect(clippy::single_match)]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
             WindowEvent::KeyboardInput {
@@ -257,12 +257,10 @@ impl crate::framework::Example for Example {
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
+    ) {
         self.config = config.clone();
         self.multisampled_framebuffer =
             Example::create_multisampled_framebuffer(device, config, self.sample_count);
-
-        Ok(())
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -320,7 +318,7 @@ impl crate::framework::Example for Example {
                 .unwrap();
         }
 
-        queue.submit(iter::once(encoder.finish().unwrap()));
+        queue.submit(iter::once(encoder.finish().unwrap())).unwrap();
     }
 }
 

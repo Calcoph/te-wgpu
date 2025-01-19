@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
-use std::{f32::consts, mem::size_of};
-use wgpu::{core::resource::CreateTextureError, util::DeviceExt, AstcBlock, AstcChannel};
+use std::f32::consts;
+use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
 const IMAGE_SIZE: u32 = 256;
 
@@ -399,7 +399,7 @@ impl crate::framework::Example for Example {
         }
     }
 
-    #[allow(clippy::single_match)]
+    #[expect(clippy::single_match)]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
             winit::event::WindowEvent::CursorMoved { position, .. } => {
@@ -417,10 +417,9 @@ impl crate::framework::Example for Example {
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
+    ) {
         self.depth_view = Self::create_depth_texture(config, device);
         self.camera.screen_size = (config.width, config.height);
-        Ok(())
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -483,7 +482,7 @@ impl crate::framework::Example for Example {
             rpass.draw(0..3, 0..1).unwrap();
         }
 
-        queue.submit(std::iter::once(encoder.finish().unwrap()));
+        queue.submit(std::iter::once(encoder.finish().unwrap())).unwrap();
 
         self.staging_belt.recall().unwrap();
     }

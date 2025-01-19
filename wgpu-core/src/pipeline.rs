@@ -41,7 +41,7 @@ pub enum ShaderModuleSource<'a> {
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
     #[cfg_attr(feature = "serde", serde(default))]
-    pub shader_bound_checks: wgt::ShaderBoundChecks,
+    pub runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
 #[derive(Debug)]
@@ -280,8 +280,6 @@ pub enum CreatePipelineCacheError {
     Validation(#[from] PipelineCacheValidationError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
-    #[error("Internal error: {0}")]
-    Internal(String),
 }
 
 #[derive(Debug)]
@@ -439,8 +437,6 @@ pub enum ColorStateError {
         pipeline: validation::NumericType,
         shader: validation::NumericType,
     },
-    #[error("Blend factors for {0:?} must be `One`")]
-    InvalidMinMaxBlendFactors(wgt::BlendComponent),
     #[error("Invalid write mask {0:?}")]
     InvalidWriteMask(wgt::ColorWrites),
 }
@@ -479,6 +475,12 @@ pub enum CreateRenderPipelineError {
     TooManyVertexAttributes { given: u32, limit: u32 },
     #[error("Vertex buffer {index} stride {given} exceeds the limit {limit}")]
     VertexStrideTooLarge { index: u32, given: u32, limit: u32 },
+    #[error("Vertex attribute at location {location} stride {given} exceeds the limit {limit}")]
+    VertexAttributeStrideTooLarge {
+        location: wgt::ShaderLocation,
+        given: u32,
+        limit: u32,
+    },
     #[error("Vertex buffer {index} stride {stride} does not respect `VERTEX_STRIDE_ALIGNMENT`")]
     UnalignedVertexStride {
         index: u32,

@@ -119,7 +119,7 @@ async fn reinterpret(
             cache: None,
         }).unwrap();
     let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &pipeline.get_bind_group_layout(0),
+        layout: &pipeline.get_bind_group_layout(0).unwrap(),
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
             resource: wgpu::BindingResource::TextureView(&tv),
@@ -181,15 +181,15 @@ async fn reinterpret(
         .unwrap();
     encoder
         .copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &target_tex,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &read_buffer,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
                     rows_per_image: None,

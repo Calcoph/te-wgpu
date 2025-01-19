@@ -3,8 +3,8 @@ mod point_gen;
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use nanorand::{Rng, WyRand};
-use std::{f32::consts, iter, mem::size_of};
-use wgpu::{core::resource::CreateTextureError, util::DeviceExt};
+use std::{f32::consts, iter};
+use wgpu::util::DeviceExt;
 
 ///
 /// Radius of the terrain.
@@ -662,7 +662,7 @@ impl crate::framework::Example for Example {
             encoder.set_vertex_buffer(0, terrain_vertex_buf.slice(..));
             encoder.draw(0..terrain_vertices.len() as u32, 0..1);
             encoder.finish(&wgpu::RenderBundleDescriptor::default())
-        };
+        }.unwrap();
 
         // Done
         Example {
@@ -700,11 +700,11 @@ impl crate::framework::Example for Example {
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
+    ) {
         if config.width == 0 && config.height == 0 {
             // Stop rendering altogether.
             self.active = None;
-            return Ok(());
+            return;
         }
         self.active = Some(self.current_frame);
 
@@ -723,14 +723,12 @@ impl crate::framework::Example for Example {
 
         self.depth_buffer = depth_buffer;
         self.reflect_view = reflect_view;
-
-        Ok(())
     }
 
-    #[allow(clippy::eq_op)]
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         // Increment frame count regardless of if we draw.
         self.current_frame += 1;
+        #[expect(clippy::eq_op, reason = "keeping common divisor on all elements")]
         let back_color = wgpu::Color {
             r: 161.0 / 255.0,
             g: 246.0 / 255.0,
@@ -848,7 +846,7 @@ impl crate::framework::Example for Example {
             rpass.draw(0..self.water_vertex_count as u32, 0..1).unwrap();
         }
 
-        queue.submit(iter::once(encoder.finish().unwrap()));
+        queue.submit(iter::once(encoder.finish().unwrap())).unwrap();
     }
 }
 

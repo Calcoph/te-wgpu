@@ -34,12 +34,9 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default())
         .run_sync(|ctx| {
-            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
-
             fail(
-                &ctx.device,
                 || {
-                    let module = ctx.device.create_shader_module(INVALID_SHADER_DESC);
+                    let module = ctx.device.create_shader_module(INVALID_SHADER_DESC).unwrap();
 
                     let pipeline =
                         ctx.device
@@ -50,10 +47,10 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
                                 entry_point: Some("doesn't exist"),
                                 compilation_options: Default::default(),
                                 cache: None,
-                            });
+                            }).unwrap();
 
                     // https://github.com/gfx-rs/wgpu/issues/4167 this used to panic
-                    pipeline.get_bind_group_layout(0);
+                    pipeline.get_bind_group_layout(0)
                 },
                 Some("Shader 'invalid shader' parsing error"),
             );
@@ -64,12 +61,9 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().test_features_limits())
         .run_sync(|ctx| {
-            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
-
             fail(
-                &ctx.device,
                 || {
-                    let module = ctx.device.create_shader_module(TRIVIAL_COMPUTE_SHADER_DESC);
+                    let module = ctx.device.create_shader_module(TRIVIAL_COMPUTE_SHADER_DESC).unwrap();
 
                     let pipeline =
                         ctx.device
@@ -80,9 +74,9 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
                                 entry_point: Some("main"),
                                 compilation_options: Default::default(),
                                 cache: None,
-                            });
+                            }).unwrap();
 
-                    pipeline.get_bind_group_layout(0);
+                    pipeline.get_bind_group_layout(0)
                 },
                 Some("Invalid group index 0"),
             );
@@ -93,12 +87,9 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default())
         .run_sync(|ctx| {
-            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
-
             fail(
-                &ctx.device,
                 || {
-                    let module = ctx.device.create_shader_module(INVALID_SHADER_DESC);
+                    let module = ctx.device.create_shader_module(INVALID_SHADER_DESC).unwrap();
 
                     let pipeline =
                         ctx.device
@@ -117,9 +108,9 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
                                 fragment: None,
                                 multiview: None,
                                 cache: None,
-                            });
+                            }).unwrap();
 
-                    pipeline.get_bind_group_layout(0);
+                    pipeline.get_bind_group_layout(0)
                 },
                 Some("Shader 'invalid shader' parsing error"),
             );
@@ -130,15 +121,13 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().test_features_limits())
         .run_sync(|ctx| {
-            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
-
             fail(
-                &ctx.device,
                 || {
-                    let vs_module = ctx.device.create_shader_module(TRIVIAL_VERTEX_SHADER_DESC);
+                    let vs_module = ctx.device.create_shader_module(TRIVIAL_VERTEX_SHADER_DESC).unwrap();
                     let fs_module = ctx
                         .device
-                        .create_shader_module(TRIVIAL_FRAGMENT_SHADER_DESC);
+                        .create_shader_module(TRIVIAL_FRAGMENT_SHADER_DESC)
+                        .unwrap();
 
                     let pipeline =
                         ctx.device
@@ -166,9 +155,9 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
                                 }),
                                 multiview: None,
                                 cache: None,
-                            });
+                            }).unwrap();
 
-                    pipeline.get_bind_group_layout(0);
+                    pipeline.get_bind_group_layout(0)
                 },
                 Some("Invalid group index 0"),
             );
@@ -179,7 +168,6 @@ static NO_TARGETLESS_RENDER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_sync(|ctx| {
         fail(
-            &ctx.device,
             || {
                 // Testing multisampling is important, because some backends don't behave well if one
                 // tries to compile code in an unsupported multisample count. Failing to validate here
@@ -193,7 +181,7 @@ static NO_TARGETLESS_RENDER: GpuTestConfiguration = GpuTestConfiguration::new()
                             vertex: wgpu::VertexState {
                                 module: &ctx
                                     .device
-                                    .create_shader_module(TRIVIAL_VERTEX_SHADER_DESC),
+                                    .create_shader_module(TRIVIAL_VERTEX_SHADER_DESC).unwrap(),
                                 entry_point: Some("main"),
                                 compilation_options: Default::default(),
                                 buffers: &[],
@@ -207,12 +195,13 @@ static NO_TARGETLESS_RENDER: GpuTestConfiguration = GpuTestConfiguration::new()
                             fragment: None,
                             multiview: None,
                             cache: None,
-                        });
+                        })?;
                 }
+                Result::<_, wgpu::core::pipeline::CreateRenderPipelineError>::Ok(())
             },
             Some(concat!(
                 "At least one color attachment or depth-stencil attachment was expected, ",
                 "but no render target for the pipeline was specified."
             )),
-        )
+        );
     });

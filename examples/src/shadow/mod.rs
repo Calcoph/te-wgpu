@@ -1,8 +1,7 @@
-use std::{f32::consts, iter, mem::{self, size_of}, ops::Range, sync::Arc};
+use std::{f32::consts, iter, mem, ops::Range, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::{
-    core::resource::CreateTextureError,
     util::{align_to, DeviceExt},
 };
 
@@ -422,6 +421,7 @@ impl crate::framework::Example for Example {
                             label: Some("shadow"),
                             format: None,
                             dimension: Some(wgpu::TextureViewDimension::D2),
+                            usage: None,
                             aspect: wgpu::TextureAspect::All,
                             base_mip_level: 0,
                             mip_level_count: None,
@@ -736,7 +736,7 @@ impl crate::framework::Example for Example {
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
+    ) {
         // update view-projection matrix
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
@@ -749,8 +749,6 @@ impl crate::framework::Example for Example {
             .unwrap();
 
         self.forward_depth = Self::create_depth_texture(config, device);
-
-        Ok(())
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -885,7 +883,7 @@ impl crate::framework::Example for Example {
         }
         encoder.pop_debug_group().unwrap();
 
-        queue.submit(iter::once(encoder.finish().unwrap()));
+        queue.submit(iter::once(encoder.finish().unwrap())).unwrap();
     }
 }
 

@@ -1,6 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::mem::size_of;
-use wgpu::{core::resource::CreateTextureError, util::DeviceExt};
+use wgpu::util::DeviceExt;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -180,8 +179,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
         _config: &wgpu::SurfaceConfiguration,
         _device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
-        Ok(())
+    ) {
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -218,7 +216,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
             rpass.draw_indexed(0..self.index_count as u32, 0, 0..1).unwrap();
         }
 
-        queue.submit(Some(encoder.finish().unwrap()));
+        queue.submit(Some(encoder.finish().unwrap())).unwrap();
     }
 }
 

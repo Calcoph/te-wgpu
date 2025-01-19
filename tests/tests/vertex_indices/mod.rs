@@ -3,7 +3,7 @@
 //! We need tests for these as the backends use various schemes to work around the lack
 //! of support for things like `gl_BaseInstance` in shaders.
 
-use std::{mem::size_of_val, num::NonZeroU64, ops::Range};
+use std::{num::NonZeroU64, ops::Range};
 
 use itertools::Itertools;
 use strum::IntoEnumIterator;
@@ -457,7 +457,7 @@ async fn vertex_index_common(ctx: TestingContext) {
             if let Some(render_bundle_encoder) = render_bundle_encoder.take() {
                 render_bundle = render_bundle_encoder.finish(&RenderBundleDescriptor {
                     label: Some("test renderbundle"),
-                });
+                }).unwrap();
                 rpass.execute_bundles([&render_bundle]).unwrap();
             }
         }

@@ -1,6 +1,4 @@
 use bytemuck::{Pod, Zeroable};
-use std::mem::size_of;
-use wgpu::core::resource::CreateTextureError;
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -184,7 +182,7 @@ impl crate::framework::Example for Example {
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
+    ) {
         self.stencil_buffer = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Stencil buffer"),
             size: wgpu::Extent3d {
@@ -198,9 +196,7 @@ impl crate::framework::Example for Example {
             format: wgpu::TextureFormat::Stencil8,
             view_formats: &[],
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        })?;
-
-        Ok(())
+        }).unwrap();
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -250,7 +246,7 @@ impl crate::framework::Example for Example {
             rpass.draw(0..3, 0..1).unwrap();
         }
 
-        queue.submit(Some(encoder.finish().unwrap()));
+        queue.submit(Some(encoder.finish().unwrap())).unwrap();
     }
 }
 

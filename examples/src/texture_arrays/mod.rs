@@ -1,9 +1,6 @@
 use bytemuck::{Pod, Zeroable};
-use std::{
-    mem::size_of,
-    num::{NonZeroU32, NonZeroU64},
-};
-use wgpu::{core::resource::CreateTextureError, util::DeviceExt};
+use std::num::{NonZeroU32, NonZeroU64};
+use wgpu::util::DeviceExt;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -221,7 +218,7 @@ impl crate::framework::Example for Example {
             .write_texture(
                 red_texture.as_image_copy(),
                 &red_texture_data,
-                wgpu::ImageDataLayout {
+                wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(4),
                     rows_per_image: None,
@@ -233,7 +230,7 @@ impl crate::framework::Example for Example {
             .write_texture(
                 green_texture.as_image_copy(),
                 &green_texture_data,
-                wgpu::ImageDataLayout {
+                wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(4),
                     rows_per_image: None,
@@ -245,7 +242,7 @@ impl crate::framework::Example for Example {
             .write_texture(
                 blue_texture.as_image_copy(),
                 &blue_texture_data,
-                wgpu::ImageDataLayout {
+                wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(4),
                     rows_per_image: None,
@@ -257,7 +254,7 @@ impl crate::framework::Example for Example {
             .write_texture(
                 white_texture.as_image_copy(),
                 &white_texture_data,
-                wgpu::ImageDataLayout {
+                wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(4),
                     rows_per_image: None,
@@ -402,8 +399,7 @@ impl crate::framework::Example for Example {
         _sc_desc: &wgpu::SurfaceConfiguration,
         _device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
-        Ok(())
+    ) {
     }
     fn update(&mut self, _event: winit::event::WindowEvent) {
         // noop
@@ -445,7 +441,7 @@ impl crate::framework::Example for Example {
 
         drop(rpass);
 
-        queue.submit(Some(encoder.finish().unwrap()));
+        queue.submit(Some(encoder.finish().unwrap())).unwrap();
     }
 }
 

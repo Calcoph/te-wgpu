@@ -14,8 +14,6 @@
 //! A lot of things aren't explained here via comments. See hello-compute and
 //! repeated-compute for code that is more thoroughly commented.
 
-use std::mem::size_of_val;
-
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utils::output_image_native;
 #[cfg(target_arch = "wasm32")]
@@ -122,15 +120,15 @@ async fn run(_path: Option<String>) {
         compute_pass.dispatch_workgroups(TEXTURE_DIMS.0 as u32, TEXTURE_DIMS.1 as u32, 1).unwrap();
     }
     command_encoder.copy_texture_to_buffer(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             texture: &storage_texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
         },
-        wgpu::ImageCopyBuffer {
+        wgpu::TexelCopyBufferInfo {
             buffer: &output_staging_buffer,
-            layout: wgpu::ImageDataLayout {
+            layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 // This needs to be padded to 256.
                 bytes_per_row: Some((TEXTURE_DIMS.0 * 4) as u32),
@@ -143,7 +141,7 @@ async fn run(_path: Option<String>) {
             depth_or_array_layers: 1,
         },
     ).unwrap();
-    queue.submit(Some(command_encoder.finish().unwrap()));
+    queue.submit(Some(command_encoder.finish().unwrap())).unwrap();
 
     let buffer_slice = output_staging_buffer.slice(..);
     let (sender, receiver) = flume::bounded(1);

@@ -76,7 +76,7 @@ static WAIT_ON_SUBMISSION: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         let cmd_buf = generate_dummy_work(&ctx);
 
-        let index = ctx.queue.submit(Some(cmd_buf));
+        let index = ctx.queue.submit(Some(cmd_buf)).unwrap();
         ctx.async_poll(Maintain::wait_for(index))
             .await
             .panic_on_timeout();
@@ -87,7 +87,7 @@ static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         let cmd_buf = generate_dummy_work(&ctx);
 
-        let index = ctx.queue.submit(Some(cmd_buf));
+        let index = ctx.queue.submit(Some(cmd_buf)).unwrap();
         ctx.async_poll(Maintain::wait_for(index.clone()))
             .await
             .panic_on_timeout();
@@ -102,8 +102,8 @@ static WAIT_OUT_OF_ORDER: GpuTestConfiguration =
         let cmd_buf1 = generate_dummy_work(&ctx);
         let cmd_buf2 = generate_dummy_work(&ctx);
 
-        let index1 = ctx.queue.submit(Some(cmd_buf1));
-        let index2 = ctx.queue.submit(Some(cmd_buf2));
+        let index1 = ctx.queue.submit(Some(cmd_buf1)).unwrap();
+        let index2 = ctx.queue.submit(Some(cmd_buf2)).unwrap();
         ctx.async_poll(Maintain::wait_for(index2))
             .await
             .panic_on_timeout();

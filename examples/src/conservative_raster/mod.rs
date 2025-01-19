@@ -1,5 +1,3 @@
-use wgpu::core::resource::CreateTextureError;
-
 const RENDER_TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 struct Example {
@@ -249,13 +247,11 @@ impl crate::framework::Example for Example {
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
+    ) {
         let (low_res_target, bind_group_upscale) =
             Self::create_low_res_target(config, device, &self.bind_group_layout_upscale);
         self.low_res_target = low_res_target;
         self.bind_group_upscale = bind_group_upscale;
-
-        Ok(())
     }
 
     fn update(&mut self, _event: winit::event::WindowEvent) {}
@@ -312,7 +308,7 @@ impl crate::framework::Example for Example {
             }
         }
 
-        queue.submit(Some(encoder.finish().unwrap()));
+        queue.submit(Some(encoder.finish().unwrap())).unwrap();
     }
 }
 

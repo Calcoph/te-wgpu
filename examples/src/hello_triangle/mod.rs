@@ -10,7 +10,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     size.width = size.width.max(1);
     size.height = size.height.max(1);
 
-    let instance = wgpu::Instance::default();
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
 
     let surface = instance.create_surface(&window).unwrap();
     let adapter = instance
@@ -83,7 +83,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let mut config = surface
         .get_default_config(&adapter, size.width, size.height)
         .unwrap();
-    surface.configure(&device, &config);
+    surface.configure(&device, &config).unwrap();
 
     let window = &window;
     event_loop
@@ -103,13 +103,14 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         // Reconfigure the surface with the new size
                         config.width = new_size.width.max(1);
                         config.height = new_size.height.max(1);
-                        surface.configure(&device, &config);
+                        surface.configure(&device, &config).unwrap();
                         // On macos the window needs to be redrawn manually after resizing
                         window.request_redraw();
                     }
                     WindowEvent::RedrawRequested => {
                         let frame = surface
                             .get_current_texture()
+                            .unwrap()
                             .expect("Failed to acquire next swap chain texture");
                         let view = frame
                             .texture
@@ -138,7 +139,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             rpass.draw(0..3, 0..1).unwrap();
                         }
 
-                        queue.submit(Some(encoder.finish().unwrap()));
+                        queue.submit(Some(encoder.finish().unwrap())).unwrap();
                         frame.present();
                     }
                     WindowEvent::CloseRequested => target.exit(),
@@ -151,7 +152,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
 pub fn main() {
     let event_loop = EventLoop::new().unwrap();
-    #[allow(unused_mut)]
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(unused_mut, reason = "`wasm32` re-assigns to specify canvas")
+    )]
     let mut builder = winit::window::WindowBuilder::new();
     #[cfg(target_arch = "wasm32")]
     {

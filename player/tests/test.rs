@@ -14,7 +14,6 @@ use player::GlobalPlay;
 use std::{
     fs::{read_to_string, File},
     io::{Read, Seek, SeekFrom},
-    mem::size_of,
     path::{Path, PathBuf},
     slice,
 };
@@ -50,6 +49,7 @@ struct Expectation {
     data: ExpectedData,
 }
 
+#[derive(serde::Deserialize)]
 struct Test<'a> {
     features: wgt::Features,
     expectations: Vec<Expectation>,
@@ -71,31 +71,11 @@ impl Test<'_> {
             wgt::Backend::Gl => "Gl",
             _ => unreachable!(),
         };
-        let string = read_to_string(path).unwrap().replace("Empty", backend_name);
-
-        #[derive(serde::Deserialize)]
-        struct SerializedTest<'a> {
-            features: Vec<String>,
-            expectations: Vec<Expectation>,
-            actions: Vec<wgc::device::trace::Action<'a>>,
-        }
-        let SerializedTest {
-            features,
-            expectations,
-            actions,
-        } = ron::de::from_str(&string).unwrap();
-        let features = features
-            .iter()
-            .map(|feature| {
-                wgt::Features::from_name(feature)
-                    .unwrap_or_else(|| panic!("Invalid feature flag {feature}"))
-            })
-            .fold(wgt::Features::empty(), |a, b| a | b);
-        Test {
-            features,
-            expectations,
-            actions,
-        }
+        let string = read_to_string(&path)
+            .unwrap()
+            .replace("Empty", backend_name);
+        ron::de::from_str(&string)
+            .unwrap_or_else(|e| panic!("{path:?}:{} {}", e.position.line, e.code))
     }
 
     fn run(
@@ -141,9 +121,7 @@ impl Test<'_> {
                     Some(expect.data.len() as u64),
                     wgc::resource::BufferMapOperation {
                         host: wgc::device::HostMap::Read,
-                        callback: Some(wgc::resource::BufferMapCallback::from_rust(Box::new(
-                            map_callback,
-                        ))),
+                        callback: Some(Box::new(map_callback)),
                     },
                 )
                 .unwrap();
@@ -219,12 +197,7 @@ impl Corpus {
 
                 let global = wgc::global::Global::new(
                     "test",
-                    wgt::InstanceDescriptor {
-                        backends: backend.into(),
-                        flags: wgt::InstanceFlags::debugging(),
-                        dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
-                        gles_minor_version: wgt::Gles3MinorVersion::default(),
-                    },
+                    &wgt::InstanceDescriptor::from_env_or_default(),
                 );
                 let adapter = match global.request_adapter(
                     &wgc::instance::RequestAdapterOptions {

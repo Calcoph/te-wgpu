@@ -750,6 +750,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     Some(res.as_native()),
                 );
             }
+
+            // Call useResource on all textures and buffers used indirectly so they are alive
+            for (resource, use_info) in group.resources_to_use.iter() {
+                encoder.use_resource_at(resource.as_native(), use_info.uses, use_info.stages);
+            }
         }
 
         if let Some(ref encoder) = self.state.compute {
@@ -806,6 +811,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     (bg_info.base_resource_indices.cs.textures + index) as u64,
                     Some(res.as_native()),
                 );
+            }
+
+            // Call useResource on all textures and buffers used indirectly so they are alive
+            for (resource, use_info) in group.resources_to_use.iter() {
+                if !use_info.visible_in_compute {
+                    continue;
+                }
+                encoder.use_resource(resource.as_native(), use_info.uses);
             }
         }
     }
@@ -1240,13 +1253,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
-        let encoder = self.state.compute.as_ref().unwrap();
-        let raw_count = metal::MTLSize {
-            width: count[0] as u64,
-            height: count[1] as u64,
-            depth: count[2] as u64,
-        };
-        encoder.dispatch_thread_groups(raw_count, self.state.raw_wg_size);
+        if count[0] > 0 && count[1] > 0 && count[2] > 0 {
+            let encoder = self.state.compute.as_ref().unwrap();
+            let raw_count = metal::MTLSize {
+                width: count[0] as u64,
+                height: count[1] as u64,
+                depth: count[2] as u64,
+            };
+            encoder.dispatch_thread_groups(raw_count, self.state.raw_wg_size);
+        }
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
@@ -1293,5 +1308,6 @@ impl Drop for super::CommandEncoder {
         unsafe {
             self.discard_encoding();
         }
+        self.counters.command_encoders.sub(1);
     }
 }

@@ -7,8 +7,6 @@
 //!
 //! Only parts specific to this example will be commented.
 
-use std::mem::size_of_val;
-
 use wgpu::util::DeviceExt;
 
 async fn run() {
@@ -134,7 +132,7 @@ async fn run() {
         cover the length of one array. */
         compute_pass.dispatch_workgroups(local_a.len() as u32, 1, 1).unwrap();
     }
-    queue.submit(Some(command_encoder.finish().unwrap()));
+    queue.submit(Some(command_encoder.finish().unwrap())).unwrap();
 
     //----------------------------------------------------------
 
@@ -176,7 +174,7 @@ async fn get_data<T: bytemuck::Pod>(
         0,
         size_of_val(output) as u64,
     ).unwrap();
-    queue.submit(Some(command_encoder.finish().unwrap()));
+    queue.submit(Some(command_encoder.finish().unwrap())).unwrap();
     let buffer_slice = staging_buffer.slice(..);
     let (sender, receiver) = flume::bounded(1);
     buffer_slice

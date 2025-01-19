@@ -243,7 +243,7 @@ fn get_derived_bgl(ctx: TestingContext) {
         .device
         .create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
-            layout: &pipeline.get_bind_group_layout(0),
+            layout: &pipeline.get_bind_group_layout(0).unwrap(),
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: buffer.as_entire_binding(),
@@ -255,7 +255,7 @@ fn get_derived_bgl(ctx: TestingContext) {
         .device
         .create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
-            layout: &pipeline.get_bind_group_layout(0),
+            layout: &pipeline.get_bind_group_layout(0).unwrap(),
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: buffer.as_entire_binding(),
@@ -324,7 +324,7 @@ fn separate_pipelines_have_incompatible_derived_bgls(ctx: TestingContext) {
         .device
         .create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
-            layout: &pipeline2.get_bind_group_layout(0),
+            layout: &pipeline2.get_bind_group_layout(0).unwrap(),
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: buffer.as_entire_binding(),
@@ -474,8 +474,8 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
             cache: None,
         }).unwrap();
 
-    let bind_group_layout_0 = pipeline.get_bind_group_layout(0);
-    let bind_group_layout_1 = pipeline.get_bind_group_layout(1);
+    let bind_group_layout_0 = pipeline.get_bind_group_layout(0).unwrap();
+    let bind_group_layout_1 = pipeline.get_bind_group_layout(1).unwrap();
 
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,

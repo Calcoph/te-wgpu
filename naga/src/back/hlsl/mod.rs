@@ -101,6 +101,7 @@ accessing individual columns by dynamic index.
 mod conv;
 mod help;
 mod keywords;
+mod ray;
 mod storage;
 mod writer;
 
@@ -193,6 +194,7 @@ pub enum EntryPointError {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
 pub struct Options {
     /// The hlsl shader model to be used
     pub shader_model: ShaderModel,
@@ -330,6 +332,8 @@ pub struct Writer<'a, W> {
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
     wrapped: Wrapped,
+    written_committed_intersection: bool,
+    written_candidate_intersection: bool,
     continue_ctx: back::continue_forward::ContinueCtx,
 
     /// A reference to some part of a global variable, lowered to a series of

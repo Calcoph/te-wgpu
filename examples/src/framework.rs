@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use wgpu::{core::resource::CreateTextureError, Instance, Surface};
+use wgpu::{Instance, Surface};
 use winit::{
     dpi::PhysicalSize,
     event::{Event, KeyEvent, StartCause, WindowEvent},
@@ -44,7 +44,7 @@ pub trait Example: 'static + Sized {
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError>;
+    );
 
     fn update(&mut self, event: WindowEvent);
 
@@ -197,7 +197,7 @@ impl SurfaceWrapper {
             config.view_formats.push(format);
         };
 
-        surface.configure(&context.device, &config);
+        surface.configure(&context.device, &config).unwrap();
         self.config = Some(config);
     }
 
@@ -209,29 +209,32 @@ impl SurfaceWrapper {
         config.width = size.width.max(1);
         config.height = size.height.max(1);
         let surface = self.surface.as_ref().unwrap();
-        surface.configure(&context.device, config);
+        surface.configure(&context.device, config).unwrap();
     }
 
     /// Acquire the next surface texture.
     fn acquire(&mut self, context: &ExampleContext) -> wgpu::SurfaceTexture {
         let surface = self.surface.as_ref().unwrap();
 
-        match surface.get_current_texture() {
+        match surface.get_current_texture().unwrap() {
             Ok(frame) => frame,
             // If we timed out, just try again
             Err(wgpu::SurfaceError::Timeout) => surface
                 .get_current_texture()
+                .unwrap()
                 .expect("Failed to acquire next surface texture!"),
             Err(
                 // If the surface is outdated, or was lost, reconfigure it.
                 wgpu::SurfaceError::Outdated
                 | wgpu::SurfaceError::Lost
+                | wgpu::SurfaceError::Other
                 // If OutOfMemory happens, reconfiguring may not help, but we might as well try
                 | wgpu::SurfaceError::OutOfMemory,
             ) => {
-                surface.configure(&context.device, self.config());
+                surface.configure(&context.device, self.config()).unwrap();
                 surface
                     .get_current_texture()
+                    .unwrap()
                     .expect("Failed to acquire next surface texture!")
             }
         }
@@ -267,48 +270,16 @@ impl ExampleContext {
     async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         log::info!("Initializing wgpu...");
 
-        let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
-        let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
-        let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
-
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends,
-            flags: wgpu::InstanceFlags::from_build_config().with_env(),
-            dx12_shader_compiler,
-            gles_minor_version,
-        });
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
         surface.pre_adapter(&instance, window);
-        let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, surface.get())
-            .await
-            .expect("No suitable GPU adapters found on the system!");
 
-        let adapter_info = adapter.get_info();
-        log::info!("Using {} ({:?})", adapter_info.name, adapter_info.backend);
-
-        let optional_features = E::optional_features();
-        let required_features = E::required_features();
-        let adapter_features = adapter.features();
-        assert!(
-            adapter_features.contains(required_features),
-            "Adapter does not support required features for this example: {:?}",
-            required_features - adapter_features
-        );
-
-        let required_downlevel_capabilities = E::required_downlevel_capabilities();
-        let downlevel_capabilities = adapter.get_downlevel_capabilities();
-        assert!(
-            downlevel_capabilities.shader_model >= required_downlevel_capabilities.shader_model,
-            "Adapter does not support the minimum shader model required to run this example: {:?}",
-            required_downlevel_capabilities.shader_model
-        );
-        assert!(
-            downlevel_capabilities
-                .flags
-                .contains(required_downlevel_capabilities.flags),
-            "Adapter does not support the downlevel capabilities required to run this example: {:?}",
-            required_downlevel_capabilities.flags - downlevel_capabilities.flags
-        );
-
+        let adapter = get_adapter_with_capabilities_or_from_env(
+            &instance,
+            &E::required_features(),
+            &E::required_downlevel_capabilities(),
+            &surface.get(),
+        )
+        .await;
         // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the surface.
         let needed_limits = E::required_limits().using_resolution(adapter.limits());
 
@@ -317,7 +288,8 @@ impl ExampleContext {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    required_features: (optional_features & adapter_features) | required_features,
+                    required_features: (E::optional_features() & adapter.features())
+                        | E::required_features(),
                     required_limits: needed_limits,
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },
@@ -392,8 +364,7 @@ async fn start<E: Example>(title: &str) {
     }
 
     log::info!("Entering event loop...");
-    // On native this is a result, but on wasm it's a unit type.
-    #[allow(clippy::let_unit_value)]
+    #[cfg_attr(target_arch = "wasm32", expect(clippy::let_unit_value))]
     let _ = (event_loop_function)(
         window_loop.event_loop,
         move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
@@ -420,8 +391,7 @@ async fn start<E: Example>(title: &str) {
                         example
                             .as_mut()
                             .unwrap()
-                            .resize(surface.config(), &context.device, &context.queue)
-                            .unwrap();
+                            .resize(surface.config(), &context.device, &context.queue);
 
                         window_loop.window.request_redraw();
                     }
@@ -516,6 +486,8 @@ pub fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'
 #[cfg(test)]
 pub use wgpu_test::image::ComparisonType;
 
+use crate::utils::get_adapter_with_capabilities_or_from_env;
+
 #[cfg(test)]
 #[derive(Clone)]
 pub struct ExampleTestParams<E> {
@@ -609,15 +581,15 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
 
                 cmd_buf
                     .copy_texture_to_buffer(
-                        wgpu::ImageCopyTexture {
+                        wgpu::TexelCopyTextureInfo {
                             texture: &dst_texture,
                             mip_level: 0,
                             origin: wgpu::Origin3d::ZERO,
                             aspect: wgpu::TextureAspect::All,
                         },
-                        wgpu::ImageCopyBuffer {
+                        wgpu::TexelCopyBufferInfo {
                             buffer: &dst_buffer,
-                            layout: wgpu::ImageDataLayout {
+                            layout: wgpu::TexelCopyBufferLayout {
                                 offset: 0,
                                 bytes_per_row: Some(params.width * 4),
                                 rows_per_image: None,
@@ -631,7 +603,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                     )
                     .unwrap();
 
-                ctx.queue.submit(Some(cmd_buf.finish().unwrap()));
+                ctx.queue.submit(Some(cmd_buf.finish().unwrap())).unwrap();
 
                 let dst_buffer_slice = dst_buffer.slice(..);
                 dst_buffer_slice
