@@ -599,7 +599,20 @@ pub struct Device {
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Mutex<suballocation::GpuAllocatorWrapper>,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
-    counters: wgt::HalCounters,
+    counters: Arc<wgt::HalCounters>,
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        self.rtv_pool.lock().free_handle(self.null_rtv_handle);
+        if self
+            .private_caps
+            .instance_flags
+            .contains(wgt::InstanceFlags::VALIDATION)
+        {
+            auxil::dxgi::exception::unregister_exception_handler();
+        }
+    }
 }
 
 unsafe impl Send for Device {}
@@ -716,6 +729,8 @@ pub struct CommandEncoder {
     /// If set, the end of the next render/compute pass will write a timestamp at
     /// the given pool & location.
     end_of_pass_timer_query: Option<(Direct3D12::ID3D12QueryHeap, u32)>,
+
+    counters: Arc<wgt::HalCounters>,
 }
 
 unsafe impl Send for CommandEncoder {}
@@ -775,6 +790,12 @@ pub struct Texture {
     mip_level_count: u32,
     sample_count: u32,
     allocation: Option<suballocation::AllocationWrapper>,
+}
+
+impl Texture {
+    pub unsafe fn raw_resource(&self) -> &Direct3D12::ID3D12Resource {
+        &self.resource
+    }
 }
 
 impl crate::DynTexture for Texture {}
@@ -932,7 +953,7 @@ unsafe impl Sync for PipelineLayoutShared {}
 #[derive(Debug, Clone)]
 struct PipelineLayoutSpecialConstants {
     root_index: RootIndex,
-    cmd_signatures: CommandSignatures,
+    indirect_cmd_signatures: Option<CommandSignatures>,
 }
 
 unsafe impl Send for PipelineLayoutSpecialConstants {}
@@ -953,7 +974,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 pub struct ShaderModule {
     naga: crate::NagaShader,
     raw_name: Option<ffi::CString>,
-    runtime_checks: bool,
+    runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
 impl crate::DynShaderModule for ShaderModule {}
@@ -1010,7 +1031,10 @@ pub struct PipelineCache;
 impl crate::DynPipelineCache for PipelineCache {}
 
 #[derive(Debug)]
-pub struct AccelerationStructure {}
+pub struct AccelerationStructure {
+    resource: Direct3D12::ID3D12Resource,
+    allocation: Option<suballocation::AllocationWrapper>,
+}
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
 

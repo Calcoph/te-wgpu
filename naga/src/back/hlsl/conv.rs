@@ -68,6 +68,7 @@ impl crate::TypeInner {
                 let count = match size {
                     crate::ArraySize::Constant(size) => size.get(),
                     // A dynamically-sized array has to have at least one element
+                    crate::ArraySize::Pending(_) => unreachable!(),
                     crate::ArraySize::Dynamic => 1,
                 };
                 let last_el_size = gctx.types[base].inner.size_hlsl(gctx);
@@ -124,6 +125,7 @@ impl crate::StorageFormat {
             Self::R8Snorm | Self::R16Snorm => "snorm float",
             Self::R8Uint | Self::R16Uint | Self::R32Uint => "uint",
             Self::R8Sint | Self::R16Sint | Self::R32Sint => "int",
+            Self::R64Uint => "uint64_t",
 
             Self::Rg16Float | Self::Rg32Float => "float2",
             Self::Rg8Unorm | Self::Rg16Unorm => "unorm float2",

@@ -174,7 +174,7 @@ async fn validate_pipeline(
     }
 
     encoder.copy_buffer_to_buffer(gpu_buffer, 0, cpu_buffer, 0, ARRAY_SIZE * 4).unwrap();
-    ctx.queue.submit([encoder.finish().unwrap()]);
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
     ctx.async_poll(wgpu::Maintain::wait())
         .await

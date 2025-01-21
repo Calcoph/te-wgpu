@@ -189,7 +189,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
 
     let buffers = ReadbackBuffers::new(&ctx.device, &texture);
     buffers.copy_from(&ctx.device, &mut encoder, &texture);
-    ctx.queue.submit([encoder.finish().unwrap()]);
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
 
     let result = input_as_unorm.repeat(4);
     buffers.assert_buffer_contents(&ctx, &result).await;

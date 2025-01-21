@@ -261,6 +261,8 @@ ids! {
     pub type RenderBundleEncoderId RenderBundleEncoder;
     pub type RenderBundleId RenderBundle;
     pub type QuerySetId QuerySet;
+    pub type BlasId Blas;
+    pub type TlasId Tlas;
 }
 
 // The CommandBuffer type serves both as encoder and

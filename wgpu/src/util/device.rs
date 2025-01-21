@@ -5,6 +5,8 @@ use wgc::{
     resource::{CreateBufferError, CreateTextureError},
 };
 
+use wgt::TextureDataOrder;
+
 /// Describes a [Buffer](crate::Buffer) when allocating.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferInitDescriptor<'a> {
@@ -45,34 +47,6 @@ impl Display for CreateTextureWithDataError {
 }
 
 impl std::error::Error for CreateTextureWithDataError {}
-
-/// Order in which TextureData is laid out in memory.
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
-pub enum TextureDataOrder {
-    /// The texture is laid out densely in memory as:
-    ///
-    /// ```text
-    /// Layer0Mip0 Layer0Mip1 Layer0Mip2
-    /// Layer1Mip0 Layer1Mip1 Layer1Mip2
-    /// Layer2Mip0 Layer2Mip1 Layer2Mip2
-    /// ````
-    ///
-    /// This is the layout used by dds files.
-    ///
-    /// This was the previous behavior of [`DeviceExt::create_texture_with_data`].
-    #[default]
-    LayerMajor,
-    /// The texture is laid out densely in memory as:
-    ///
-    /// ```text
-    /// Layer0Mip0 Layer1Mip0 Layer2Mip0
-    /// Layer0Mip1 Layer1Mip1 Layer2Mip1
-    /// Layer0Mip2 Layer1Mip2 Layer2Mip2
-    /// ```
-    ///
-    /// This is the layout used by ktx and ktx2 files.
-    MipMajor,
-}
 
 /// Utility methods not meant to be in the main API.
 pub trait DeviceExt {
@@ -203,7 +177,7 @@ impl DeviceExt for crate::Device {
                 let end_offset = binary_offset + data_size as usize;
 
                 queue.write_texture(
-                    crate::ImageCopyTexture {
+                    crate::TexelCopyTextureInfo {
                         texture: &texture,
                         mip_level: mip,
                         origin: crate::Origin3d {
@@ -214,7 +188,7 @@ impl DeviceExt for crate::Device {
                         aspect: wgt::TextureAspect::All,
                     },
                     &data[binary_offset..end_offset],
-                    crate::ImageDataLayout {
+                    crate::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(bytes_per_row),
                         rows_per_image: Some(height_blocks),

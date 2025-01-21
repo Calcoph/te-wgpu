@@ -35,7 +35,7 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
             12 * 4,
         ).unwrap();
 
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         test_resources
             .readback_buffer
@@ -210,7 +210,7 @@ impl TestResources {
 
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
-            layout: &pipeline.get_bind_group_layout(0),
+            layout: &pipeline.get_bind_group_layout(0).unwrap(),
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,

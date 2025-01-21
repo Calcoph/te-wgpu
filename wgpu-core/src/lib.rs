@@ -10,7 +10,7 @@
 #![cfg_attr(
     all(
         not(all(feature = "vulkan", not(target_arch = "wasm32"))),
-        not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
+        not(all(feature = "metal", any(target_vendor = "apple"))),
         not(all(feature = "dx12", windows)),
         not(feature = "gles"),
     ),
@@ -76,6 +76,7 @@ pub mod pipeline;
 mod pipeline_cache;
 mod pool;
 pub mod present;
+pub mod ray_tracing;
 pub mod registry;
 pub mod resource;
 mod snatch;
@@ -86,7 +87,10 @@ mod weak_vec;
 // preserve all run-time checks that `wgpu-core` does.
 // See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be
 // made private again.
+mod scratch;
 pub mod validation;
+
+pub use validation::{map_storage_format_from_naga, map_storage_format_to_naga};
 
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
 pub use naga;
@@ -160,7 +164,18 @@ macro_rules! api_log {
 macro_rules! api_log {
     ($($arg:tt)+) => (log::trace!($($arg)+))
 }
+
+#[cfg(feature = "api_log_info")]
+macro_rules! api_log_debug {
+    ($($arg:tt)+) => (log::info!($($arg)+))
+}
+#[cfg(not(feature = "api_log_info"))]
+macro_rules! api_log_debug {
+    ($($arg:tt)+) => (log::debug!($($arg)+))
+}
+
 pub(crate) use api_log;
+pub(crate) use api_log_debug;
 
 #[cfg(feature = "resource_log_info")]
 macro_rules! resource_log {

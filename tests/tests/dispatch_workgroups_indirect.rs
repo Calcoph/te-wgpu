@@ -83,9 +83,9 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
             // compute_pass.set_bind_group(0, &test_resources.bind_group, &[]);
             compute_pass.dispatch_workgroups_indirect(&indirect_buffer, 0).unwrap();
         }
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
-        //assert!(error.map_or(false, |error| {
+        //assert!(error.is_some_and(|error| {
         //    format!("{error}").contains("The current set ComputePipeline with '' label expects a BindGroup to be set at index 0")
         //}));
     });
@@ -122,9 +122,9 @@ static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
             compute_pass.set_bind_group(0, &test_resources.bind_group, &[]).unwrap();
             compute_pass.dispatch_workgroups_indirect(&indirect_buffer, 0).unwrap();
         }
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
-        //assert!(error.map_or(false, |error| {
+        //assert!(error.is_some_and(|error| {
         //    format!("{error}").contains(
         //        "Indirect buffer uses bytes 0..12 which overruns indirect buffer of size 0",
         //    )
@@ -222,7 +222,7 @@ impl TestResources {
 
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
-            layout: &pipeline.get_bind_group_layout(0),
+            layout: &pipeline.get_bind_group_layout(0).unwrap(),
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: out_buffer.as_entire_binding(),
@@ -287,7 +287,7 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
             12,
         ).unwrap();
 
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         test_resources
             .readback_buffer

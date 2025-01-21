@@ -206,6 +206,6 @@ async fn pulling_common(
         draw_command(&mut rpass);
     }
     readback_buffer.copy_from(&ctx.device, &mut encoder, &color_texture);
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
     readback_buffer.assert_buffer_contents(&ctx, expected).await;
 }

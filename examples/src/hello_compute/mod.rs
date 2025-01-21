@@ -1,10 +1,9 @@
-use std::{mem::size_of_val, str::FromStr};
+use std::str::FromStr;
 use wgpu::util::DeviceExt;
 
 // Indicates a u32 overflow in an intermediate Collatz value
 const OVERFLOW: u32 = 0xffffffff;
 
-#[cfg_attr(test, allow(dead_code))]
 async fn run() {
     let numbers = if std::env::args().len() <= 2 {
         let default = vec![1, 2, 3, 4];
@@ -32,7 +31,6 @@ async fn run() {
     log::info!("Steps: [{}]", disp_steps.join(", "));
 }
 
-#[cfg_attr(test, allow(dead_code))]
 async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
     // Instantiates instance of WebGPU
     let instance = wgpu::Instance::default();
@@ -112,7 +110,7 @@ async fn execute_gpu_inner(
     }).unwrap();
 
     // Instantiates the bind group, once again specifying the binding of buffers.
-    let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
+    let bind_group_layout = compute_pipeline.get_bind_group_layout(0).unwrap();
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &bind_group_layout,
@@ -144,7 +142,7 @@ async fn execute_gpu_inner(
         .unwrap();
 
     // Submits command encoder for processing
-    queue.submit(Some(encoder.finish().unwrap()));
+    queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     // Note that we're not calling `.await` here.
     let buffer_slice = staging_buffer.slice(..);

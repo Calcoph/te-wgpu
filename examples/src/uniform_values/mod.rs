@@ -16,7 +16,7 @@
 //! The usage of the uniform buffer within the shader itself is pretty self-explanatory given
 //! some understanding of WGSL.
 
-use std::{mem::size_of, sync::Arc};
+use std::sync::Arc;
 // We won't bring StorageBuffer into scope as that might be too easy to confuse
 // with actual GPU-allocated WGPU storage buffers.
 use encase::ShaderType;
@@ -199,7 +199,7 @@ impl WgpuContext {
         let surface_config = surface
             .get_default_config(&adapter, size.width, size.height)
             .unwrap();
-        surface.configure(&device, &surface_config);
+        surface.configure(&device, &surface_config).unwrap();
 
         // (5)
         WgpuContext {
@@ -217,7 +217,7 @@ impl WgpuContext {
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.surface_config.width = new_size.width;
         self.surface_config.height = new_size.height;
-        self.surface.configure(&self.device, &self.surface_config);
+        self.surface.configure(&self.device, &self.surface_config).unwrap();
         self.window.request_redraw();
     }
 }
@@ -291,7 +291,7 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                         WindowEvent::RedrawRequested => {
                             let wgpu_context_ref = wgpu_context.as_ref().unwrap();
                             let state_ref = state.as_ref().unwrap();
-                            let frame = wgpu_context_ref.surface.get_current_texture().unwrap();
+                            let frame = wgpu_context_ref.surface.get_current_texture().unwrap().unwrap();
                             let view = frame
                                 .texture
                                 .create_view(&wgpu::TextureViewDescriptor::default())
@@ -344,7 +344,7 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                             }
                             wgpu_context_ref
                                 .queue
-                                .submit(Some(encoder.finish().unwrap()));
+                                .submit(Some(encoder.finish().unwrap())).unwrap();
                             frame.present();
                         }
                         _ => {}
@@ -358,7 +358,10 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
 
 pub fn main() {
     let event_loop = EventLoop::new().unwrap();
-    #[allow(unused_mut)]
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(unused_mut, reason = "`wasm32` re-assigns to specify canvas")
+    )]
     let mut builder = winit::window::WindowBuilder::new()
         .with_title("Remember: Use U/D to change sample count!")
         .with_inner_size(winit::dpi::LogicalSize::new(900, 900));

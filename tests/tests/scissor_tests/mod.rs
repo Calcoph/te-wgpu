@@ -107,7 +107,7 @@ async fn scissor_test_impl(
             render_pass.draw(0..3, 0..1).unwrap();
         }
         readback_buffer.copy_from(&ctx.device, &mut encoder, &texture);
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
     }
     readback_buffer
         .assert_buffer_contents(ctx, &expected_data)

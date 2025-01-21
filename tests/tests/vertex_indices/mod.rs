@@ -3,7 +3,7 @@
 //! We need tests for these as the backends use various schemes to work around the lack
 //! of support for things like `gl_BaseInstance` in shaders.
 
-use std::{mem::size_of_val, num::NonZeroU64, ops::Range};
+use std::{num::NonZeroU64, ops::Range};
 
 use itertools::Itertools;
 use strum::IntoEnumIterator;
@@ -457,7 +457,7 @@ async fn vertex_index_common(ctx: TestingContext) {
             if let Some(render_bundle_encoder) = render_bundle_encoder.take() {
                 render_bundle = render_bundle_encoder.finish(&RenderBundleDescriptor {
                     label: Some("test renderbundle"),
-                });
+                }).unwrap();
                 rpass.execute_bundles([&render_bundle]).unwrap();
             }
         }
@@ -473,11 +473,11 @@ async fn vertex_index_common(ctx: TestingContext) {
 
         // See https://github.com/gfx-rs/wgpu/issues/4732 for why this is split between two submissions
         // with a hard wait in between.
-        ctx.queue.submit([encoder1.finish().unwrap()]);
+        ctx.queue.submit([encoder1.finish().unwrap()]).unwrap();
         ctx.async_poll(wgpu::Maintain::wait())
             .await
             .panic_on_timeout();
-        ctx.queue.submit([encoder2.finish().unwrap()]);
+        ctx.queue.submit([encoder2.finish().unwrap()]).unwrap();
         let slice = cpu_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
         ctx.async_poll(wgpu::Maintain::wait())

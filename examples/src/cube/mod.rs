@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
-use std::{f32::consts, mem::size_of};
-use wgpu::{core::resource::CreateTextureError, util::DeviceExt};
+use std::f32::consts;
+use wgpu::util::DeviceExt;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -185,7 +185,7 @@ impl crate::framework::Example for Example {
         queue.write_texture(
             texture.as_image_copy(),
             &texels,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(size),
                 rows_per_image: None,
@@ -329,14 +329,12 @@ impl crate::framework::Example for Example {
         config: &wgpu::SurfaceConfiguration,
         _device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
+    ) {
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
         queue
             .write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref))
             .unwrap();
-
-        Ok(())
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -377,7 +375,7 @@ impl crate::framework::Example for Example {
             }
         }
 
-        queue.submit(Some(encoder.finish().unwrap()));
+        queue.submit(Some(encoder.finish().unwrap())).unwrap();
     }
 }
 

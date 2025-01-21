@@ -173,7 +173,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
         drop(double_rpass);
 
         // Submit the first pass using both buffers
-        ctx.queue.submit(Some(encoder1.finish().unwrap()));
+        ctx.queue.submit(Some(encoder1.finish().unwrap())).unwrap();
         // Drop the second buffer, meaning it's invalid to use draw
         // unless it's unbound.
         drop(vertex_buffer2);
@@ -207,5 +207,5 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
 
         drop(single_rpass);
 
-        ctx.queue.submit(Some(encoder2.finish().unwrap()));
+        ctx.queue.submit(Some(encoder2.finish().unwrap())).unwrap();
     });

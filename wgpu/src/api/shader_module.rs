@@ -1,4 +1,4 @@
-use std::{borrow::Cow, future::Future, marker::PhantomData, sync::Arc, thread};
+use std::{borrow::Cow, future::Future, marker::PhantomData};
 
 use crate::*;
 
@@ -12,26 +12,17 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUShaderModule`](https://gpuweb.github.io/gpuweb/#shader-module).
 #[derive(Debug)]
 pub struct ShaderModule {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchShaderModule,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ShaderModule: Send, Sync);
 
-super::impl_partialeq_eq_hash!(ShaderModule);
-
-impl Drop for ShaderModule {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.shader_module_drop(self.data.as_ref());
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(ShaderModule => .inner);
 
 impl ShaderModule {
     /// Get the compilation info for the shader module.
     pub fn get_compilation_info(&self) -> impl Future<Output = CompilationInfo> + WasmNotSend {
-        self.context.shader_get_compilation_info(self.data.as_ref())
+        self.inner.get_compilation_info()
     }
 }
 
@@ -177,7 +168,7 @@ impl From<crate::naga::SourceLocation> for SourceLocation {
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
-#[cfg_attr(feature = "naga-ir", allow(clippy::large_enum_variant))]
+#[cfg_attr(feature = "naga-ir", expect(clippy::large_enum_variant))]
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum ShaderSource<'a> {

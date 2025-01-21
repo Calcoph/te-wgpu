@@ -49,6 +49,7 @@ impl From<super::StorageFormat> for super::Scalar {
             Sf::Rgb10a2Uint => Sk::Uint,
             Sf::Rgb10a2Unorm => Sk::Float,
             Sf::Rg11b10Ufloat => Sk::Float,
+            Sf::R64Uint => Sk::Uint,
             Sf::Rg32Uint => Sk::Uint,
             Sf::Rg32Sint => Sk::Sint,
             Sf::Rg32Float => Sk::Float,
@@ -65,7 +66,11 @@ impl From<super::StorageFormat> for super::Scalar {
             Sf::Rgba16Unorm => Sk::Float,
             Sf::Rgba16Snorm => Sk::Float,
         };
-        super::Scalar { kind, width: 4 }
+        let width = match format {
+            Sf::R64Uint => 8,
+            _ => 4,
+        };
+        super::Scalar { kind, width }
     }
 }
 
@@ -297,6 +302,9 @@ impl super::TypeInner {
             } => {
                 let count = match size {
                     super::ArraySize::Constant(count) => count.get(),
+                    // any struct member or array element needing a size at pipeline-creation time
+                    // must have a creation-fixed footprint
+                    super::ArraySize::Pending(_) => 0,
                     // A dynamically-sized array has to have at least one element
                     super::ArraySize::Dynamic => 1,
                 };
@@ -478,6 +486,7 @@ impl super::MathFunction {
             Self::Inverse => 1,
             Self::Transpose => 1,
             Self::Determinant => 1,
+            Self::QuantizeToF16 => 1,
             // bits
             Self::CountTrailingZeros => 1,
             Self::CountLeadingZeros => 1,

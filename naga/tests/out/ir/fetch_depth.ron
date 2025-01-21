@@ -237,6 +237,7 @@
                     value: None,
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [
@@ -245,6 +246,7 @@
             stage: Compute,
             early_depth_test: None,
             workgroup_size: (32, 1, 1),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("cull::fetch_depth_wrap"),
                 arguments: [],
@@ -259,7 +261,10 @@
                         result: None,
                     ),
                 ],
+                diagnostic_filter_leaf: None,
             ),
         ),
     ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
 )

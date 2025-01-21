@@ -1,7 +1,7 @@
 //! Tests that compute passes take ownership of resources that are associated with.
 //! I.e. once a resource is passed in to a compute pass, it can be dropped.
 
-use std::{mem::size_of, num::NonZeroU64};
+use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt as _;
 use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
@@ -225,7 +225,7 @@ async fn assert_compute_pass_executed_normally(
     ctx: TestingContext,
 ) {
     encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size).unwrap();
-    ctx.queue.submit([encoder.finish().unwrap()]);
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
     ctx.async_poll(wgpu::Maintain::wait())
         .await

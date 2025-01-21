@@ -34,7 +34,11 @@ pub fn map_texture_usage_to_resource_flags(
             flags |= Direct3D12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
         }
     }
-    if usage.contains(crate::TextureUses::STORAGE_READ_WRITE) {
+    if usage.intersects(
+        crate::TextureUses::STORAGE_READ_ONLY
+            | crate::TextureUses::STORAGE_WRITE_ONLY
+            | crate::TextureUses::STORAGE_READ_WRITE,
+    ) {
         flags |= Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
@@ -108,7 +112,7 @@ pub fn map_binding_type(ty: &wgt::BindingType) -> Direct3D12::D3D12_DESCRIPTOR_R
             ..
         }
         | Bt::StorageTexture { .. } => Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-        Bt::AccelerationStructure => todo!(),
+        Bt::AccelerationStructure => Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
     }
 }
 
@@ -130,7 +134,7 @@ pub fn map_buffer_usage_to_state(usage: crate::BufferUses) -> Direct3D12::D3D12_
     }
     if usage.intersects(Bu::STORAGE_READ_WRITE) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    } else if usage.intersects(Bu::STORAGE_READ) {
+    } else if usage.intersects(Bu::STORAGE_READ_ONLY) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
             | Direct3D12::D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
@@ -168,7 +172,7 @@ pub fn map_texture_usage_to_state(usage: crate::TextureUses) -> Direct3D12::D3D1
     if usage.intersects(Tu::DEPTH_STENCIL_WRITE) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
-    if usage.intersects(Tu::STORAGE_READ | Tu::STORAGE_READ_WRITE) {
+    if usage.intersects(Tu::STORAGE_READ_ONLY | Tu::STORAGE_WRITE_ONLY | Tu::STORAGE_READ_WRITE) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
     state
@@ -345,4 +349,52 @@ pub fn map_depth_stencil(ds: &wgt::DepthStencilState) -> Direct3D12::D3D12_DEPTH
         FrontFace: map_stencil_face(&ds.stencil.front),
         BackFace: map_stencil_face(&ds.stencil.back),
     }
+}
+
+pub(crate) fn map_acceleration_structure_build_flags(
+    flags: wgt::AccelerationStructureFlags,
+    mode: Option<crate::AccelerationStructureBuildMode>,
+) -> Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS {
+    let mut d3d_flags = Default::default();
+    if flags.contains(wgt::AccelerationStructureFlags::ALLOW_COMPACTION) {
+        d3d_flags |=
+            Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+    }
+
+    if flags.contains(wgt::AccelerationStructureFlags::ALLOW_UPDATE) {
+        d3d_flags |= Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+    }
+
+    if flags.contains(wgt::AccelerationStructureFlags::LOW_MEMORY) {
+        d3d_flags |= Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_MINIMIZE_MEMORY;
+    }
+
+    if flags.contains(wgt::AccelerationStructureFlags::PREFER_FAST_BUILD) {
+        d3d_flags |=
+            Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+    }
+
+    if flags.contains(wgt::AccelerationStructureFlags::PREFER_FAST_TRACE) {
+        d3d_flags |=
+            Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    }
+
+    if let Some(crate::AccelerationStructureBuildMode::Update) = mode {
+        d3d_flags |= Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE
+    }
+
+    d3d_flags
+}
+
+pub(crate) fn map_acceleration_structure_geometry_flags(
+    flags: wgt::AccelerationStructureGeometryFlags,
+) -> Direct3D12::D3D12_RAYTRACING_GEOMETRY_FLAGS {
+    let mut d3d_flags = Default::default();
+    if flags.contains(wgt::AccelerationStructureGeometryFlags::OPAQUE) {
+        d3d_flags |= Direct3D12::D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+    }
+    if flags.contains(wgt::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION) {
+        d3d_flags |= Direct3D12::D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
+    }
+    d3d_flags
 }

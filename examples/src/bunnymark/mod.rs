@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use nanorand::{Rng, WyRand};
-use std::{borrow::Cow, mem::size_of};
-use wgpu::{core::resource::CreateTextureError, util::DeviceExt};
+use std::borrow::Cow;
+use wgpu::util::DeviceExt;
 use winit::{
     event::{ElementState, KeyEvent},
     keyboard::{Key, NamedKey},
@@ -139,7 +139,7 @@ impl Example {
             }
         }
 
-        queue.submit(Some(encoder.finish().unwrap()));
+        queue.submit(Some(encoder.finish().unwrap())).unwrap();
     }
 }
 
@@ -266,7 +266,7 @@ impl crate::framework::Example for Example {
             queue.write_texture(
                 texture.as_image_copy(),
                 &buf,
-                wgpu::ImageDataLayout {
+                wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(info.width * 4),
                     rows_per_image: None,
@@ -389,7 +389,7 @@ impl crate::framework::Example for Example {
         sc_desc: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
+    ) {
         self.extent = [sc_desc.width, sc_desc.height];
 
         let globals = Globals {
@@ -431,7 +431,6 @@ impl crate::framework::Example for Example {
             label: None,
         }).unwrap();
         self.global_group = global_group;
-        Ok(())
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {

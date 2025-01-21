@@ -38,7 +38,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         encoder.clear_buffer(&buffer, 0, None).unwrap();
 
         // Submit the work.
-        ctx.queue.submit(Some(encoder.finish().unwrap()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
         // Ensure the work is finished.
         ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
 

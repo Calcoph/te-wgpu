@@ -5,8 +5,6 @@
 //! hello-compute example does not such as mapping buffers
 //! and why use the async channels.
 
-use std::mem::size_of_val;
-
 const OVERFLOW: u32 = 0xffffffff;
 
 async fn run() {
@@ -82,7 +80,8 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // Finalize the command encoder, add the contained commands to the queue and flush.
     context
         .queue
-        .submit(Some(command_encoder.finish().unwrap()));
+        .submit(Some(command_encoder.finish().unwrap()))
+        .unwrap();
     log::info!("Submitted commands.");
 
     // Finally time to get our results.

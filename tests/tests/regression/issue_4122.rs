@@ -43,7 +43,7 @@ async fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
         .copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, size)
         .unwrap();
 
-    ctx.queue.submit(Some(encoder.finish().unwrap()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
     cpu_buffer
         .slice(..)
         .map_async(wgpu::MapMode::Read, |_| ())

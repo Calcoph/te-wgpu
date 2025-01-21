@@ -34,7 +34,7 @@ impl ViewportDesc {
             .surface
             .get_default_config(adapter, size.width, size.height)
             .unwrap();
-        self.surface.configure(device, &config);
+        self.surface.configure(device, &config).unwrap();
         Viewport { desc: self, config }
     }
 }
@@ -43,12 +43,13 @@ impl Viewport {
     fn resize(&mut self, device: &wgpu::Device, size: winit::dpi::PhysicalSize<u32>) {
         self.config.width = size.width;
         self.config.height = size.height;
-        self.desc.surface.configure(device, &self.config);
+        self.desc.surface.configure(device, &self.config).unwrap();
     }
     fn get_current_texture(&mut self) -> wgpu::SurfaceTexture {
         self.desc
             .surface
             .get_current_texture()
+            .unwrap()
             .expect("Failed to acquire next swap chain texture")
     }
 }
@@ -138,7 +139,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Arc<Window>, wgpu::Color
                                     });
                             }
 
-                            queue.submit(Some(encoder.finish().unwrap()));
+                            queue.submit(Some(encoder.finish().unwrap())).unwrap();
                             frame.present();
                         }
                     }

@@ -1,14 +1,10 @@
-use std::mem::size_of_val;
-
 const ARR_SIZE: usize = 128;
 
 struct ExecuteResults {
     patient_workgroup_results: Vec<u32>,
-    #[cfg_attr(test, allow(unused))]
     hasty_workgroup_results: Vec<u32>,
 }
 
-#[cfg_attr(test, allow(unused))]
 async fn run() {
     let instance = wgpu::Instance::default();
     let adapter = instance
@@ -133,7 +129,7 @@ async fn execute(
         compute_pass.set_bind_group(0, &bind_group, &[]).unwrap();
         compute_pass.dispatch_workgroups(local_patient_workgroup_results.len() as u32, 1, 1).unwrap();
     }
-    queue.submit(Some(command_encoder.finish().unwrap()));
+    queue.submit(Some(command_encoder.finish().unwrap())).unwrap();
 
     get_data(
         local_patient_workgroup_results.as_mut_slice(),
@@ -156,7 +152,7 @@ async fn execute(
         compute_pass.set_bind_group(0, &bind_group, &[]).unwrap();
         compute_pass.dispatch_workgroups(local_patient_workgroup_results.len() as u32, 1, 1).unwrap();
     }
-    queue.submit(Some(command_encoder.finish().unwrap()));
+    queue.submit(Some(command_encoder.finish().unwrap())).unwrap();
 
     get_data(
         local_hasty_workgroup_results.as_mut_slice(),
@@ -190,7 +186,7 @@ async fn get_data<T: bytemuck::Pod>(
         0,
         size_of_val(output) as u64,
     ).unwrap();
-    queue.submit(Some(command_encoder.finish().unwrap()));
+    queue.submit(Some(command_encoder.finish().unwrap())).unwrap();
     let buffer_slice = staging_buffer.slice(..);
     let (sender, receiver) = flume::bounded(1);
     buffer_slice

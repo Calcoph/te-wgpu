@@ -253,7 +253,7 @@ async fn draw_test_with_reports(
     assert_eq!(report.texture_views.num_allocated, 0);
     assert_eq!(report.textures.num_allocated, 0);
 
-    let submit_index = ctx.queue.submit(Some(encoder.finish().unwrap()));
+    let submit_index = ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     // TODO: fix in https://github.com/gfx-rs/wgpu/pull/5141
     // let global_report = ctx.instance.generate_report().unwrap();

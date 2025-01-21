@@ -207,10 +207,10 @@ impl super::Adapter {
                 Direct3D12::D3D_SHADER_MODEL_6_2,
                 Direct3D12::D3D_SHADER_MODEL_6_1,
                 Direct3D12::D3D_SHADER_MODEL_6_0,
-                Direct3D12::D3D_SHADER_MODEL_5_1,
             ]
             .iter();
-            match loop {
+
+            let highest_shader_model = loop {
                 if let Some(&sm) = versions.next() {
                     let mut sm = Direct3D12::D3D12_FEATURE_DATA_SHADER_MODEL {
                         HighestShaderModel: sm,
@@ -229,8 +229,10 @@ impl super::Adapter {
                 } else {
                     break Direct3D12::D3D_SHADER_MODEL_5_1;
                 }
-            } {
-                Direct3D12::D3D_SHADER_MODEL_5_1 => naga::back::hlsl::ShaderModel::V5_1,
+            };
+
+            match highest_shader_model {
+                Direct3D12::D3D_SHADER_MODEL_5_1 => return None, // don't expose this adapter if it doesn't support DXIL
                 Direct3D12::D3D_SHADER_MODEL_6_0 => naga::back::hlsl::ShaderModel::V6_0,
                 Direct3D12::D3D_SHADER_MODEL_6_1 => naga::back::hlsl::ShaderModel::V6_1,
                 Direct3D12::D3D_SHADER_MODEL_6_2 => naga::back::hlsl::ShaderModel::V6_2,
@@ -242,7 +244,6 @@ impl super::Adapter {
                 _ => unreachable!(),
             }
         };
-
         let private_caps = super::PrivateCapabilities {
             instance_flags,
             heterogeneous_resource_heaps: options.ResourceHeapTier
@@ -293,6 +294,7 @@ impl super::Adapter {
             }
         };
 
+        // these should always be available on d3d12
         let mut features = wgt::Features::empty()
             | wgt::Features::DEPTH_CLIP_CONTROL
             | wgt::Features::DEPTH32FLOAT_STENCIL8
@@ -315,7 +317,9 @@ impl super::Adapter {
             | wgt::Features::SHADER_PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
             | wgt::Features::DUAL_SOURCE_BLENDING
-            | wgt::Features::TEXTURE_FORMAT_NV12;
+            | wgt::Features::TEXTURE_FORMAT_NV12
+            | wgt::Features::FLOAT32_FILTERABLE
+            | wgt::Features::TEXTURE_ATOMIC;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
@@ -338,6 +342,12 @@ impl super::Adapter {
                 | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
                 | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             shader_model >= naga::back::hlsl::ShaderModel::V5_1,
+        );
+
+        // See note below the table https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support
+        features.set(
+            wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY,
+            options.ResourceBindingTier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0,
         );
 
         let bgra8unorm_storage_supported = {
@@ -379,10 +389,38 @@ impl super::Adapter {
         );
 
         features.set(
+            wgt::Features::TEXTURE_INT64_ATOMIC,
+            shader_model >= naga::back::hlsl::ShaderModel::V6_6
+                && hr.is_ok()
+                && features1.Int64ShaderOps.as_bool(),
+        );
+
+        features.set(
             wgt::Features::SUBGROUP,
             shader_model >= naga::back::hlsl::ShaderModel::V6_0
                 && hr.is_ok()
                 && features1.WaveOps.as_bool(),
+        );
+        let mut features5 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS5::default();
+        let has_features5 = unsafe {
+            device.CheckFeatureSupport(
+                Direct3D12::D3D12_FEATURE_D3D12_OPTIONS5,
+                <*mut _>::cast(&mut features5),
+                size_of_val(&features5) as u32,
+            )
+        }
+        .is_ok();
+
+        // Since all features for raytracing pipeline (geometry index) and ray queries both come
+        // from here, there is no point in adding an extra call here given that there will be no
+        // feature using EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE if all these are not met.
+        // Once ray tracing pipelines are supported they also will go here
+        features.set(
+            wgt::Features::EXPERIMENTAL_RAY_QUERY
+                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+            features5.RaytracingTier == Direct3D12::D3D12_RAYTRACING_TIER_1_1
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_5
+                && has_features5,
         );
 
         let atomic_int64_on_typed_resource_supported = {
@@ -403,9 +441,6 @@ impl super::Adapter {
             atomic_int64_on_typed_resource_supported,
         );
 
-        // float32-filterable should always be available on d3d12
-        features.set(wgt::Features::FLOAT32_FILTERABLE, true);
-
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
 
@@ -418,9 +453,8 @@ impl super::Adapter {
 
         // See https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-feature-levels#feature-level-support
         let max_color_attachments = 8;
-        // TODO: determine this programmatically if possible.
-        // https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447
-        let max_color_attachment_bytes_per_sample = 64;
+        let max_color_attachment_bytes_per_sample =
+            max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
@@ -522,6 +556,9 @@ impl super::Adapter {
                     // Direct3D correctly bounds-checks all array accesses:
                     // https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.8.2%20Device%20Memory%20Reads
                     uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
+                    raw_tlas_instance_size: size_of::<Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC>(),
+                    ray_tracing_scratch_buffer_alignment:
+                        Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
                 },
                 downlevel,
             },
@@ -669,16 +706,26 @@ impl crate::Adapter for super::Adapter {
         );
         // UAVs use srv_uav_format
         caps.set(
-            Tfc::STORAGE,
-            data_srv_uav
-                .Support1
-                .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW),
-        );
-        caps.set(
-            Tfc::STORAGE_READ_WRITE,
+            Tfc::STORAGE_READ_ONLY,
             data_srv_uav
                 .Support2
                 .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD),
+        );
+        caps.set(
+            Tfc::STORAGE_ATOMIC,
+            data_srv_uav
+                .Support2
+                .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_UNSIGNED_MIN_OR_MAX),
+        );
+        caps.set(
+            Tfc::STORAGE_WRITE_ONLY,
+            data_srv_uav
+                .Support2
+                .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE),
+        );
+        caps.set(
+            Tfc::STORAGE_READ_WRITE,
+            caps.contains(Tfc::STORAGE_READ_ONLY | Tfc::STORAGE_WRITE_ONLY),
         );
 
         // We load via UAV/SRV so use srv_uav_format

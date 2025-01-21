@@ -2,8 +2,7 @@
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
 use nanorand::{Rng, WyRand};
-use std::mem::size_of;
-use wgpu::{core::resource::CreateTextureError, util::DeviceExt};
+use wgpu::util::DeviceExt;
 
 // number of boid particles to simulate
 
@@ -254,9 +253,8 @@ impl crate::framework::Example for Example {
         _sc_desc: &wgpu::SurfaceConfiguration,
         _device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
+    ) {
         //empty
-        Ok(())
     }
 
     /// render is called each frame, dispatching compute groups proportional
@@ -318,7 +316,7 @@ impl crate::framework::Example for Example {
         self.frame_num += 1;
 
         // done
-        queue.submit(Some(command_encoder.finish().unwrap()));
+        queue.submit(Some(command_encoder.finish().unwrap())).unwrap();
     }
 }
 

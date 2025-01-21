@@ -171,7 +171,7 @@ impl<'ctx> TestCase<'ctx> {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             }).unwrap();
-            ctx.queue.submit([encoder.finish().unwrap()]);
+            ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
         } else {
             let block_size = format.block_copy_size(None).unwrap();
             let bytes_per_row = texture.width() * block_size;
@@ -184,14 +184,14 @@ impl<'ctx> TestCase<'ctx> {
             let data = vec![255; buffer_size as usize];
             ctx.queue
                 .write_texture(
-                    ImageCopyTexture {
+                    TexelCopyTextureInfo {
                         texture: &texture,
                         mip_level: 0,
                         origin: Origin3d { x: 0, y: 0, z: 0 },
                         aspect: TextureAspect::All,
                     },
                     &data,
-                    ImageDataLayout {
+                    TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(bytes_per_row),
                         rows_per_image: None,
@@ -224,7 +224,7 @@ impl<'ctx> TestCase<'ctx> {
     pub fn submit_command_encoder(&mut self) {
         self.ctx
             .queue
-            .submit([self.encoder.take().unwrap().finish().unwrap()]);
+            .submit([self.encoder.take().unwrap().finish().unwrap()]).unwrap();
     }
 
     pub fn discard(&mut self) {

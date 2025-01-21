@@ -2,7 +2,7 @@ use std::{
     ffi,
     mem::{self, size_of, size_of_val},
     num::NonZeroU32,
-    ptr,
+    ptr, slice,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -21,6 +21,7 @@ use super::{conv, descriptor, D3D12Lib};
 use crate::{
     auxil::{self, dxgi::result::HResult},
     dx12::{borrow_optional_interface_temporarily, shader_compilation, Event},
+    AccelerationStructureEntries, TlasInstance,
 };
 
 // this has to match Naga's HLSL backend, and also needs to be null-terminated
@@ -36,6 +37,13 @@ impl super::Device {
         library: &Arc<D3D12Lib>,
         dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     ) -> Result<Self, crate::DeviceError> {
+        if private_caps
+            .instance_flags
+            .contains(wgt::InstanceFlags::VALIDATION)
+        {
+            auxil::dxgi::exception::register_exception_handler();
+        }
+
         let mem_allocator = super::suballocation::create_allocator_wrapper(&raw, memory_hints)?;
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
@@ -272,12 +280,12 @@ impl super::Device {
 
         let needs_temp_options = stage.zero_initialize_workgroup_memory
             != layout.naga_options.zero_initialize_workgroup_memory
-            || stage.module.runtime_checks != layout.naga_options.restrict_indexing;
+            || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing;
         let mut temp_options;
         let naga_options = if needs_temp_options {
             temp_options = layout.naga_options.clone();
             temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
-            temp_options.restrict_indexing = stage.module.runtime_checks;
+            temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
             &temp_options
         } else {
             &layout.naga_options
@@ -390,10 +398,6 @@ impl super::Device {
 
 impl crate::Device for super::Device {
     type A = super::Api;
-
-    unsafe fn exit(self, _queue: super::Queue) {
-        self.rtv_pool.lock().free_handle(self.null_rtv_handle);
-    }
 
     unsafe fn create_buffer(
         &self,
@@ -580,7 +584,9 @@ impl crate::Device for super::Device {
                 None
             },
             handle_uav: if desc.usage.intersects(
-                crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE,
+                crate::TextureUses::STORAGE_READ_ONLY
+                    | crate::TextureUses::STORAGE_WRITE_ONLY
+                    | crate::TextureUses::STORAGE_READ_WRITE,
             ) {
                 match unsafe { view_desc.to_uav() } {
                     Some(raw_desc) => {
@@ -749,18 +755,20 @@ impl crate::Device for super::Device {
             pass: super::PassState::new(),
             temp: super::Temp::default(),
             end_of_pass_timer_query: None,
+            counters: Arc::clone(&self.counters),
         })
-    }
-
-    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {
-        self.counters.command_encoders.sub(1);
     }
 
     unsafe fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
     ) -> Result<super::BindGroupLayout, crate::DeviceError> {
-        let (mut num_buffer_views, mut num_samplers, mut num_texture_views) = (0, 0, 0);
+        let (
+            mut num_buffer_views,
+            mut num_samplers,
+            mut num_texture_views,
+            mut num_acceleration_structures,
+        ) = (0, 0, 0, 0);
         for entry in desc.entries.iter() {
             let count = entry.count.map_or(1, NonZeroU32::get);
             match entry.ty {
@@ -773,13 +781,13 @@ impl crate::Device for super::Device {
                     num_texture_views += count
                 }
                 wgt::BindingType::Sampler { .. } => num_samplers += count,
-                wgt::BindingType::AccelerationStructure => todo!(),
+                wgt::BindingType::AccelerationStructure => num_acceleration_structures += count,
             }
         }
 
         self.counters.bind_group_layouts.add(1);
 
-        let num_views = num_buffer_views + num_texture_views;
+        let num_views = num_buffer_views + num_texture_views + num_acceleration_structures;
         Ok(super::BindGroupLayout {
             entries: desc.entries.to_vec(),
             cpu_heap_views: if num_views != 0 {
@@ -1126,78 +1134,85 @@ impl crate::Device for super::Device {
         .into_device_result("Root signature creation")?;
 
         let special_constants = if let Some(root_index) = special_constants_root_index {
-            let constant_indirect_argument_desc = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT,
-                Anonymous: Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0 {
-                    Constant: Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_1 {
-                        RootParameterIndex: root_index,
-                        DestOffsetIn32BitValues: 0,
-                        Num32BitValuesToSet: 3,
+            let cmd_signatures = if desc
+                .flags
+                .contains(crate::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE)
+            {
+                let constant_indirect_argument_desc = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                    Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT,
+                    Anonymous: Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0 {
+                        Constant: Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_1 {
+                            RootParameterIndex: root_index,
+                            DestOffsetIn32BitValues: 0,
+                            Num32BitValuesToSet: 3,
+                        },
                     },
-                },
-            };
-            let special_constant_buffer_args_len = {
-                // Hack: construct a dummy value of the special constants buffer value we need to
-                // fill, and calculate the size of each member.
-                let super::RootElement::SpecialConstantBuffer {
-                    first_vertex,
-                    first_instance,
-                    other,
-                } = (super::RootElement::SpecialConstantBuffer {
-                    first_vertex: 0,
-                    first_instance: 0,
-                    other: 0,
-                })
-                else {
-                    unreachable!();
                 };
-                size_of_val(&first_vertex) + size_of_val(&first_instance) + size_of_val(&other)
+                let special_constant_buffer_args_len = {
+                    // Hack: construct a dummy value of the special constants buffer value we need to
+                    // fill, and calculate the size of each member.
+                    let super::RootElement::SpecialConstantBuffer {
+                        first_vertex,
+                        first_instance,
+                        other,
+                    } = (super::RootElement::SpecialConstantBuffer {
+                        first_vertex: 0,
+                        first_instance: 0,
+                        other: 0,
+                    })
+                    else {
+                        unreachable!();
+                    };
+                    size_of_val(&first_vertex) + size_of_val(&first_instance) + size_of_val(&other)
+                };
+                Some(super::CommandSignatures {
+                    draw: Self::create_command_signature(
+                        &self.raw,
+                        Some(&raw),
+                        special_constant_buffer_args_len + size_of::<wgt::DrawIndirectArgs>(),
+                        &[
+                            constant_indirect_argument_desc,
+                            Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW,
+                                ..Default::default()
+                            },
+                        ],
+                        0,
+                    )?,
+                    draw_indexed: Self::create_command_signature(
+                        &self.raw,
+                        Some(&raw),
+                        special_constant_buffer_args_len
+                            + size_of::<wgt::DrawIndexedIndirectArgs>(),
+                        &[
+                            constant_indirect_argument_desc,
+                            Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED,
+                                ..Default::default()
+                            },
+                        ],
+                        0,
+                    )?,
+                    dispatch: Self::create_command_signature(
+                        &self.raw,
+                        Some(&raw),
+                        special_constant_buffer_args_len + size_of::<wgt::DispatchIndirectArgs>(),
+                        &[
+                            constant_indirect_argument_desc,
+                            Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH,
+                                ..Default::default()
+                            },
+                        ],
+                        0,
+                    )?,
+                })
+            } else {
+                None
             };
-            let cmd_signatures = super::CommandSignatures {
-                draw: Self::create_command_signature(
-                    &self.raw,
-                    Some(&raw),
-                    special_constant_buffer_args_len + size_of::<wgt::DrawIndirectArgs>(),
-                    &[
-                        constant_indirect_argument_desc,
-                        Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                            Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW,
-                            ..Default::default()
-                        },
-                    ],
-                    0,
-                )?,
-                draw_indexed: Self::create_command_signature(
-                    &self.raw,
-                    Some(&raw),
-                    special_constant_buffer_args_len + size_of::<wgt::DrawIndexedIndirectArgs>(),
-                    &[
-                        constant_indirect_argument_desc,
-                        Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                            Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED,
-                            ..Default::default()
-                        },
-                    ],
-                    0,
-                )?,
-                dispatch: Self::create_command_signature(
-                    &self.raw,
-                    Some(&raw),
-                    special_constant_buffer_args_len + size_of::<wgt::DispatchIndirectArgs>(),
-                    &[
-                        constant_indirect_argument_desc,
-                        Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                            Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH,
-                            ..Default::default()
-                        },
-                    ],
-                    0,
-                )?,
-            };
-
             Some(super::PipelineLayoutSpecialConstants {
                 root_index,
-                cmd_signatures,
+                indirect_cmd_signatures: cmd_signatures,
             })
         } else {
             None
@@ -1379,7 +1394,33 @@ impl crate::Device for super::Device {
                         cpu_samplers.as_mut().unwrap().stage.push(data.handle.raw);
                     }
                 }
-                wgt::BindingType::AccelerationStructure => todo!(),
+                wgt::BindingType::AccelerationStructure => {
+                    let start = entry.resource_index as usize;
+                    let end = start + entry.count as usize;
+                    for data in &desc.acceleration_structures[start..end] {
+                        let inner = cpu_views.as_mut().unwrap();
+                        let cpu_index = inner.stage.len() as u32;
+                        let handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);
+                        let raw_desc = Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC {
+                            Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
+                            Shader4ComponentMapping:
+                                Direct3D12::D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                            ViewDimension:
+                                Direct3D12::D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE,
+                            Anonymous: Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
+                                RaytracingAccelerationStructure:
+                                    Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV {
+                                        Location: unsafe { data.resource.GetGPUVirtualAddress() },
+                                    },
+                            },
+                        };
+                        unsafe {
+                            self.raw
+                                .CreateShaderResourceView(None, Some(&raw_desc), handle)
+                        };
+                        inner.stage.push(handle);
+                    }
+                }
             }
         }
 
@@ -1878,40 +1919,171 @@ impl crate::Device for super::Device {
 
     unsafe fn get_acceleration_structure_build_sizes<'a>(
         &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Buffer>,
+        desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Buffer>,
     ) -> crate::AccelerationStructureBuildSizes {
-        // Implement using `GetRaytracingAccelerationStructurePrebuildInfo`:
-        // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#getraytracingaccelerationstructureprebuildinfo
-        todo!()
+        let mut geometry_desc;
+        let device5 = self.raw.cast::<Direct3D12::ID3D12Device5>().unwrap();
+        let ty;
+        let inputs0;
+        let num_desc;
+        match desc.entries {
+            AccelerationStructureEntries::Instances(instances) => {
+                ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+                inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+                    InstanceDescs: 0,
+                };
+                num_desc = instances.count;
+            }
+            AccelerationStructureEntries::Triangles(triangles) => {
+                geometry_desc = Vec::with_capacity(triangles.len());
+                for triangle in triangles {
+                    let index_format = triangle
+                        .indices
+                        .as_ref()
+                        .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |indices| {
+                            auxil::dxgi::conv::map_index_format(indices.format)
+                        });
+                    let index_count = triangle.indices.as_ref().map_or(0, |indices| indices.count);
+
+                    let triangle_desc = Direct3D12::D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC {
+                        Transform3x4: 0,
+                        IndexFormat: index_format,
+                        VertexFormat: auxil::dxgi::conv::map_vertex_format(triangle.vertex_format),
+                        IndexCount: index_count,
+                        VertexCount: triangle.vertex_count,
+                        IndexBuffer: 0,
+                        VertexBuffer: Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE {
+                            StartAddress: 0,
+                            StrideInBytes: triangle.vertex_stride,
+                        },
+                    };
+
+                    geometry_desc.push(Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC {
+                        Type: Direct3D12::D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
+                        Flags: conv::map_acceleration_structure_geometry_flags(triangle.flags),
+                        Anonymous: Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC_0 {
+                            Triangles: triangle_desc,
+                        },
+                    })
+                }
+                ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+                inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+                    pGeometryDescs: geometry_desc.as_ptr(),
+                };
+                num_desc = geometry_desc.len() as u32;
+            }
+            AccelerationStructureEntries::AABBs(aabbs) => {
+                geometry_desc = Vec::with_capacity(aabbs.len());
+                for aabb in aabbs {
+                    let aabb_desc = Direct3D12::D3D12_RAYTRACING_GEOMETRY_AABBS_DESC {
+                        AABBCount: aabb.count as u64,
+                        AABBs: Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE {
+                            StartAddress: 0,
+                            StrideInBytes: aabb.stride,
+                        },
+                    };
+                    geometry_desc.push(Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC {
+                        Type: Direct3D12::D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS,
+                        Flags: conv::map_acceleration_structure_geometry_flags(aabb.flags),
+                        Anonymous: Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC_0 {
+                            AABBs: aabb_desc,
+                        },
+                    })
+                }
+                ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+                inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+                    pGeometryDescs: geometry_desc.as_ptr(),
+                };
+                num_desc = geometry_desc.len() as u32;
+            }
+        };
+        let acceleration_structure_inputs =
+            Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS {
+                Type: ty,
+                Flags: conv::map_acceleration_structure_build_flags(desc.flags, None),
+                NumDescs: num_desc,
+                DescsLayout: Direct3D12::D3D12_ELEMENTS_LAYOUT_ARRAY,
+                Anonymous: inputs0,
+            };
+        let mut info = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO::default();
+        unsafe {
+            device5.GetRaytracingAccelerationStructurePrebuildInfo(
+                &acceleration_structure_inputs,
+                &mut info,
+            )
+        };
+        crate::AccelerationStructureBuildSizes {
+            acceleration_structure_size: info.ResultDataMaxSizeInBytes,
+            update_scratch_size: info.UpdateScratchDataSizeInBytes,
+            build_scratch_size: info.ScratchDataSizeInBytes,
+        }
     }
 
     unsafe fn get_acceleration_structure_device_address(
         &self,
-        _acceleration_structure: &super::AccelerationStructure,
+        acceleration_structure: &super::AccelerationStructure,
     ) -> wgt::BufferAddress {
-        // Implement using `GetGPUVirtualAddress`:
-        // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12resource-getgpuvirtualaddress
-        todo!()
+        unsafe { acceleration_structure.resource.GetGPUVirtualAddress() }
     }
 
     unsafe fn create_acceleration_structure(
         &self,
-        _desc: &crate::AccelerationStructureDescriptor,
+        desc: &crate::AccelerationStructureDescriptor,
     ) -> Result<super::AccelerationStructure, crate::DeviceError> {
         // Create a D3D12 resource as per-usual.
-        todo!()
+        let size = desc.size;
+
+        let raw_desc = Direct3D12::D3D12_RESOURCE_DESC {
+            Dimension: Direct3D12::D3D12_RESOURCE_DIMENSION_BUFFER,
+            Alignment: 0,
+            Width: size,
+            Height: 1,
+            DepthOrArraySize: 1,
+            MipLevels: 1,
+            Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
+            SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+            // TODO: when moving to enhanced barriers use Direct3D12::D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE
+            Flags: Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        };
+
+        let (resource, allocation) =
+            super::suballocation::create_acceleration_structure_resource(self, desc, raw_desc)?;
+
+        if let Some(label) = desc.label {
+            unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
+                .into_device_result("SetName")?;
+        }
+
+        // for some reason there is no counter for acceleration structures
+
+        Ok(super::AccelerationStructure {
+            resource,
+            allocation,
+        })
     }
 
     unsafe fn destroy_acceleration_structure(
         &self,
-        _acceleration_structure: super::AccelerationStructure,
+        mut acceleration_structure: super::AccelerationStructure,
     ) {
-        // Destroy a D3D12 resource as per-usual.
-        todo!()
+        if let Some(alloc) = acceleration_structure.allocation.take() {
+            // Resource should be dropped before suballocation is freed
+            drop(acceleration_structure);
+
+            super::suballocation::free_acceleration_structure_allocation(
+                self,
+                alloc,
+                &self.mem_allocator,
+            );
+        }
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
-        self.counters.clone()
+        self.counters.as_ref().clone()
     }
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
@@ -1942,5 +2114,23 @@ impl crate::Device for super::Device {
             total_allocated_bytes: upstream.total_allocated_bytes,
             total_reserved_bytes: upstream.total_reserved_bytes,
         })
+    }
+
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+        const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
+        let temp = Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC {
+            Transform: instance.transform,
+            _bitfield1: (instance.custom_index & MAX_U24) | (u32::from(instance.mask) << 24),
+            _bitfield2: 0,
+            AccelerationStructure: instance.blas_address,
+        };
+        let temp: *const _ = &temp;
+        unsafe {
+            slice::from_raw_parts(
+                temp.cast::<u8>(),
+                size_of::<Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC>(),
+            )
+            .to_vec()
+        }
     }
 }

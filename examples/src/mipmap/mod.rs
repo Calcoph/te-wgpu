@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
-use std::{f32::consts, mem::size_of};
-use wgpu::{core::resource::CreateTextureError, util::DeviceExt};
+use std::f32::consts;
+use wgpu::util::DeviceExt;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 const MIP_LEVEL_COUNT: u32 = 10;
@@ -108,7 +108,7 @@ impl Example {
             cache: None,
         }).unwrap();
 
-        let bind_group_layout = pipeline.get_bind_group_layout(0);
+        let bind_group_layout = pipeline.get_bind_group_layout(0).unwrap();
 
         let sampler = device
             .create_sampler(&wgpu::SamplerDescriptor {
@@ -130,7 +130,8 @@ impl Example {
                         label: Some("mip"),
                         format: None,
                         dimension: None,
-                        aspect: wgpu::TextureAspect::All,
+                        usage: None,
+                    aspect: wgpu::TextureAspect::All,
                         base_mip_level: mip,
                         mip_level_count: Some(1),
                         base_array_layer: 0,
@@ -264,9 +265,9 @@ impl crate::framework::Example for Example {
             .unwrap();
         init_encoder
             .copy_buffer_to_texture(
-                wgpu::ImageCopyBuffer {
+                wgpu::TexelCopyBufferInfo {
                     buffer: &temp_buf,
-                    layout: wgpu::ImageDataLayout {
+                    layout: wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(4 * size),
                         rows_per_image: None,
@@ -331,7 +332,7 @@ impl crate::framework::Example for Example {
         }).unwrap();
 
         // Create bind group
-        let bind_group_layout = draw_pipeline.get_bind_group_layout(0);
+        let bind_group_layout = draw_pipeline.get_bind_group_layout(0).unwrap();
         let bind_group = device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &bind_group_layout,
@@ -434,7 +435,7 @@ impl crate::framework::Example for Example {
                 .unwrap();
         }
 
-        queue.submit(Some(init_encoder.finish().unwrap()));
+        queue.submit(Some(init_encoder.finish().unwrap())).unwrap();
         if let Some(ref query_sets) = query_sets {
             // We can ignore the callback as we're about to wait for the device.
             query_sets
@@ -494,14 +495,12 @@ impl crate::framework::Example for Example {
         config: &wgpu::SurfaceConfiguration,
         _device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> Result<(), CreateTextureError> {
+    ) {
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
         queue
             .write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref))
             .unwrap();
-
-        Ok(())
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -534,7 +533,7 @@ impl crate::framework::Example for Example {
             rpass.draw(0..4, 0..1).unwrap();
         }
 
-        queue.submit(Some(encoder.finish().unwrap()));
+        queue.submit(Some(encoder.finish().unwrap())).unwrap();
     }
 }
 
