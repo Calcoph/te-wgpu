@@ -62,15 +62,12 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         let ordering_clone_map_async = Arc::clone(&ordering);
         let ordering_clone_queue_submitted = Arc::clone(&ordering);
 
-        // Register the callabacks.
-        buffer
-            .slice(..)
-            .map_async(MapMode::Read, move |_| {
-                let mut guard = ordering_clone_map_async.lock();
-                guard.value_read_map_async = Some(guard.counter);
-                guard.counter += 1;
-            })
-            .unwrap();
+        // Register the callbacks.
+        buffer.slice(..).map_async(MapMode::Read, move |_| {
+            let mut guard = ordering_clone_map_async.lock();
+            guard.value_read_map_async = Some(guard.counter);
+            guard.counter += 1;
+        }).unwrap();
 
         // If the bug is present, this callback will be invoked immediately inside this function,
         // despite the fact there is an outstanding map_async callback.

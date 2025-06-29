@@ -40,6 +40,18 @@ Bottom level categories:
 
 ## Unreleased
 
+## v25.0.1 (2025-04-11)
+
+### Bug Fixes
+
+- Fix typos in various documentation. By @waywardmonkeys in [#7509](https://github.com/gfx-rs/wgpu/pull/7509).
+- Fix compile error when building with `profiling/profile-with-*` feature enabled. By @waywardmonkeys in [#7510](https://github.com/gfx-rs/wgpu/pull/7510).
+- Use `once_cell::race::OnceBox` instead of `std::sync::LazyLock` to allow `naga::proc::Namer::default()` to be available without backend features being enabled. By @cwfitzgerald in [#7517](https://github.com/gfx-rs/wgpu/pull/7517).
+
+#### DX12
+
+- Fix validation error when creating a non-mappable buffer using the committed allocation scheme. By @cwfitzgerald and @ErichDonGubler in [#7519](https://github.com/gfx-rs/wgpu/pull/7519). 
+
 ## v25.0.0 (2025-04-10)
 
 ### Major Features
@@ -124,8 +136,7 @@ pub enum PollError {
 >
 > You will lose the ability to know exactly when a submission has completed, but `device.poll(Wait)` will behave the same as it does on native.
 
-By @cwfitzgerald in [#6942](https://github.com/gfx-rs/wgpu/pull/6942).
-By @cwfitzgerald in [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
+By @cwfitzgerald in [#6942](https://github.com/gfx-rs/wgpu/pull/6942) and [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
 
 #### `wgpu::Device::start_capture` renamed, documented, and made unsafe
 
@@ -219,6 +230,35 @@ It is now possible to create a dummy `wgpu` device even when no GPU is available
 To use it, enable the `noop` feature of `wgpu`, and either call `Device::noop()`, or add `NoopBackendOptions { enable: true }` to the backend options of your `Instance` (this is an additional safeguard beyond the `Backends` bits).
 
 By @kpreid in [#7063](https://github.com/gfx-rs/wgpu/pull/7063) and [#7342](https://github.com/gfx-rs/wgpu/pull/7342).
+
+#### `SHADER_F16` feature is now available with naga shaders
+
+Previously this feature only allowed you to use `f16` on SPIR-V passthrough shaders. Now you can use it on all shaders, including WGSL, SPIR-V, and GLSL!
+
+```wgsl
+enable f16;
+
+fn hello_world(a: f16) -> f16 {
+    return a + 1.0h;
+}
+```
+
+By @FL33TW00D, @ErichDonGubler, and @cwfitzgerald in [#5701](https://github.com/gfx-rs/wgpu/pull/5701) 
+
+#### Bindless support improved and validation rules changed.
+
+Metal support for bindless has significantly improved and the limits for binding arrays have been increased.
+
+Previously, all resources inside binding arrays contributed towards the standard limit of their type (`texture_2d` arrays for example would contribute to `max_sampled_textures_per_shader_stage`). Now these resources will only contribute towards binding-array specific limits:
+- `max_binding_array_elements_per_shader_stage` for all non-sampler resources
+- `max_binding_array_sampler_elements_per_shader_stage` for sampler resources.
+
+This change has allowed the metal binding array limits to go from between 32 and 128 resources, all the way 500,000 sampled textures. Additionally binding arrays are now bound more efficiently on Metal.
+
+This change also enabled legacy Intel GPUs to support 1M bindless resources, instead of the previous 1800.
+
+To facilitate this change, there was an additional validation rule put in place: if there is a binding array in a bind group, you may not use dynamic offset buffers or uniform buffers in that bind group. This requirement comes from vulkan rules on `UpdateAfterBind` descriptors.
+By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](https://github.com/gfx-rs/wgpu/pull/6815), and [#6952](https://github.com/gfx-rs/wgpu/pull/6952).
 
 ### New Features
 
