@@ -462,6 +462,7 @@ pub struct CoreRenderPass {
     pub(crate) context: ContextWgpuCore,
     pass: wgc::command::RenderPass,
     id: crate::cmp::Identifier,
+    ended: bool,
 }
 
 #[derive(Debug)]
@@ -1890,6 +1891,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             context: self.context.clone(),
             pass,
             id: crate::cmp::Identifier::create(),
+            ended: false,
         }
         .into())
     }
@@ -2546,13 +2548,16 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     }
 
     fn end(&mut self) -> Result<(), wgc::command::RenderPassError> {
+        self.ended = true;
         self.context.0.render_pass_end(&mut self.pass)
     }
 }
 
 impl Drop for CoreRenderPass {
     fn drop(&mut self) {
-        dispatch::RenderPassInterface::end(self).expect("Call CoreRenderPass::end() before dropping to handle this error");
+        if !self.ended {
+            dispatch::RenderPassInterface::end(self).expect("Call CoreRenderPass::end() before dropping to handle this error");
+        }
     }
 }
 
