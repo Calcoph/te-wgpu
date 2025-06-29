@@ -154,7 +154,7 @@ async fn partial_update_test(ctx: TestingContext) {
         cpass.dispatch_workgroups(1, 1, 1).unwrap();
     }
 
-    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, 32);
+    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, 32).unwrap();
     ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
     ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
@@ -371,10 +371,10 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         }
     }
     // Move the result to the cpu buffer, so that we can read them.
-    command_encoder.copy_buffer_to_buffer(&output_buffer, 0, &cpu_buffer, 0, output_buffer.size());
+    command_encoder.copy_buffer_to_buffer(&output_buffer, 0, &cpu_buffer, 0, output_buffer.size()).unwrap();
     let command_buffer = command_encoder.finish().unwrap();
     ctx.queue.submit([command_buffer]).unwrap();
-    cpu_buffer.slice(..).map_async(MapMode::Read, |_| ());
+    cpu_buffer.slice(..).map_async(MapMode::Read, |_| ()).unwrap();
     ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
     let mapped_data = cpu_buffer.slice(..).get_mapped_range();
     let result = bytemuck::cast_slice::<u8, i32>(&mapped_data).to_vec();

@@ -12,7 +12,7 @@ mod render;
 mod render_command;
 mod timestamp_writes;
 mod transfer;
-mod transition_resources;
+pub mod transition_resources;
 
 use alloc::{borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::mem::{self, ManuallyDrop};

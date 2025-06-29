@@ -16,14 +16,15 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
         let test_resources = TestResources::new(&ctx);
 
         ctx.queue
-            .write_buffer(&test_resources.in_buffer, 0, bytemuck::bytes_of(&4_u32));
+            .write_buffer(&test_resources.in_buffer, 0, bytemuck::bytes_of(&4_u32))
+            .unwrap();
 
-        let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
         {
-            let mut compute_pass = encoder.begin_compute_pass(&Default::default());
-            compute_pass.set_pipeline(&test_resources.pipeline);
-            compute_pass.set_bind_group(0, &test_resources.bind_group, &[]);
-            compute_pass.dispatch_workgroups(1, 1, 1);
+            let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap();
+            compute_pass.set_pipeline(&test_resources.pipeline).unwrap();
+            compute_pass.set_bind_group(0, &test_resources.bind_group, &[]).unwrap();
+            compute_pass.dispatch_workgroups(1, 1, 1).unwrap();
         }
 
         encoder.copy_buffer_to_buffer(
@@ -32,14 +33,15 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
             &test_resources.readback_buffer,
             0,
             12 * 4,
-        );
+        ).unwrap();
 
-        ctx.queue.submit(Some(encoder.finish()));
+        ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         test_resources
             .readback_buffer
             .slice(..)
-            .map_async(wgpu::MapMode::Read, |_| {});
+            .map_async(wgpu::MapMode::Read, |_| {})
+            .unwrap();
 
         ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
 
@@ -47,7 +49,7 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
 
         let current_res: [u32; 12] = *bytemuck::from_bytes(&view);
         drop(view);
-        test_resources.readback_buffer.unmap();
+        test_resources.readback_buffer.unmap().unwrap();
 
         if ctx.adapter_info.backend == Backend::Dx12 {
             assert_eq!([1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0], current_res);
@@ -134,7 +136,7 @@ impl TestResources {
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(shader_src.into()),
-            });
+            }).unwrap();
 
         let bgl = ctx
             .device
@@ -162,7 +164,7 @@ impl TestResources {
                         count: None,
                     },
                 ],
-            });
+            }).unwrap();
 
         let layout = ctx
             .device
@@ -170,7 +172,7 @@ impl TestResources {
                 label: None,
                 bind_group_layouts: &[&bgl],
                 push_constant_ranges: &[],
-            });
+            }).unwrap();
 
         let pipeline = ctx
             .device
@@ -181,32 +183,32 @@ impl TestResources {
                 entry_point: Some("main"),
                 compilation_options: Default::default(),
                 cache: None,
-            });
+            }).unwrap();
 
         let in_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 4,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let out_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 12 * 4,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 12 * 4,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
-            layout: &pipeline.get_bind_group_layout(0),
+            layout: &pipeline.get_bind_group_layout(0).unwrap(),
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -217,7 +219,7 @@ impl TestResources {
                     resource: out_buffer.as_entire_binding(),
                 },
             ],
-        });
+        }).unwrap();
 
         Self {
             pipeline,
@@ -278,7 +280,8 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(shader_src.into()),
-        });
+        })
+        .unwrap();
 
     let bgl = ctx
         .device
@@ -326,7 +329,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
                     count: None,
                 },
             ],
-        });
+        }).unwrap();
 
     let layout = ctx
         .device
@@ -334,7 +337,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
             label: None,
             bind_group_layouts: &[&bgl],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
     let pipeline = ctx
         .device
@@ -345,41 +348,41 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
             entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: None,
-        });
+        }).unwrap();
 
     let in_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 4,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let out_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 3 * 4,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let in_data_uniform_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 256 + 8 * 4,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
-    });
+    }).unwrap();
     let in_data_storage_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 256 + 8 * 4,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 3 * 4,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
@@ -410,10 +413,11 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
                 }),
             },
         ],
-    });
+    }).unwrap();
 
     ctx.queue
-        .write_buffer(&in_buffer, 0, bytemuck::bytes_of(&1_u32));
+        .write_buffer(&in_buffer, 0, bytemuck::bytes_of(&1_u32))
+        .unwrap();
 
     #[rustfmt::skip]
         let in_data = [
@@ -422,25 +426,28 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
         ];
 
     ctx.queue
-        .write_buffer(&in_data_uniform_buffer, 256, bytemuck::bytes_of(&in_data));
+        .write_buffer(&in_data_uniform_buffer, 256, bytemuck::bytes_of(&in_data))
+        .unwrap();
     ctx.queue
-        .write_buffer(&in_data_storage_buffer, 256, bytemuck::bytes_of(&in_data));
+        .write_buffer(&in_data_storage_buffer, 256, bytemuck::bytes_of(&in_data))
+        .unwrap();
 
-    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+    let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
     {
-        let mut compute_pass = encoder.begin_compute_pass(&Default::default());
-        compute_pass.set_pipeline(&pipeline);
-        compute_pass.set_bind_group(0, &bind_group, &[256, 256]);
-        compute_pass.dispatch_workgroups(1, 1, 1);
+        let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap();
+        compute_pass.set_pipeline(&pipeline).unwrap();
+        compute_pass.set_bind_group(0, &bind_group, &[256, 256]).unwrap();
+        compute_pass.dispatch_workgroups(1, 1, 1).unwrap();
     }
 
-    encoder.copy_buffer_to_buffer(&out_buffer, 0, &readback_buffer, 0, 3 * 4);
+    encoder.copy_buffer_to_buffer(&out_buffer, 0, &readback_buffer, 0, 3 * 4).unwrap();
 
-    ctx.queue.submit(Some(encoder.finish()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     readback_buffer
         .slice(..)
-        .map_async(wgpu::MapMode::Read, |_| {});
+        .map_async(wgpu::MapMode::Read, |_| {})
+        .unwrap();
 
     ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
 
@@ -448,7 +455,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
 
     let current_res: [u32; 3] = *bytemuck::from_bytes(&view);
     drop(view);
-    readback_buffer.unmap();
+    readback_buffer.unmap().unwrap();
 
     assert_eq!([1, 3, 0], current_res);
 }

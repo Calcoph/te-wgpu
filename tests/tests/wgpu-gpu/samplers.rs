@@ -2,7 +2,7 @@
 //!
 //! Do some tests to ensure things are working correctly and nothing gets mad.
 
-use wgpu_test::{did_fail, gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
 
 // A number large enough to likely cause sampler caches to run out of space
 // on some devices.
@@ -51,7 +51,7 @@ fn sampler_deduplication(ctx: TestingContext) {
     let samplers = (0..PROBABLY_PROBLEMATIC_SAMPLER_COUNT)
         .map(|i| {
             let desc = if i % 2 == 0 { &desc1 } else { &desc2 };
-            valid(&ctx.device, || ctx.device.create_sampler(desc))
+            valid(|| ctx.device.create_sampler(desc))
         })
         .collect::<Vec<_>>();
 
@@ -93,16 +93,12 @@ fn sampler_creation_failure(ctx: TestingContext) {
     let mut sampler_storage = Vec::with_capacity(PROBABLY_PROBLEMATIC_SAMPLER_COUNT as usize);
 
     for i in 0..PROBABLY_PROBLEMATIC_SAMPLER_COUNT {
-        let (failed, sampler) = did_fail(&ctx.device, || {
-            ctx.device.create_sampler(&wgpu::SamplerDescriptor {
-                lod_min_clamp: i as f32 * 0.01,
-                ..desc
-            })
-        });
-
-        if failed {
+        let Ok(sampler) = ctx.device.create_sampler(&wgpu::SamplerDescriptor {
+            lod_min_clamp: i as f32 * 0.01,
+            ..desc
+        }) else {
             break;
-        }
+        };
 
         sampler_storage.push(sampler);
     }
@@ -113,7 +109,7 @@ fn sampler_creation_failure(ctx: TestingContext) {
     ctx.device.poll(wgpu::PollType::Wait).unwrap();
 
     for i in 0..failed_count {
-        valid(&ctx.device, || {
+        valid(|| -> Result<(), wgpu::wgc::resource::CreateSamplerError> {
             eprintln!("Trying to create sampler {}", i);
             let sampler = ctx.device.create_sampler(&wgpu::SamplerDescriptor {
                 lod_min_clamp: i as f32 * 0.01,
@@ -121,8 +117,9 @@ fn sampler_creation_failure(ctx: TestingContext) {
                 // the previous run.
                 lod_max_clamp: 200.0,
                 ..desc
-            });
+            })?;
             sampler_storage.push(sampler);
+            Ok(())
         });
     }
 }
@@ -195,7 +192,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             source: wgpu::ShaderSource::Wgsl(full_shader.into()),
             label: None,
-        });
+        }).unwrap();
 
     let mut bind_group_layouts = Vec::new();
 
@@ -235,7 +232,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
                             count: None,
                         },
                     ],
-                });
+                }).unwrap();
 
             bind_group_layouts.push(bgl);
         }
@@ -262,7 +259,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
                             count: None,
                         },
                     ],
-                });
+                }).unwrap();
 
             let bgl1 = ctx
                 .device
@@ -274,7 +271,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     }],
-                });
+                }).unwrap();
 
             let bgl2 = ctx
                 .device
@@ -286,7 +283,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     }],
-                });
+                }).unwrap();
 
             bind_group_layouts.push(bgl0);
             bind_group_layouts.push(bgl1);
@@ -308,7 +305,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
                 },
                 count: None,
             }],
-        });
+        }).unwrap();
 
     let mut bgl_references: Vec<_> = bind_group_layouts.iter().collect();
 
@@ -320,7 +317,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
             label: Some("pipeline_layout"),
             bind_group_layouts: &bgl_references,
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
     let input_image = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("input_image"),
@@ -335,9 +332,9 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
-    });
+    }).unwrap();
 
-    let input_image_view = input_image.create_view(&wgpu::TextureViewDescriptor::default());
+    let input_image_view = input_image.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
 
     let image_data: [u8; 16] = [
         255, 0, 0, 255, /* */ 0, 255, 0, 255, //
@@ -362,7 +359,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
             height: 2,
             depth_or_array_layers: 1,
         },
-    );
+    ).unwrap();
 
     let address_modes = [
         (
@@ -387,7 +384,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
             compare: None,
             anisotropy_clamp: 1,
             border_color: None,
-        })
+        }).unwrap()
     });
 
     let mut bind_groups = Vec::new();
@@ -415,7 +412,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
                         resource: wgpu::BindingResource::Sampler(&samplers[2]),
                     },
                 ],
-            });
+            }).unwrap();
 
             bind_groups.push(bg);
         }
@@ -433,7 +430,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
                         resource: wgpu::BindingResource::Sampler(&samplers[0]),
                     },
                 ],
-            });
+            }).unwrap();
 
             let bg1 = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("multiple_bg1"),
@@ -442,7 +439,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
                     binding: 0,
                     resource: wgpu::BindingResource::Sampler(&samplers[1]),
                 }],
-            });
+            }).unwrap();
 
             let bg2 = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("multiple_bg2"),
@@ -451,7 +448,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
                     binding: 0,
                     resource: wgpu::BindingResource::Sampler(&samplers[2]),
                 }],
-            });
+            }).unwrap();
 
             bind_groups.push(bg0);
             bind_groups.push(bg1);
@@ -464,14 +461,14 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         size: 48,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let transfer_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("transfer_buffer"),
         size: 48,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let output_bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("output_bg"),
@@ -484,7 +481,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
                 size: None,
             }),
         }],
-    });
+    }).unwrap();
 
     let mut bg_references = bind_groups.iter().collect::<Vec<_>>();
 
@@ -499,31 +496,31 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
             entry_point: Some("cs_main"),
             cache: None,
             compilation_options: Default::default(),
-        });
+        }).unwrap();
 
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("encoder"),
-        });
+        }).unwrap();
 
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        });
-        cpass.set_pipeline(&pipeline);
+        }).unwrap();
+        cpass.set_pipeline(&pipeline).unwrap();
         for (i, &bg) in bg_references.iter().enumerate() {
-            cpass.set_bind_group(i as u32, bg, &[]);
+            cpass.set_bind_group(i as u32, bg, &[]).unwrap();
         }
-        cpass.dispatch_workgroups(1, 1, 1);
+        cpass.dispatch_workgroups(1, 1, 1).unwrap();
     }
 
-    encoder.copy_buffer_to_buffer(&output_buffer, 0, &transfer_buffer, 0, 48);
+    encoder.copy_buffer_to_buffer(&output_buffer, 0, &transfer_buffer, 0, 48).unwrap();
 
-    ctx.queue.submit([encoder.finish()]);
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
     let buffer_slice = transfer_buffer.slice(..);
-    buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
+    buffer_slice.map_async(wgpu::MapMode::Read, |_| {}).unwrap();
 
     ctx.device.poll(wgpu::PollType::Wait).unwrap();
 

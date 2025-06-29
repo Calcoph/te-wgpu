@@ -33,10 +33,11 @@ fn texture_binding(ctx: TestingContext) {
         format: TextureFormat::Rg32Float,
         usage: TextureUsages::STORAGE_BINDING,
         view_formats: &[],
-    });
+    }).unwrap();
     let shader = ctx
         .device
-        .create_shader_module(include_wgsl!("shader.wgsl"));
+        .create_shader_module(include_wgsl!("shader.wgsl"))
+        .unwrap();
     let pipeline = ctx
         .device
         .create_compute_pipeline(&ComputePipelineDescriptor {
@@ -46,24 +47,24 @@ fn texture_binding(ctx: TestingContext) {
             entry_point: None,
             compilation_options: Default::default(),
             cache: None,
-        });
+        }).unwrap();
     let bind = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: None,
-        layout: &pipeline.get_bind_group_layout(0),
+        layout: &pipeline.get_bind_group_layout(0).unwrap(),
         entries: &[BindGroupEntry {
             binding: 0,
-            resource: BindingResource::TextureView(&texture.create_view(&Default::default())),
+            resource: BindingResource::TextureView(&texture.create_view(&Default::default()).unwrap()),
         }],
-    });
+    }).unwrap();
 
-    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+    let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
     {
-        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind, &[]);
-        pass.dispatch_workgroups(1, 1, 1);
+        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default()).unwrap();
+        pass.set_pipeline(&pipeline).unwrap();
+        pass.set_bind_group(0, &bind, &[]).unwrap();
+        pass.dispatch_workgroups(1, 1, 1).unwrap();
     }
-    ctx.queue.submit([encoder.finish()]);
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
 }
 
 #[gpu_test]
@@ -90,7 +91,7 @@ fn single_scalar_load(ctx: TestingContext) {
         format: TextureFormat::R32Float,
         usage: TextureUsages::STORAGE_BINDING,
         view_formats: &[],
-    });
+    }).unwrap();
     let texture_write = ctx.device.create_texture(&TextureDescriptor {
         label: None,
         size: Extent3d {
@@ -104,16 +105,17 @@ fn single_scalar_load(ctx: TestingContext) {
         format: TextureFormat::Rgba32Float,
         usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_SRC,
         view_formats: &[],
-    });
+    }).unwrap();
     let buffer = ctx.device.create_buffer(&BufferDescriptor {
         label: None,
         size: size_of::<[f32; 4]>() as wgpu::BufferAddress,
         usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
         mapped_at_creation: false,
-    });
+    }).unwrap();
     let shader = ctx
         .device
-        .create_shader_module(include_wgsl!("single_scalar.wgsl"));
+        .create_shader_module(include_wgsl!("single_scalar.wgsl"))
+        .unwrap();
     let pipeline = ctx
         .device
         .create_compute_pipeline(&ComputePipelineDescriptor {
@@ -123,32 +125,32 @@ fn single_scalar_load(ctx: TestingContext) {
             entry_point: None,
             compilation_options: Default::default(),
             cache: None,
-        });
+        }).unwrap();
     let bind = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: None,
-        layout: &pipeline.get_bind_group_layout(0),
+        layout: &pipeline.get_bind_group_layout(0).unwrap(),
         entries: &[
             BindGroupEntry {
                 binding: 0,
                 resource: BindingResource::TextureView(
-                    &texture_write.create_view(&Default::default()),
+                    &texture_write.create_view(&Default::default()).unwrap(),
                 ),
             },
             BindGroupEntry {
                 binding: 1,
                 resource: BindingResource::TextureView(
-                    &texture_read.create_view(&Default::default()),
+                    &texture_read.create_view(&Default::default()).unwrap(),
                 ),
             },
         ],
-    });
+    }).unwrap();
 
-    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+    let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
     {
-        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind, &[]);
-        pass.dispatch_workgroups(1, 1, 1);
+        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default()).unwrap();
+        pass.set_pipeline(&pipeline).unwrap();
+        pass.set_bind_group(0, &bind, &[]).unwrap();
+        pass.dispatch_workgroups(1, 1, 1).unwrap();
     }
     encoder.copy_texture_to_buffer(
         TexelCopyTextureInfo {
@@ -170,13 +172,13 @@ fn single_scalar_load(ctx: TestingContext) {
             height: 1,
             depth_or_array_layers: 1,
         },
-    );
-    ctx.queue.submit([encoder.finish()]);
+    ).unwrap();
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
     let (send, recv) = std::sync::mpsc::channel();
     buffer.slice(..).map_async(MapMode::Read, move |res| {
         res.unwrap();
         send.send(()).expect("Thread should wait for receive");
-    });
+    }).unwrap();
     // Poll to run map.
     ctx.device.poll(PollType::Wait).unwrap();
     recv.recv_timeout(Duration::from_secs(10))

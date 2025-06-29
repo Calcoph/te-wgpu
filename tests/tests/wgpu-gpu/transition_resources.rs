@@ -15,11 +15,12 @@ static TRANSITION_RESOURCES: GpuTestConfiguration = GpuTestConfiguration::new().
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
-    });
+    }).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+        .unwrap();
 
     encoder.transition_resources(
         std::iter::empty(),
@@ -29,7 +30,7 @@ static TRANSITION_RESOURCES: GpuTestConfiguration = GpuTestConfiguration::new().
             state: wgpu::TextureUses::COLOR_TARGET,
         }]
         .into_iter(),
-    );
+    ).unwrap();
 
-    ctx.queue.submit([encoder.finish()]);
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
 });

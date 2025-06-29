@@ -3,9 +3,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use wgpu::custom::{
-    AdapterInterface, DeviceInterface, DispatchAdapter, DispatchDevice, DispatchQueue,
-    DispatchShaderModule, DispatchSurface, InstanceInterface, QueueInterface, RequestAdapterFuture,
-    ShaderModuleInterface,
+    AdapterInterface, DeviceInterface, DispatchAdapter, DispatchDevice, DispatchQuerySet, DispatchQueue, DispatchShaderModule, DispatchSurface, InstanceInterface, QueueInterface, RequestAdapterFuture, ShaderModuleInterface
 };
 
 #[derive(Debug, Clone)]
@@ -121,65 +119,65 @@ impl DeviceInterface for CustomDevice {
         &self,
         desc: wgpu::ShaderModuleDescriptor<'_>,
         _shader_bound_checks: wgpu::ShaderRuntimeChecks,
-    ) -> DispatchShaderModule {
+    ) -> Result<DispatchShaderModule, wgpu::wgc::pipeline::CreateShaderModuleError> {
         assert_eq!(desc.label, Some("shader"));
-        DispatchShaderModule::custom(CustomShaderModule(self.0.clone()))
+        Ok(DispatchShaderModule::custom(CustomShaderModule(self.0.clone())))
     }
 
     unsafe fn create_shader_module_passthrough(
         &self,
         _desc: &wgpu::ShaderModuleDescriptorPassthrough<'_>,
-    ) -> DispatchShaderModule {
+    ) -> Result<DispatchShaderModule, wgpu::wgc::pipeline::CreateShaderModuleError> {
         unimplemented!()
     }
 
     fn create_bind_group_layout(
         &self,
         _desc: &wgpu::BindGroupLayoutDescriptor<'_>,
-    ) -> wgpu::custom::DispatchBindGroupLayout {
+    ) -> Result<wgpu::custom::DispatchBindGroupLayout, wgpu::wgc::binding_model::CreateBindGroupLayoutError> {
         unimplemented!()
     }
 
     fn create_bind_group(
         &self,
         _desc: &wgpu::BindGroupDescriptor<'_>,
-    ) -> wgpu::custom::DispatchBindGroup {
+    ) -> Result<wgpu::custom::DispatchBindGroup, wgpu::wgc::binding_model::CreateBindGroupError> {
         unimplemented!()
     }
 
     fn create_pipeline_layout(
         &self,
         _desc: &wgpu::PipelineLayoutDescriptor<'_>,
-    ) -> wgpu::custom::DispatchPipelineLayout {
+    ) -> Result<wgpu::custom::DispatchPipelineLayout, wgpu::wgc::binding_model::CreatePipelineLayoutError> {
         unimplemented!()
     }
 
     fn create_render_pipeline(
         &self,
         _desc: &wgpu::RenderPipelineDescriptor<'_>,
-    ) -> wgpu::custom::DispatchRenderPipeline {
+    ) -> Result<wgpu::custom::DispatchRenderPipeline, wgpu::wgc::pipeline::CreateRenderPipelineError> {
         unimplemented!()
     }
 
     fn create_compute_pipeline(
         &self,
         _desc: &wgpu::ComputePipelineDescriptor<'_>,
-    ) -> wgpu::custom::DispatchComputePipeline {
+    ) -> Result<wgpu::custom::DispatchComputePipeline, wgpu::wgc::pipeline::CreateComputePipelineError>{
         unimplemented!()
     }
 
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &wgpu::PipelineCacheDescriptor<'_>,
-    ) -> wgpu::custom::DispatchPipelineCache {
+    ) -> Result<wgpu::custom::DispatchPipelineCache, wgpu::wgc::pipeline::CreatePipelineCacheError> {
         unimplemented!()
     }
 
-    fn create_buffer(&self, _desc: &wgpu::BufferDescriptor<'_>) -> wgpu::custom::DispatchBuffer {
+    fn create_buffer(&self, _desc: &wgpu::BufferDescriptor<'_>) -> Result<wgpu::custom::DispatchBuffer, wgpu::wgc::resource::CreateBufferError> {
         unimplemented!()
     }
 
-    fn create_texture(&self, _desc: &wgpu::TextureDescriptor<'_>) -> wgpu::custom::DispatchTexture {
+    fn create_texture(&self, _desc: &wgpu::TextureDescriptor<'_>) -> Result<wgpu::custom::DispatchTexture, wgpu::wgc::resource::CreateTextureError> {
         unimplemented!()
     }
 
@@ -187,29 +185,29 @@ impl DeviceInterface for CustomDevice {
         &self,
         _desc: &wgpu::CreateBlasDescriptor<'_>,
         _sizes: wgpu::BlasGeometrySizeDescriptors,
-    ) -> (Option<u64>, wgpu::custom::DispatchBlas) {
+    ) -> Result<(u64, wgpu::custom::DispatchBlas), wgpu::wgc::ray_tracing::CreateBlasError> {
         unimplemented!()
     }
 
-    fn create_tlas(&self, _desc: &wgpu::CreateTlasDescriptor<'_>) -> wgpu::custom::DispatchTlas {
+    fn create_tlas(&self, _desc: &wgpu::CreateTlasDescriptor<'_>) -> Result<wgpu::custom::DispatchTlas, wgpu::wgc::ray_tracing::CreateTlasError> {
         unimplemented!()
     }
 
-    fn create_sampler(&self, _desc: &wgpu::SamplerDescriptor<'_>) -> wgpu::custom::DispatchSampler {
+    fn create_sampler(&self, _desc: &wgpu::SamplerDescriptor<'_>) -> Result<wgpu::custom::DispatchSampler, wgpu::wgc::resource::CreateSamplerError> {
         unimplemented!()
     }
 
     fn create_query_set(
         &self,
         _desc: &wgpu::QuerySetDescriptor<'_>,
-    ) -> wgpu::custom::DispatchQuerySet {
+    ) -> Result<DispatchQuerySet, wgpu::wgc::resource::CreateQuerySetError> {
         unimplemented!()
     }
 
     fn create_command_encoder(
         &self,
         _desc: &wgpu::CommandEncoderDescriptor<'_>,
-    ) -> wgpu::custom::DispatchCommandEncoder {
+    ) -> Result<wgpu::custom::DispatchCommandEncoder, wgpu::wgc::device::DeviceError> {
         unimplemented!()
     }
 
@@ -221,18 +219,6 @@ impl DeviceInterface for CustomDevice {
     }
 
     fn set_device_lost_callback(&self, _device_lost_callback: wgpu::custom::BoxDeviceLostCallback) {
-        unimplemented!()
-    }
-
-    fn on_uncaptured_error(&self, _handler: Box<dyn wgpu::UncapturedErrorHandler>) {
-        unimplemented!()
-    }
-
-    fn push_error_scope(&self, _filter: wgpu::ErrorFilter) {
-        unimplemented!()
-    }
-
-    fn pop_error_scope(&self) -> Pin<Box<dyn wgpu::custom::PopErrorScopeFuture>> {
         unimplemented!()
     }
 
@@ -279,14 +265,14 @@ impl QueueInterface for CustomQueue {
         _buffer: &wgpu::custom::DispatchBuffer,
         _offset: wgpu::BufferAddress,
         _data: &[u8],
-    ) {
+    ) -> Result<(), wgpu::wgc::device::queue::QueueWriteError> {
         unimplemented!()
     }
 
     fn create_staging_buffer(
         &self,
         _size: wgpu::BufferSize,
-    ) -> Option<wgpu::custom::DispatchQueueWriteBuffer> {
+    ) -> Result<wgpu::custom::DispatchQueueWriteBuffer, wgpu::wgc::device::queue::QueueWriteError> {
         unimplemented!()
     }
 
@@ -295,7 +281,7 @@ impl QueueInterface for CustomQueue {
         _buffer: &wgpu::custom::DispatchBuffer,
         _offset: wgpu::BufferAddress,
         _size: wgpu::BufferSize,
-    ) -> Option<()> {
+    ) -> Result<(), wgpu::wgc::device::queue::QueueWriteError> {
         unimplemented!()
     }
 
@@ -304,7 +290,7 @@ impl QueueInterface for CustomQueue {
         _buffer: &wgpu::custom::DispatchBuffer,
         _offset: wgpu::BufferAddress,
         _staging_buffer: &wgpu::custom::DispatchQueueWriteBuffer,
-    ) {
+    ) -> Result<(), wgpu::wgc::device::queue::QueueWriteError> {
         unimplemented!()
     }
 
@@ -314,14 +300,14 @@ impl QueueInterface for CustomQueue {
         _data: &[u8],
         _data_layout: wgpu::TexelCopyBufferLayout,
         _size: wgpu::Extent3d,
-    ) {
+    ) -> Result<(), wgpu::wgc::device::queue::QueueWriteError> {
         unimplemented!()
     }
 
     fn submit(
         &self,
         _command_buffers: &mut dyn Iterator<Item = wgpu::custom::DispatchCommandBuffer>,
-    ) -> u64 {
+    ) -> Result<u64, (u64, wgpu::wgc::device::queue::QueueSubmitError)> {
         unimplemented!()
     }
 

@@ -35,7 +35,7 @@ impl AsBuildContext {
             label: None,
             contents: &[0; mem::size_of::<[[f32; 3]; 3]>()],
             usage: BufferUsages::BLAS_INPUT,
-        });
+        }).unwrap();
 
         let blas_size = BlasTriangleGeometrySizeDescriptor {
             vertex_format: VertexFormat::Float32x3,
@@ -54,14 +54,14 @@ impl AsBuildContext {
             BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_size.clone()],
             },
-        );
+        ).unwrap();
 
         let tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
             label: Some("TLAS"),
             max_instances: 1,
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE | additional_tlas_flags,
             update_mode: AccelerationStructureUpdateMode::Build,
-        });
+        }).unwrap();
 
         let mut tlas_package = TlasPackage::new(tlas);
         tlas_package[0] = Some(TlasInstance::new(

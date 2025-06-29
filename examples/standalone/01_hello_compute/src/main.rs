@@ -79,7 +79,7 @@ fn main() {
     //
     // `include_wgsl` is a macro provided by wgpu like `include_str` which constructs a ShaderModuleDescriptor.
     // If you want to load shaders differently, you can construct the ShaderModuleDescriptor manually.
-    let module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+    let module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl")).unwrap();
 
     // Create a buffer with the data we want to process on the GPU.
     //
@@ -91,7 +91,7 @@ fn main() {
         label: None,
         contents: bytemuck::cast_slice(&arguments),
         usage: wgpu::BufferUsages::STORAGE,
-    });
+    }).unwrap();
 
     // Now we create a buffer to store the output data.
     let output_data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -99,7 +99,7 @@ fn main() {
         size: input_data_buffer.size(),
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     // Finally we create a buffer which can be read by the CPU. This buffer is how we will read
     // the data. We need to use a separate buffer because we need to have a usage of `MAP_READ`,
@@ -109,7 +109,7 @@ fn main() {
         size: input_data_buffer.size(),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     // A bind group layout describes the types of resources that a bind group can contain. Think
     // of this like a C-style header declaration, ensuring both the pipeline and bind group agree
@@ -142,7 +142,7 @@ fn main() {
                 count: None,
             },
         ],
-    });
+    }).unwrap();
 
     // The bind group contains the actual resources to bind to the pipeline.
     //
@@ -161,14 +161,14 @@ fn main() {
                 resource: output_data_buffer.as_entire_binding(),
             },
         ],
-    });
+    }).unwrap();
 
     // The pipeline layout describes the bind groups that a pipeline expects
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[&bind_group_layout],
         push_constant_ranges: &[],
-    });
+    }).unwrap();
 
     // The pipeline is the ready-to-go program state for the GPU. It contains the shader modules,
     // the interfaces (bind group layouts) and the shader entry point.
@@ -179,23 +179,23 @@ fn main() {
         entry_point: Some("doubleMe"),
         compilation_options: wgpu::PipelineCompilationOptions::default(),
         cache: None,
-    });
+    }).unwrap();
 
     // The command encoder allows us to record commands that we will later submit to the GPU.
     let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
     // A compute pass is a single series of compute operations. While we are recording a compute
     // pass, we cannot record to the encoder.
     let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    });
+    }).unwrap();
 
     // Set the pipeline that we want to use
-    compute_pass.set_pipeline(&pipeline);
+    compute_pass.set_pipeline(&pipeline).unwrap();
     // Set the bind group that we want to use
-    compute_pass.set_bind_group(0, &bind_group, &[]);
+    compute_pass.set_bind_group(0, &bind_group, &[]).unwrap();
 
     // Now we dispatch a series of workgroups. Each workgroup is a 3D grid of individual programs.
     //
@@ -203,7 +203,7 @@ fn main() {
     // inputs, we ceiling divide the number of inputs by 64. If the user passes 32 inputs, we will
     // dispatch 1 workgroups. If the user passes 65 inputs, we will dispatch 2 workgroups, etc.
     let workgroup_count = arguments.len().div_ceil(64);
-    compute_pass.dispatch_workgroups(workgroup_count as u32, 1, 1);
+    compute_pass.dispatch_workgroups(workgroup_count as u32, 1, 1).unwrap();
 
     // Now we drop the compute pass, giving us access to the encoder again.
     drop(compute_pass);
@@ -216,17 +216,17 @@ fn main() {
         &download_buffer,
         0,
         output_data_buffer.size(),
-    );
+    ).unwrap();
 
     // We finish the encoder, giving us a fully recorded command buffer.
-    let command_buffer = encoder.finish();
+    let command_buffer = encoder.finish().unwrap();
 
     // At this point nothing has actually been executed on the gpu. We have recorded a series of
     // commands that we want to execute, but they haven't been sent to the gpu yet.
     //
     // Submitting to the queue sends the command buffer to the gpu. The gpu will then execute the
     // commands in the command buffer in order.
-    queue.submit([command_buffer]);
+    queue.submit([command_buffer]).unwrap();
 
     // We now map the download buffer so we can read it. Mapping tells wgpu that we want to read/write
     // to the buffer directly by the CPU and it should not permit any more GPU operations on the buffer.
@@ -237,7 +237,7 @@ fn main() {
     buffer_slice.map_async(wgpu::MapMode::Read, |_| {
         // In this case we know exactly when the mapping will be finished,
         // so we don't need to do anything in the callback.
-    });
+    }).unwrap();
 
     // Wait for the GPU to finish working on the submitted work. This doesn't work on WebGPU, so we would need
     // to rely on the callback to know when the buffer is mapped.

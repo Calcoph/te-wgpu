@@ -49,16 +49,16 @@ pub async fn execute_gpu_inner(
     let (staging_buffers, storage_buffers, bind_group, compute_pipeline) = setup(device, numbers);
 
     let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("compute pass descriptor"),
             timestamp_writes: None,
-        });
-        cpass.set_pipeline(&compute_pipeline);
-        cpass.set_bind_group(0, Some(&bind_group), &[]);
+        }).unwrap();
+        cpass.set_pipeline(&compute_pipeline).unwrap();
+        cpass.set_bind_group(0, Some(&bind_group), &[]).unwrap();
 
-        cpass.dispatch_workgroups(MAX_DISPATCH_SIZE.min(numbers.len() as u32), 1, 1);
+        cpass.dispatch_workgroups(MAX_DISPATCH_SIZE.min(numbers.len() as u32), 1, 1).unwrap();
     }
 
     for (storage_buffer, staging_buffer) in storage_buffers.iter().zip(staging_buffers.iter()) {
@@ -70,14 +70,14 @@ pub async fn execute_gpu_inner(
             staging_buffer, // Destination buffer
             0,
             stg_size,
-        );
+        ).unwrap();
     }
 
-    queue.submit(Some(encoder.finish()));
+    queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     for staging_buffer in &staging_buffers {
         let slice = staging_buffer.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| {});
+        slice.map_async(wgpu::MapMode::Read, |_| {}).unwrap();
     }
 
     device.poll(wgpu::PollType::Wait).unwrap();
@@ -88,7 +88,7 @@ pub async fn execute_gpu_inner(
         let mapped = slice.get_mapped_range();
         data.extend_from_slice(bytemuck::cast_slice(&mapped));
         drop(mapped);
-        staging_buffer.unmap();
+        staging_buffer.unmap().unwrap();
     }
 
     data
@@ -103,7 +103,7 @@ fn setup(
     wgpu::BindGroup,
     wgpu::ComputePipeline,
 ) {
-    let cs_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+    let cs_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl")).unwrap();
 
     let staging_buffers = create_staging_buffers(device, numbers);
     let storage_buffers = create_storage_buffers(device, numbers);
@@ -128,7 +128,7 @@ fn setup_pipeline(
         label: Some("Compute Pipeline Layout"),
         bind_group_layouts: &[&bind_group_layout],
         push_constant_ranges: &[],
-    });
+    }).unwrap();
 
     device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: Some("Compute Pipeline"),
@@ -137,7 +137,7 @@ fn setup_pipeline(
         entry_point: Some("main"),
         compilation_options: Default::default(),
         cache: None,
-    })
+    }).unwrap()
 }
 
 fn setup_binds(
@@ -169,13 +169,13 @@ fn setup_binds(
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("Custom Storage Bind Group Layout"),
         entries: &bind_group_layout_entries,
-    });
+    }).unwrap();
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("Combined Storage Bind Group"),
         layout: &bind_group_layout,
         entries: &bind_group_entries,
-    });
+    }).unwrap();
 
     (bind_group_layout, bind_group)
 }
@@ -198,7 +198,7 @@ fn create_storage_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
                 usage: wgpu::BufferUsages::STORAGE
                     | wgpu::BufferUsages::COPY_DST
                     | wgpu::BufferUsages::COPY_SRC,
-            })
+            }).unwrap()
         })
         .collect()
 }
@@ -215,7 +215,7 @@ fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
                 size,
                 usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
-            })
+            }).unwrap()
         })
         .collect()
 }

@@ -40,10 +40,10 @@ fn device_and_buffers() {
         size: 8,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
-    });
+    }).unwrap();
     assert_eq!(buffer.size(), 8);
-    queue.write_buffer(&buffer, 0, &[1, 2, 3, 4]);
-    queue.write_buffer(&buffer, 4, &[5, 6, 7, 8]);
+    queue.write_buffer(&buffer, 0, &[1, 2, 3, 4]).unwrap();
+    queue.write_buffer(&buffer, 4, &[5, 6, 7, 8]).unwrap();
 
     // Demonstrate that we can read back data from the buffer.
     // This also involves copy_buffer_to_buffer().
@@ -52,7 +52,7 @@ fn device_and_buffers() {
     wgpu::util::DownloadBuffer::read_buffer(&device, &queue, &buffer.slice(..), move |result| {
         assert_eq!(*result.unwrap(), [1, 2, 3, 4, 5, 6, 7, 8],);
         done.store(true, Relaxed);
-    });
+    }).unwrap();
     device.poll(wgpu::PollType::Wait).unwrap();
     assert!(done2.load(Relaxed));
 }

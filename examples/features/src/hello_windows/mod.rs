@@ -137,7 +137,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Arc<Window>, wgpu::Color
                                     });
                             }
 
-                            queue.submit(Some(encoder.finish()));
+                            queue.submit(Some(encoder.finish().unwrap())).unwrap();
                             viewport.desc.window.pre_present_notify();
                             frame.present();
                         }

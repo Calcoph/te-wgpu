@@ -16,7 +16,6 @@ fn dynamic_offset() {
 
     // Check that you can't create a bind group with both dynamic offset and binding array
     fail(
-        &device,
         || {
             device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some("Test1"),
@@ -61,7 +60,6 @@ fn uniform_buffer() {
 
     // Check that you can't create a bind group with both uniform buffer and binding array
     fail(
-        &device,
         || {
             device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some("Test2"),

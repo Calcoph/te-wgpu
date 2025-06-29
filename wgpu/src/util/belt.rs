@@ -6,7 +6,7 @@ use crate::{
     BufferViewMut, CommandEncoder, Device, MapMode,
 };
 use alloc::vec::Vec;
-use core::fmt;
+use core::fmt::{self, Display};
 use std::sync::mpsc;
 
 #[derive(Debug)]
@@ -114,15 +114,15 @@ impl StagingBelt {
             size,
             const { BufferSize::new(crate::COPY_BUFFER_ALIGNMENT).unwrap() },
             device,
-        );
+        )?;
         encoder.copy_buffer_to_buffer(
             slice_of_belt.buffer(),
             slice_of_belt.offset(),
             target,
             offset,
             size.get(),
-        );
-        slice_of_belt.get_mapped_range_mut()
+        )?;
+        Ok(slice_of_belt.get_mapped_range_mut())
     }
 
     /// Allocate a staging belt slice with the given `size` and `alignment` and return it.
@@ -149,7 +149,7 @@ impl StagingBelt {
         size: BufferSize,
         alignment: BufferSize,
         device: &Device,
-    ) -> BufferSlice<'_> {
+    ) -> Result<BufferSlice<'_>, CreateBufferError> {
         assert!(
             alignment.get().is_power_of_two(),
             "alignment must be a power of two, not {alignment}"
@@ -190,9 +190,9 @@ impl StagingBelt {
         self.active_chunks.push(chunk);
         let chunk = self.active_chunks.last().unwrap();
 
-        chunk
+        Ok(chunk
             .buffer
-            .slice(allocation_offset..allocation_offset + size.get())
+            .slice(allocation_offset..allocation_offset + size.get()))
     }
 
     /// Prepare currently mapped buffers for use in a submission.

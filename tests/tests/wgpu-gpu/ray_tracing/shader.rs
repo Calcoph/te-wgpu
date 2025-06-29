@@ -23,7 +23,7 @@ fn access_all_struct_members(ctx: TestingContext) {
         size: STRUCT_SIZE,
         usage: BufferUsages::STORAGE,
         mapped_at_creation: false,
-    });
+    }).unwrap();
     //
     // Create a clean `AsBuildContext`
     //
@@ -38,12 +38,14 @@ fn access_all_struct_members(ctx: TestingContext) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("Build"),
-        });
+        })
+        .unwrap();
 
     encoder_build
-        .build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas_package]);
+        .build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas_package])
+        .unwrap();
 
-    ctx.queue.submit([encoder_build.finish()]);
+    ctx.queue.submit([encoder_build.finish().unwrap()]).unwrap();
 
     //
     // Create shader to use tlas with
@@ -51,7 +53,8 @@ fn access_all_struct_members(ctx: TestingContext) {
 
     let shader = ctx
         .device
-        .create_shader_module(include_wgsl!("shader.wgsl"));
+        .create_shader_module(include_wgsl!("shader.wgsl"))
+        .unwrap();
     let compute_pipeline = ctx
         .device
         .create_compute_pipeline(&ComputePipelineDescriptor {
@@ -61,11 +64,12 @@ fn access_all_struct_members(ctx: TestingContext) {
             entry_point: Some("all_of_struct"),
             compilation_options: Default::default(),
             cache: None,
-        });
+        })
+        .unwrap();
 
     let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: None,
-        layout: &compute_pipeline.get_bind_group_layout(0),
+        layout: &compute_pipeline.get_bind_group_layout(0).unwrap(),
         entries: &[
             BindGroupEntry {
                 binding: 0,
@@ -76,7 +80,7 @@ fn access_all_struct_members(ctx: TestingContext) {
                 resource: BindingResource::Buffer(buf.as_entire_buffer_binding()),
             },
         ],
-    });
+    }).unwrap();
 
     //
     // Submit once to check for no issues
@@ -84,16 +88,17 @@ fn access_all_struct_members(ctx: TestingContext) {
 
     let mut encoder_compute = ctx
         .device
-        .create_command_encoder(&CommandEncoderDescriptor::default());
+        .create_command_encoder(&CommandEncoderDescriptor::default())
+        .unwrap();
     {
         let mut pass = encoder_compute.begin_compute_pass(&ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        });
-        pass.set_pipeline(&compute_pipeline);
-        pass.set_bind_group(0, Some(&bind_group), &[]);
-        pass.dispatch_workgroups(1, 1, 1)
+        }).unwrap();
+        pass.set_pipeline(&compute_pipeline).unwrap();
+        pass.set_bind_group(0, Some(&bind_group), &[]).unwrap();
+        pass.dispatch_workgroups(1, 1, 1).unwrap()
     }
 
-    ctx.queue.submit([encoder_compute.finish()]);
+    ctx.queue.submit([encoder_compute.finish().unwrap()]).unwrap();
 }

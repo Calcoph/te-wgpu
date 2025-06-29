@@ -141,11 +141,10 @@ impl GPUTexture {
             },
         };
 
-        let (id, err) = self
+        let id = self
             .instance
-            .texture_create_view(self.id, &wgpu_descriptor, None);
-
-        self.error_handler.push_error(err);
+            .texture_create_view(self.id, &wgpu_descriptor, None)
+            .unwrap();
 
         Ok(GPUTextureView {
             instance: self.instance.clone(),

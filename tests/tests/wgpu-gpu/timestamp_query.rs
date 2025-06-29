@@ -35,7 +35,8 @@ fn timestamp_query(ctx: TestingContext) {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("timestamp query shader"),
             source: wgpu::ShaderSource::Wgsl(SHADER.into()),
-        });
+        })
+        .unwrap();
 
     let pipeline = ctx
         .device
@@ -46,18 +47,20 @@ fn timestamp_query(ctx: TestingContext) {
             entry_point: None,
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             cache: None,
-        });
+        })
+        .unwrap();
 
     // Create timestamp query set
     let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
         label: Some("Query set"),
         ty: wgpu::QueryType::Timestamp,
         count: TOTAL_QUERIES,
-    });
+    }).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
 
     for i in 0..ITERATIONS {
         let base_index = i * QUERIES_PER_ITERATION;
@@ -69,10 +72,10 @@ fn timestamp_query(ctx: TestingContext) {
                 beginning_of_pass_write_index: Some(base_index),
                 end_of_pass_write_index: Some(base_index + 1),
             }),
-        });
-        compute_pass.set_pipeline(&pipeline);
+        }).unwrap();
+        compute_pass.set_pipeline(&pipeline).unwrap();
 
-        compute_pass.dispatch_workgroups(1, 1, 1);
+        compute_pass.dispatch_workgroups(1, 1, 1).unwrap();
     }
 
     let buffer_size = QUERY_RESOLVE_BUFFER_ALIGNMENT * TOTAL_QUERIES as u64;
@@ -87,7 +90,8 @@ fn timestamp_query(ctx: TestingContext) {
             label: Some("Query buffer"),
             contents: bytemuck::cast_slice(&init_data),
             usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
-        });
+        })
+        .unwrap();
 
     for i in 0..ITERATIONS {
         let start_query = i * QUERIES_PER_ITERATION;
@@ -99,7 +103,7 @@ fn timestamp_query(ctx: TestingContext) {
             start_query..end_query,
             &query_buffer,
             buffer_offset,
-        );
+        ).unwrap();
     }
 
     let mapping_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -107,14 +111,15 @@ fn timestamp_query(ctx: TestingContext) {
         size: query_buffer.size(),
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
-    });
-    encoder.copy_buffer_to_buffer(&query_buffer, 0, &mapping_buffer, 0, query_buffer.size());
+    }).unwrap();
+    encoder.copy_buffer_to_buffer(&query_buffer, 0, &mapping_buffer, 0, query_buffer.size()).unwrap();
 
-    ctx.queue.submit(Some(encoder.finish()));
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     mapping_buffer
         .slice(..)
-        .map_async(wgpu::MapMode::Read, |_| ());
+        .map_async(wgpu::MapMode::Read, |_| ())
+        .unwrap();
     ctx.device.poll(wgpu::PollType::wait()).unwrap();
     let query_buffer_view = mapping_buffer.slice(..).get_mapped_range();
     let query_data: &[u64] = bytemuck::cast_slice(&query_buffer_view);

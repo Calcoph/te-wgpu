@@ -143,11 +143,10 @@ impl GPUDevice {
             mapped_at_creation: descriptor.mapped_at_creation,
         };
 
-        let (id, err) = self
+        let id = self
             .instance
-            .device_create_buffer(self.id, &wgpu_descriptor, None);
+            .device_create_buffer(self.id, &wgpu_descriptor, None).unwrap();
 
-        self.error_handler.push_error(err);
 
         Ok(GPUBuffer {
             instance: self.instance.clone(),
@@ -193,11 +192,10 @@ impl GPUDevice {
                 .collect(),
         };
 
-        let (id, err) = self
+        let id = self
             .instance
-            .device_create_texture(self.id, &wgpu_descriptor, None);
-
-        self.error_handler.push_error(err);
+            .device_create_texture(self.id, &wgpu_descriptor, None)
+            .unwrap();
 
         Ok(GPUTexture {
             instance: self.instance.clone(),
@@ -235,11 +233,10 @@ impl GPUDevice {
             border_color: None,
         };
 
-        let (id, err) = self
+        let id = self
             .instance
-            .device_create_sampler(self.id, &wgpu_descriptor, None);
-
-        self.error_handler.push_error(err);
+            .device_create_sampler(self.id, &wgpu_descriptor, None)
+            .unwrap();
 
         Ok(GPUSampler {
             instance: self.instance.clone(),
@@ -309,11 +306,10 @@ impl GPUDevice {
             entries: Cow::Owned(entries),
         };
 
-        let (id, err) =
+        let id =
             self.instance
-                .device_create_bind_group_layout(self.id, &wgpu_descriptor, None);
-
-        self.error_handler.push_error(err);
+                .device_create_bind_group_layout(self.id, &wgpu_descriptor, None)
+                .unwrap();
 
         Ok(GPUBindGroupLayout {
             instance: self.instance.clone(),
@@ -340,11 +336,10 @@ impl GPUDevice {
             push_constant_ranges: Default::default(),
         };
 
-        let (id, err) =
+        let id =
             self.instance
-                .device_create_pipeline_layout(self.id, &wgpu_descriptor, None);
-
-        self.error_handler.push_error(err);
+                .device_create_pipeline_layout(self.id, &wgpu_descriptor, None)
+                .unwrap();
 
         GPUPipelineLayout {
             instance: self.instance.clone(),
@@ -386,11 +381,10 @@ impl GPUDevice {
             entries: Cow::Owned(entries),
         };
 
-        let (id, err) = self
+        let id = self
             .instance
-            .device_create_bind_group(self.id, &wgpu_descriptor, None);
-
-        self.error_handler.push_error(err);
+            .device_create_bind_group(self.id, &wgpu_descriptor, None)
+            .unwrap();
 
         GPUBindGroup {
             instance: self.instance.clone(),
@@ -410,14 +404,12 @@ impl GPUDevice {
             runtime_checks: wgpu_types::ShaderRuntimeChecks::default(),
         };
 
-        let (id, err) = self.instance.device_create_shader_module(
+        let id = self.instance.device_create_shader_module(
             self.id,
             &wgpu_descriptor,
             wgpu_core::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(descriptor.code)),
             None,
-        );
-
-        self.error_handler.push_error(err);
+        ).unwrap();
 
         GPUShaderModule {
             instance: self.instance.clone(),
@@ -474,15 +466,13 @@ impl GPUDevice {
             label: Some(Cow::Owned(label.clone())),
         };
 
-        let (id, err) =
+        let id =
             self.instance
-                .device_create_command_encoder(self.id, &wgpu_descriptor, None);
-
-        self.error_handler.push_error(err);
+                .device_create_command_encoder(self.id, &wgpu_descriptor, None)
+                .unwrap();
 
         GPUCommandEncoder {
             instance: self.instance.clone(),
-            error_handler: self.error_handler.clone(),
             id,
             label,
         }
@@ -545,11 +535,10 @@ impl GPUDevice {
             count: descriptor.count,
         };
 
-        let (id, err) = self
+        let id = self
             .instance
-            .device_create_query_set(self.id, &wgpu_descriptor, None);
-
-        self.error_handler.push_error(err);
+            .device_create_query_set(self.id, &wgpu_descriptor, None)
+            .unwrap();
 
         GPUQuerySet {
             instance: self.instance.clone(),
@@ -641,11 +630,10 @@ impl GPUDevice {
             cache: None,
         };
 
-        let (id, err) =
+        let id =
             self.instance
-                .device_create_compute_pipeline(self.id, &wgpu_descriptor, None, None);
-
-        self.error_handler.push_error(err);
+                .device_create_compute_pipeline(self.id, &wgpu_descriptor, None, None)
+                .unwrap();
 
         GPUComputePipeline {
             instance: self.instance.clone(),
@@ -811,11 +799,10 @@ impl GPUDevice {
             multiview: None,
         };
 
-        let (id, err) =
+        let id =
             self.instance
-                .device_create_render_pipeline(self.id, &wgpu_descriptor, None, None);
-
-        self.error_handler.push_error(err);
+                .device_create_render_pipeline(self.id, &wgpu_descriptor, None, None)
+                .unwrap();
 
         Ok(GPURenderPipeline {
             instance: self.instance.clone(),

@@ -1,26 +1,20 @@
 use alloc::{
     borrow::Cow::{self, Borrowed},
     boxed::Box,
-    format,
     string::{String, ToString as _},
     sync::Arc,
     vec,
     vec::Vec,
 };
-use core::{error::Error, fmt, future::ready, ops::Range, pin::Pin, ptr::NonNull, slice};
+use core::{fmt, future::ready, ops::Range, pin::Pin, ptr::NonNull, slice};
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
-use wgc::{command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError};
-use wgt::WasmNotSendSync;
+use wgc::{binding_model::{self, CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError}, command::{self, bundle_ffi::*, transition_resources::TransitionResourcesError, CommandEncoderError, ComputePassError}, device::{queue::{QueueSubmitError, QueueWriteError}, DeviceError}, pipeline::{self, CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError}, present::{self, SurfaceError}, ray_tracing::{BuildAccelerationStructureError, CreateBlasError, CreateTlasError}, resource::{self, CreateBufferError, CreateTextureError, CreateTextureViewError}};
 
 use crate::{
-    api,
-    dispatch::{self, BufferMappedRangeInterface},
-    BindingResource, Blas, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
-    CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
-    ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas,
+    api, dispatch::{self, BufferMappedRangeInterface}, BindingResource, Blas, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage, CompilationMessageType, Features, LoadOp, MapMode, Operations, ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas
 };
 
 #[derive(Clone)]
@@ -858,24 +852,13 @@ impl dispatch::DeviceInterface for CoreDevice {
         desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> Result<dispatch::DispatchShaderModule, CreateShaderModuleError> {
         let desc = desc.map_label(|l| l.map(Cow::from));
-        let (id, error) = unsafe {
+        let id = unsafe {
             self.context
                 .0
-                .device_create_shader_module_passthrough(self.id, &desc, None)?
-        };
+                .device_create_shader_module_passthrough(self.id, &desc, None)
+        }?;
 
-        let compilation_info = match error {
-            Some(cause) => {
-                self.context.handle_error(
-                    &self.error_sink,
-                    cause.clone(),
-                    desc.label().as_deref(),
-                    "Device::create_shader_module_passthrough",
-                );
-                CompilationInfo::from(cause)
-            }
-            None => CompilationInfo { messages: vec![] },
-        };
+        let compilation_info = CompilationInfo { messages: vec![] };
 
         Ok(CoreShaderModule {
             context: self.context.clone(),
@@ -1482,7 +1465,7 @@ impl dispatch::QueueInterface for CoreQueue {
         size: crate::Extent3d,
     ) -> Result<(), QueueWriteError> {
         #[cfg(webgl)]
-        match self.context.0.queue_copy_external_image_to_texture(
+        self.context.0.queue_copy_external_image_to_texture(
             self.id,
             source,
             map_texture_tagged_copy_view(dest),
@@ -2000,24 +1983,17 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         &self,
         blas: &mut dyn Iterator<Item = &'a Blas>,
         tlas: &mut dyn Iterator<Item = &'a Tlas>,
-    ) {
+    ) -> Result<(), BuildAccelerationStructureError> {
         let blas = blas
             .map(|b| b.inner.as_core().id)
             .collect::<SmallVec<[_; 4]>>();
         let tlas = tlas
             .map(|t| t.shared.inner.as_core().id)
             .collect::<SmallVec<[_; 4]>>();
-        if let Err(cause) = self
+        self
             .context
             .0
             .command_encoder_mark_acceleration_structures_built(self.id, &blas, &tlas)
-        {
-            self.context.handle_error_nolabel(
-                &self.error_sink,
-                cause,
-                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
-            );
-        }
     }
 
     fn build_acceleration_structures_unsafe_tlas<'a>(
@@ -2127,8 +2103,8 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         texture_transitions: &mut dyn Iterator<
             Item = wgt::TextureTransition<&'a dispatch::DispatchTexture>,
         >,
-    ) {
-        let result = self.context.0.command_encoder_transition_resources(
+    ) -> Result<(), TransitionResourcesError> {
+        self.context.0.command_encoder_transition_resources(
             self.id,
             buffer_transitions.map(|t| wgt::BufferTransition {
                 buffer: t.buffer.as_core().id,
@@ -2139,15 +2115,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 selector: t.selector.clone(),
                 state: t.state,
             }),
-        );
-
-        if let Err(cause) = result {
-            self.context.handle_error_nolabel(
-                &self.error_sink,
-                cause,
-                "CommandEncoder::transition_resources",
-            );
-        }
+        )
     }
 }
 

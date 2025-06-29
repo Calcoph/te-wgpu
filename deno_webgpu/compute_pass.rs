@@ -17,7 +17,6 @@ use crate::Instance;
 
 pub struct GPUComputePassEncoder {
     pub instance: Instance,
-    pub error_handler: super::error::ErrorHandler,
 
     pub compute_pass: RefCell<wgpu_core::command::ComputePass>,
     pub label: String,
@@ -39,11 +38,10 @@ impl GPUComputePassEncoder {
     }
 
     fn set_pipeline(&self, #[webidl] pipeline: Ptr<crate::compute_pipeline::GPUComputePipeline>) {
-        let err = self
+        self
             .instance
             .compute_pass_set_pipeline(&mut self.compute_pass.borrow_mut(), pipeline.id)
-            .err();
-        self.error_handler.push_error(err);
+            .unwrap()
     }
 
     fn dispatch_workgroups(
@@ -52,16 +50,14 @@ impl GPUComputePassEncoder {
         #[webidl(default = 1, options(enforce_range = true))] work_group_count_y: u32,
         #[webidl(default = 1, options(enforce_range = true))] work_group_count_z: u32,
     ) {
-        let err = self
+        self
             .instance
             .compute_pass_dispatch_workgroups(
                 &mut self.compute_pass.borrow_mut(),
                 work_group_count_x,
                 work_group_count_y,
                 work_group_count_z,
-            )
-            .err();
-        self.error_handler.push_error(err);
+            ).unwrap()
     }
 
     fn dispatch_workgroups_indirect(
@@ -69,57 +65,47 @@ impl GPUComputePassEncoder {
         #[webidl] indirect_buffer: Ptr<crate::buffer::GPUBuffer>,
         #[webidl(options(enforce_range = true))] indirect_offset: u64,
     ) {
-        let err = self
+        self
             .instance
             .compute_pass_dispatch_workgroups_indirect(
                 &mut self.compute_pass.borrow_mut(),
                 indirect_buffer.id,
                 indirect_offset,
-            )
-            .err();
-        self.error_handler.push_error(err);
+            ).unwrap()
     }
 
     #[fast]
     fn end(&self) {
-        let err = self
+        self
             .instance
-            .compute_pass_end(&mut self.compute_pass.borrow_mut())
-            .err();
-        self.error_handler.push_error(err);
+            .compute_pass_end(&mut self.compute_pass.borrow_mut()).unwrap()
     }
 
     fn push_debug_group(&self, #[webidl] group_label: String) {
-        let err = self
+        self
             .instance
             .compute_pass_push_debug_group(
                 &mut self.compute_pass.borrow_mut(),
                 &group_label,
                 0, // wgpu#975
-            )
-            .err();
-        self.error_handler.push_error(err);
+            ).unwrap()
     }
 
     #[fast]
     fn pop_debug_group(&self) {
-        let err = self
+        self
             .instance
-            .compute_pass_pop_debug_group(&mut self.compute_pass.borrow_mut())
-            .err();
-        self.error_handler.push_error(err);
+            .compute_pass_pop_debug_group(&mut self.compute_pass.borrow_mut()).unwrap()
     }
 
     fn insert_debug_marker(&self, #[webidl] marker_label: String) {
-        let err = self
+        self
             .instance
             .compute_pass_insert_debug_marker(
                 &mut self.compute_pass.borrow_mut(),
                 &marker_label,
                 0, // wgpu#975
-            )
-            .err();
-        self.error_handler.push_error(err);
+            ).unwrap()
     }
 
     fn set_bind_group<'a>(
@@ -194,7 +180,9 @@ impl GPUComputePassEncoder {
                 .err()
         };
 
-        self.error_handler.push_error(err);
+        if let Some(err) = err {
+            panic!("{err:?}");
+        }
 
         Ok(())
     }

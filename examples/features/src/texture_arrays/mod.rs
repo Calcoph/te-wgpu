@@ -296,8 +296,6 @@ impl crate::framework::Example for Example {
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
                             view_dimension: wgpu::TextureViewDimension::D2,
                             multisampled: false,
-                        },
-                        count: NonZeroU32::new(2),
                     },
                     count: NonZeroU32::new(2),
                 },
@@ -308,7 +306,7 @@ impl crate::framework::Example for Example {
                     count: NonZeroU32::new(2),
                 },
             ],
-        });
+        }).unwrap();
 
         let uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -323,7 +321,7 @@ impl crate::framework::Example for Example {
                     },
                     count: None,
                 }],
-            });
+            }).unwrap();
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             entries: &[
@@ -348,7 +346,7 @@ impl crate::framework::Example for Example {
             ],
             layout: &bind_group_layout,
             label: Some("bind group"),
-        });
+        }).unwrap();
 
         let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             entries: &[wgpu::BindGroupEntry {
@@ -361,13 +359,13 @@ impl crate::framework::Example for Example {
             }],
             layout: &uniform_bind_group_layout,
             label: Some("uniform bind group"),
-        });
+        }).unwrap();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
             bind_group_layouts: &[&bind_group_layout, &uniform_bind_group_layout],
             push_constant_ranges: &[],
-        });
+        }).unwrap();
 
         let index_format = wgpu::IndexFormat::Uint16;
 

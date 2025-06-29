@@ -50,11 +50,10 @@ impl GPURenderPipeline {
 
     #[cppgc]
     fn get_bind_group_layout(&self, #[webidl] index: u32) -> GPUBindGroupLayout {
-        let (id, err) = self
+        let id = self
             .instance
-            .render_pipeline_get_bind_group_layout(self.id, index, None);
-
-        self.error_handler.push_error(err);
+            .render_pipeline_get_bind_group_layout(self.id, index, None)
+            .unwrap();
 
         // TODO(wgpu): needs to add a way to retrieve the label
         GPUBindGroupLayout {

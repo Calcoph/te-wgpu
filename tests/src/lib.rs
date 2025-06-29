@@ -29,7 +29,7 @@ pub use run::{execute_test, TestingContext};
 pub use wgpu_macros::gpu_test;
 
 /// Run some code in an error scope and assert that validation fails.
-pub fn fail<T, E: Debug + ToString>(callback: impl FnOnce() -> Result<T, E>, expected_msg_substring: Option<&'static str>,) -> E {
+pub fn fail<T, E: Debug + ToString + std::fmt::Display>(callback: impl FnOnce() -> Result<T, E>, expected_msg_substring: Option<&'static str>,) -> E {
     let result = callback();
     let validation_error = result.err()
         .expect("expected validation error in callback, but no validation error was emitted");
@@ -61,7 +61,7 @@ pub fn valid<T, E: Debug>(callback: impl FnOnce() -> Result<T, E>) -> T {
 
 /// Run some code in an error scope and assert that validation succeeds or fails depending on the
 /// provided `should_fail` boolean.
-pub fn fail_if<T, E: Debug + ToString>(
+pub fn fail_if<T, E: Debug + ToString + std::fmt::Display>(
     should_fail: bool,
     callback: impl FnOnce() -> Result<T, E>,
     expected_msg_substring: Option<&'static str>,
@@ -71,16 +71,6 @@ pub fn fail_if<T, E: Debug + ToString>(
     } else {
         Ok(valid(callback))
     }
-}
-
-/// Returns true if the provided callback fails validation.
-pub fn did_fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool, T) {
-    device.push_error_scope(wgpu::ErrorFilter::Validation);
-    let result = callback();
-    let validation_error = pollster::block_on(device.pop_error_scope());
-    let failed = validation_error.is_some();
-
-    (failed, result)
 }
 
 /// Adds the necessary main function for our gpu test harness.

@@ -131,7 +131,7 @@ impl Queue {
     ///   be able to use [`StagingBelt`](crate::util::StagingBelt),
     ///   or buffers you explicitly create, map, and unmap yourself.
     pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) -> Result<(), wgc::device::queue::QueueWriteError> {
-        self.inner.write_buffer(&buffer.inner, offset, data);
+        self.inner.write_buffer(&buffer.inner, offset, data)
     }
 
     /// Prepares to write data to a buffer via a mapped staging buffer.
@@ -173,7 +173,7 @@ impl Queue {
         buffer: &'a Buffer,
         offset: BufferAddress,
         size: BufferSize,
-    ) -> Result<QueueWriteBufferView<'a>, QueueWriteError> {
+    ) -> Result<QueueWriteBufferView<'a>, wgc::device::queue::QueueWriteError> {
         profiling::scope!("Queue::write_buffer_with");
         self.inner
             .validate_write_buffer(&buffer.inner, offset, size)?;
@@ -233,7 +233,7 @@ impl Queue {
     pub fn submit<I: IntoIterator<Item = CommandBuffer>>(
         &self,
         command_buffers: I,
-    ) -> Result<SubmissionIndex, (u64, QueueSubmitError)> {
+    ) -> Result<SubmissionIndex, (u64, wgc::device::queue::QueueSubmitError)> {
         let mut command_buffers = command_buffers.into_iter().map(|comb| comb.buffer);
 
         let index = self.inner.submit(&mut command_buffers)?;

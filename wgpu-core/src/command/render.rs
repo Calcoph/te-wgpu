@@ -1583,14 +1583,10 @@ impl Global {
                 timestamp_writes,
                 occlusion_query_set,
             },
-        )?;
-        if let Err(err) = render_pass {
-            return Err(RenderPassError {
-                scope: pass_scope,
-                inner: err.into(),
-            });
-        };
-        let mut render_pass = render_pass.unwrap();
+        ).map_err(|err| RenderPassError {
+            scope: pass_scope,
+            inner: err.into(),
+        })?;
 
         render_pass.base = Some(BasePass {
             label,

@@ -22,7 +22,6 @@ use crate::Instance;
 
 pub struct GPUCommandEncoder {
     pub instance: Instance,
-    pub error_handler: super::error::ErrorHandler,
 
     pub id: wgpu_core::id::CommandEncoderId,
     pub label: String,
@@ -124,15 +123,13 @@ impl GPUCommandEncoder {
             occlusion_query_set: descriptor.occlusion_query_set.map(|query_set| query_set.id),
         };
 
-        let (render_pass, err) = self
+        let render_pass = self
             .instance
-            .command_encoder_begin_render_pass(self.id, &wgpu_descriptor);
-
-        self.error_handler.push_error(err);
+            .command_encoder_begin_render_pass(self.id, &wgpu_descriptor)
+            .unwrap();
 
         Ok(GPURenderPassEncoder {
             instance: self.instance.clone(),
-            error_handler: self.error_handler.clone(),
             render_pass: RefCell::new(render_pass),
             label: descriptor.label,
         })
@@ -142,7 +139,7 @@ impl GPUCommandEncoder {
     fn begin_compute_pass(
         &self,
         #[webidl] descriptor: crate::compute_pass::GPUComputePassDescriptor,
-    ) -> GPUComputePassEncoder {
+    ) -> Result<GPUComputePassEncoder, wgpu_core::command::CommandEncoderError> {
         let timestamp_writes = descriptor.timestamp_writes.map(|timestamp_writes| {
             wgpu_core::command::PassTimestampWrites {
                 query_set: timestamp_writes.query_set.id,
@@ -156,18 +153,16 @@ impl GPUCommandEncoder {
             timestamp_writes,
         };
 
-        let (compute_pass, err) = self
+        let compute_pass = self
             .instance
-            .command_encoder_begin_compute_pass(self.id, &wgpu_descriptor);
+            .command_encoder_begin_compute_pass(self.id, &wgpu_descriptor)?;
 
-        self.error_handler.push_error(err);
 
-        GPUComputePassEncoder {
+        Ok(GPUComputePassEncoder {
             instance: self.instance.clone(),
-            error_handler: self.error_handler.clone(),
             compute_pass: RefCell::new(compute_pass),
             label: descriptor.label,
-        }
+        })
     }
 
     #[required(5)]
@@ -178,8 +173,8 @@ impl GPUCommandEncoder {
         #[webidl] destination: Ptr<GPUBuffer>,
         #[webidl(options(enforce_range = true))] destination_offset: u64,
         #[webidl(options(enforce_range = true))] size: u64,
-    ) {
-        let err = self
+    ) -> Result<(), wgpu_core::command::CopyError> {
+        self
             .instance
             .command_encoder_copy_buffer_to_buffer(
                 self.id,
@@ -189,9 +184,6 @@ impl GPUCommandEncoder {
                 destination_offset,
                 size,
             )
-            .err();
-
-        self.error_handler.push_error(err);
     }
 
     #[required(3)]
@@ -200,7 +192,7 @@ impl GPUCommandEncoder {
         #[webidl] source: GPUTexelCopyBufferInfo,
         #[webidl] destination: GPUTexelCopyTextureInfo,
         #[webidl] copy_size: GPUExtent3D,
-    ) {
+    ) -> Result<(), wgpu_core::command::CopyError> {
         let source = TexelCopyBufferInfo {
             buffer: source.buffer.id,
             layout: wgpu_types::TexelCopyBufferLayout {
@@ -216,7 +208,7 @@ impl GPUCommandEncoder {
             aspect: destination.aspect.into(),
         };
 
-        let err = self
+        self
             .instance
             .command_encoder_copy_buffer_to_texture(
                 self.id,
@@ -224,9 +216,6 @@ impl GPUCommandEncoder {
                 &destination,
                 &copy_size.into(),
             )
-            .err();
-
-        self.error_handler.push_error(err);
     }
 
     #[required(3)]
@@ -235,7 +224,7 @@ impl GPUCommandEncoder {
         #[webidl] source: GPUTexelCopyTextureInfo,
         #[webidl] destination: GPUTexelCopyBufferInfo,
         #[webidl] copy_size: GPUExtent3D,
-    ) {
+    ) -> Result<(), wgpu_core::command::CopyError> {
         let source = wgpu_types::TexelCopyTextureInfo {
             texture: source.texture.id,
             mip_level: source.mip_level,
@@ -251,7 +240,7 @@ impl GPUCommandEncoder {
             },
         };
 
-        let err = self
+        self
             .instance
             .command_encoder_copy_texture_to_buffer(
                 self.id,
@@ -259,9 +248,6 @@ impl GPUCommandEncoder {
                 &destination,
                 &copy_size.into(),
             )
-            .err();
-
-        self.error_handler.push_error(err);
     }
 
     #[required(3)]
@@ -270,7 +256,7 @@ impl GPUCommandEncoder {
         #[webidl] source: GPUTexelCopyTextureInfo,
         #[webidl] destination: GPUTexelCopyTextureInfo,
         #[webidl] copy_size: GPUExtent3D,
-    ) {
+    ) -> Result<(), wgpu_core::command::CopyError> {
         let source = wgpu_types::TexelCopyTextureInfo {
             texture: source.texture.id,
             mip_level: source.mip_level,
@@ -284,7 +270,7 @@ impl GPUCommandEncoder {
             aspect: destination.aspect.into(),
         };
 
-        let err = self
+        self
             .instance
             .command_encoder_copy_texture_to_texture(
                 self.id,
@@ -292,9 +278,6 @@ impl GPUCommandEncoder {
                 &destination,
                 &copy_size.into(),
             )
-            .err();
-
-        self.error_handler.push_error(err);
     }
 
     #[required(1)]
@@ -303,12 +286,10 @@ impl GPUCommandEncoder {
         #[webidl] buffer: Ptr<GPUBuffer>,
         #[webidl(default = 0, options(enforce_range = true))] offset: u64,
         #[webidl(options(enforce_range = true))] size: Option<u64>,
-    ) {
-        let err = self
+    ) -> Result<(), wgpu_core::command::ClearError> {
+        self
             .instance
             .command_encoder_clear_buffer(self.id, buffer.id, offset, size)
-            .err();
-        self.error_handler.push_error(err);
     }
 
     #[required(5)]
@@ -319,8 +300,8 @@ impl GPUCommandEncoder {
         #[webidl(options(enforce_range = true))] query_count: u32,
         #[webidl] destination: Ptr<GPUBuffer>,
         #[webidl(options(enforce_range = true))] destination_offset: u64,
-    ) {
-        let err = self
+    ) -> Result<(), wgpu_core::command::QueryError> {
+        self
             .instance
             .command_encoder_resolve_query_set(
                 self.id,
@@ -330,54 +311,44 @@ impl GPUCommandEncoder {
                 destination.id,
                 destination_offset,
             )
-            .err();
-
-        self.error_handler.push_error(err);
     }
 
     #[cppgc]
     fn finish(
         &self,
         #[webidl] descriptor: crate::command_buffer::GPUCommandBufferDescriptor,
-    ) -> GPUCommandBuffer {
+    ) -> Result<GPUCommandBuffer, wgpu_core::command::CommandEncoderError> {
         let wgpu_descriptor = wgpu_types::CommandBufferDescriptor {
             label: crate::transform_label(descriptor.label.clone()),
         };
 
-        let (id, err) = self
+        let id = self
             .instance
-            .command_encoder_finish(self.id, &wgpu_descriptor);
+            .command_encoder_finish(self.id, &wgpu_descriptor)?;
 
-        self.error_handler.push_error(err);
-
-        GPUCommandBuffer {
+        Ok(GPUCommandBuffer {
             instance: self.instance.clone(),
             id,
             label: descriptor.label,
             consumed: Default::default(),
-        }
+        })
     }
 
-    fn push_debug_group(&self, #[webidl] group_label: String) {
-        let err = self
+    fn push_debug_group(&self, #[webidl] group_label: String) -> Result<(), wgpu_core::command::CommandEncoderError> {
+        self
             .instance
             .command_encoder_push_debug_group(self.id, &group_label)
-            .err();
-        self.error_handler.push_error(err);
     }
 
     #[fast]
-    fn pop_debug_group(&self) {
-        let err = self.instance.command_encoder_pop_debug_group(self.id).err();
-        self.error_handler.push_error(err);
+    fn pop_debug_group(&self) -> Result<(), wgpu_core::command::CommandEncoderError> {
+        self.instance.command_encoder_pop_debug_group(self.id)
     }
 
-    fn insert_debug_marker(&self, #[webidl] marker_label: String) {
-        let err = self
+    fn insert_debug_marker(&self, #[webidl] marker_label: String) -> Result<(), wgpu_core::command::CommandEncoderError> {
+        self
             .instance
             .command_encoder_insert_debug_marker(self.id, &marker_label)
-            .err();
-        self.error_handler.push_error(err);
     }
 }
 

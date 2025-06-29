@@ -93,7 +93,7 @@ static SHARED_USAGE_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::
                     | TextureUsages::TEXTURE_BINDING
                     | TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[TextureFormat::Rgba8UnormSrgb],
-            });
+            }).unwrap();
             let _view = texture.create_view(&TextureViewDescriptor {
                 aspect: TextureAspect::All,
                 format: Some(view_format),

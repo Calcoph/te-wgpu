@@ -1,5 +1,8 @@
+use core::fmt::Display;
+
 use alloc::borrow::ToOwned as _;
 
+use wgc::{device::queue::QueueWriteError, resource::{CreateBufferError, CreateTextureError}};
 use wgt::TextureDataOrder;
 
 /// Describes a [Buffer](crate::Buffer) when allocating.

@@ -201,7 +201,8 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("u64_mul_u32"),
             source: wgpu::ShaderSource::Wgsl(full_source.into()),
-        });
+        })
+        .unwrap();
 
     let pipeline = ctx
         .device
@@ -212,7 +213,8 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
             entry_point: None,
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             cache: None,
-        });
+        })
+        .unwrap();
 
     let input_buffer = ctx
         .device
@@ -220,7 +222,8 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
             label: Some("Input Buffer"),
             contents: inputs,
             usage: wgpu::BufferUsages::STORAGE,
-        });
+        })
+        .unwrap();
 
     let output_size = (size_of::<Uint96>() * inputs.len()) as u64;
 
@@ -229,16 +232,16 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
         size: output_size,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let pulldown_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Pulldown Buffer"),
         size: output_size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
-    let bgl = pipeline.get_bind_group_layout(0);
+    let bgl = pipeline.get_bind_group_layout(0).unwrap();
 
     let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("Bind Group"),
@@ -253,29 +256,30 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
                 resource: output_buffer.as_entire_binding(),
             },
         ],
-    });
+    }).unwrap();
 
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Compute Encoder"),
-        });
+        })
+        .unwrap();
 
     let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: Some("Compute Pass"),
         timestamp_writes: None,
-    });
+    }).unwrap();
 
-    cpass.set_pipeline(&pipeline);
-    cpass.set_bind_group(0, &bg, &[]);
-    cpass.dispatch_workgroups(inputs.len().div_ceil(256) as u32, 1, 1);
+    cpass.set_pipeline(&pipeline).unwrap();
+    cpass.set_bind_group(0, &bg, &[]).unwrap();
+    cpass.dispatch_workgroups(inputs.len().div_ceil(256) as u32, 1, 1).unwrap();
 
     drop(cpass);
 
-    encoder.copy_buffer_to_buffer(&output_buffer, 0, &pulldown_buffer, 0, output_size);
+    encoder.copy_buffer_to_buffer(&output_buffer, 0, &pulldown_buffer, 0, output_size).unwrap();
 
-    ctx.queue.submit([encoder.finish()]);
-    pulldown_buffer.map_async(wgpu::MapMode::Read, .., |_| {});
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
+    pulldown_buffer.map_async(wgpu::MapMode::Read, .., |_| {}).unwrap();
 
     ctx.device.poll(wgpu::PollType::Wait).unwrap();
 

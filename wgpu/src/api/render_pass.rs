@@ -481,14 +481,14 @@ impl RenderPass<'_> {
     /// [`end_occlusion_query`](Self::end_occlusion_query).
     /// Occlusion queries may not be nested.
     pub fn begin_occlusion_query(&mut self, query_index: u32) -> Result<(), wgc::command::RenderPassError> {
-        self.inner.begin_occlusion_query(query_index);
+        self.inner.begin_occlusion_query(query_index)
     }
 
     /// End the occlusion query on this render pass. It can be started with
     /// [`begin_occlusion_query`](Self::begin_occlusion_query).
     /// Occlusion queries may not be nested.
     pub fn end_occlusion_query(&mut self) -> Result<(), wgc::command::RenderPassError> {
-        self.inner.end_occlusion_query();
+        self.inner.end_occlusion_query()
     }
 }
 
@@ -506,7 +506,7 @@ impl RenderPass<'_> {
     /// [`begin_pipeline_statistics_query`](Self::begin_pipeline_statistics_query).
     /// Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::RenderPassError> {
-        self.inner.end_pipeline_statistics_query();
+        self.inner.end_pipeline_statistics_query()
     }
 }
 

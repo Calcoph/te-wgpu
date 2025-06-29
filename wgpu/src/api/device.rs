@@ -1,3 +1,5 @@
+use std::boxed::Box;
+use std::string::String;
 use std::{error, fmt, sync::Arc};
 
 use parking_lot::Mutex;
@@ -186,9 +188,9 @@ impl Device {
     pub unsafe fn create_shader_module_passthrough(
         &self,
         desc: ShaderModuleDescriptorPassthrough<'_>,
-    ) -> ShaderModule {
-        let module = unsafe { self.inner.create_shader_module_passthrough(&desc) };
-        ShaderModule { inner: module }
+    ) -> Result<ShaderModule, CreateShaderModuleError> {
+        let module = unsafe { self.inner.create_shader_module_passthrough(&desc) }?;
+        Ok(ShaderModule { inner: module })
     }
 
     /// Creates an empty [`CommandEncoder`].

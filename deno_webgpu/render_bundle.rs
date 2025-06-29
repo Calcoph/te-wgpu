@@ -49,13 +49,11 @@ impl GPURenderBundleEncoder {
             label: crate::transform_label(descriptor.label.clone()),
         };
 
-        let (id, err) = self.instance.render_bundle_encoder_finish(
+        let id = self.instance.render_bundle_encoder_finish(
             self.encoder.borrow_mut().take().unwrap(),
             &wgpu_descriptor,
             None,
-        );
-
-        self.error_handler.push_error(err);
+        ).unwrap();
 
         GPURenderBundle {
             instance: self.instance.clone(),

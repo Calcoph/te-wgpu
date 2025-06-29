@@ -307,7 +307,7 @@ impl Buffer {
         mode: MapMode,
         bounds: S,
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
-    ) {
+    ) -> Result<(), wgc::resource::BufferAccessError> {
         self.slice(bounds).map_async(mode, callback)
     }
 

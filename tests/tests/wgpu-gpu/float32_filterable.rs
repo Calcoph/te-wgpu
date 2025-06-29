@@ -1,6 +1,6 @@
 //! Tests for FLOAT32_FILTERABLE feature.
 
-use wgpu::core::binding_model::CreateBindGroupLayoutError;
+use wgpu::wgc::binding_model::CreateBindGroupLayoutError;
 use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters};
 
 fn create_texture_binding(

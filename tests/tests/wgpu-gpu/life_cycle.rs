@@ -50,14 +50,14 @@ static BUFFER_DESTROY: GpuTestConfiguration =
         let buffer = ctx.device.create_buffer(&descriptor).unwrap();
         buffer.destroy();
         ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
-        let buffer = ctx.device.create_buffer(&descriptor);
+        let buffer = ctx.device.create_buffer(&descriptor).unwrap();
         buffer.destroy();
         {
             let buffer = ctx.device.create_buffer(&descriptor).unwrap();
             buffer.destroy();
             let buffer = ctx.device.create_buffer(&descriptor).unwrap();
             buffer.destroy();
-            let buffer = ctx.device.create_buffer(&descriptor);
+            let buffer = ctx.device.create_buffer(&descriptor).unwrap();
             ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
             buffer.destroy();
         }

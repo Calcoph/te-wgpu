@@ -98,7 +98,7 @@ impl Example {
         }
 
         let uniform_alignment = device.limits().min_uniform_buffer_offset_alignment;
-        queue.write_buffer(&self.local_buffer, 0, bytemuck::cast_slice(&self.bunnies));
+        queue.write_buffer(&self.local_buffer, 0, bytemuck::cast_slice(&self.bunnies)).unwrap();
 
         let mut encoder = device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())

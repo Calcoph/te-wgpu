@@ -256,40 +256,43 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("BLAS 3"),
-        });
+        })
+        .unwrap();
 
-    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []).unwrap();
 
     let mut encoder_blas2 = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("BLAS 4"),
-        });
+        })
+        .unwrap();
 
-    encoder_blas2.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+    encoder_blas2.build_acceleration_structures([&as_ctx.blas_build_entry()], []).unwrap();
 
     let mut encoder_tlas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("TLAS 2"),
-        });
+        })
+        .unwrap();
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
 
     ctx.queue.submit([
-        encoder_blas.finish(),
-        encoder_tlas.finish(),
-        encoder_blas2.finish(),
-    ]);
+        encoder_blas.finish().unwrap(),
+        encoder_tlas.finish().unwrap(),
+        encoder_blas2.finish().unwrap(),
+    ]).unwrap();
 
     let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: None,
-        layout: &compute_pipeline.get_bind_group_layout(0),
+        layout: &compute_pipeline.get_bind_group_layout(0).unwrap(),
         entries: &[BindGroupEntry {
             binding: 0,
             resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
         }],
-    });
+    }).unwrap();
 
     //
     // Use TLAS
@@ -297,21 +300,21 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
 
     let mut encoder_compute = ctx
         .device
-        .create_command_encoder(&CommandEncoderDescriptor::default());
+        .create_command_encoder(&CommandEncoderDescriptor::default())
+        .unwrap();
     {
         let mut pass = encoder_compute.begin_compute_pass(&ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        });
-        pass.set_pipeline(&compute_pipeline);
-        pass.set_bind_group(0, Some(&bind_group), &[]);
-        pass.dispatch_workgroups(1, 1, 1)
+        }).unwrap();
+        pass.set_pipeline(&compute_pipeline).unwrap();
+        pass.set_bind_group(0, Some(&bind_group), &[]).unwrap();
+        pass.dispatch_workgroups(1, 1, 1).unwrap()
     }
 
     fail(
-        &ctx.device,
         || {
-            ctx.queue.submit(Some(encoder_compute.finish()));
+            ctx.queue.submit(Some(encoder_compute.finish().unwrap())).map_err(|(_, err)| err)
         },
         None,
     );
@@ -469,20 +472,23 @@ fn only_blas_vertex_return(ctx: TestingContext) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("BLAS 1"),
-        });
+        })
+        .unwrap();
 
-    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []).unwrap();
 
     let mut encoder_tlas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("TLAS 1"),
-        });
+        })
+        .unwrap();
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
 
     ctx.queue
-        .submit([encoder_blas.finish(), encoder_tlas.finish()]);
+        .submit([encoder_blas.finish().unwrap(), encoder_tlas.finish().unwrap()])
+        .unwrap();
 
     // Create a bind-group containing a TLAS with a bind-group layout that requires vertex return,
     // because only the BLAS and not the TLAS has `AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`
@@ -500,11 +506,10 @@ fn only_blas_vertex_return(ctx: TestingContext) {
                     },
                     count: None,
                 }],
-            });
+            }).unwrap();
         fail(
-            &ctx.device,
             || {
-                let _ = ctx.device.create_bind_group(&BindGroupDescriptor {
+                ctx.device.create_bind_group(&BindGroupDescriptor {
                     label: None,
                     layout: &bind_group_layout,
                     entries: &[BindGroupEntry {
@@ -513,7 +518,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
                             as_ctx.tlas_package.tlas(),
                         ),
                     }],
-                });
+                })
             },
             None,
         );
@@ -528,7 +533,8 @@ fn only_blas_vertex_return(ctx: TestingContext) {
 
         let shader = ctx
             .device
-            .create_shader_module(include_wgsl!("shader.wgsl"));
+            .create_shader_module(include_wgsl!("shader.wgsl"))
+            .unwrap();
         let compute_pipeline = ctx
             .device
             .create_compute_pipeline(&ComputePipelineDescriptor {
@@ -538,16 +544,17 @@ fn only_blas_vertex_return(ctx: TestingContext) {
                 entry_point: Some("basic_usage"),
                 compilation_options: Default::default(),
                 cache: None,
-            });
+            })
+            .unwrap();
 
         let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
             label: None,
-            layout: &compute_pipeline.get_bind_group_layout(0),
+            layout: &compute_pipeline.get_bind_group_layout(0).unwrap(),
             entries: &[BindGroupEntry {
                 binding: 0,
                 resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
             }],
-        });
+        }).unwrap();
 
         //
         // Use TLAS
@@ -555,18 +562,19 @@ fn only_blas_vertex_return(ctx: TestingContext) {
 
         let mut encoder_compute = ctx
             .device
-            .create_command_encoder(&CommandEncoderDescriptor::default());
+            .create_command_encoder(&CommandEncoderDescriptor::default())
+            .unwrap();
         {
             let mut pass = encoder_compute.begin_compute_pass(&ComputePassDescriptor {
                 label: None,
                 timestamp_writes: None,
-            });
-            pass.set_pipeline(&compute_pipeline);
-            pass.set_bind_group(0, Some(&bind_group), &[]);
-            pass.dispatch_workgroups(1, 1, 1)
+            }).unwrap();
+            pass.set_pipeline(&compute_pipeline).unwrap();
+            pass.set_bind_group(0, Some(&bind_group), &[]).unwrap();
+            pass.dispatch_workgroups(1, 1, 1).unwrap()
         }
 
-        ctx.queue.submit(Some(encoder_compute.finish()));
+        ctx.queue.submit(Some(encoder_compute.finish().unwrap())).unwrap();
     }
 }
 
@@ -597,20 +605,20 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("BLAS 1"),
-        });
+        }).unwrap();
 
-    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []).unwrap();
 
     let mut encoder_tlas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("TLAS 1"),
-        });
+        })
+        .unwrap();
 
     fail(
-        &ctx.device,
         || {
-            encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+            encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package])
         },
         None,
     );

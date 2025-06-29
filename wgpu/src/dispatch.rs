@@ -15,6 +15,7 @@
 use crate::{Blas, Tlas, WasmNotSend, WasmNotSendSync};
 
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
+use wgc::{binding_model::{self, CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError}, command::{self, CommandEncoderError, ComputePassError}, device::{queue::{QueueSubmitError, QueueWriteError}, DeviceError}, pipeline::{self, CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError}, present, ray_tracing::{CreateBlasError, CreateTlasError}, resource::{self, CreateBufferError, CreateTextureError, CreateTextureViewError}};
 use core::{any::Any, fmt::Debug, future::Future, hash::Hash, ops::Range, pin::Pin};
 
 #[cfg(custom)]
@@ -312,7 +313,7 @@ pub trait CommandEncoderInterface: CommonTraits {
         &self,
         blas: &mut dyn Iterator<Item = &'a Blas>,
         tlas: &mut dyn Iterator<Item = &'a Tlas>,
-    );
+    ) -> Result<(), wgc::ray_tracing::BuildAccelerationStructureError>;
 
     fn build_acceleration_structures_unsafe_tlas<'a>(
         &self,
@@ -329,7 +330,7 @@ pub trait CommandEncoderInterface: CommonTraits {
         &mut self,
         buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,
         texture_transitions: &mut dyn Iterator<Item = wgt::TextureTransition<&'a DispatchTexture>>,
-    );
+    ) -> Result<(), command::transition_resources::TransitionResourcesError>;
 }
 pub trait ComputePassInterface: CommonTraits {
     fn set_pipeline(&mut self, pipeline: &DispatchComputePipeline) -> Result<(), ComputePassError>;
@@ -505,7 +506,7 @@ pub trait SurfaceInterface: CommonTraits {
         Option<DispatchTexture>,
         crate::SurfaceStatus,
         DispatchSurfaceOutputDetail,
-    ), SurfaceError>;
+    ), present::SurfaceError>;
 }
 
 pub trait SurfaceOutputDetailInterface: CommonTraits {

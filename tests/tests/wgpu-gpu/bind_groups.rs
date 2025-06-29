@@ -35,7 +35,7 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
         size: 8,
         usage: BufferUsages::UNIFORM | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let bind_group_layout = ctx
         .device
@@ -51,7 +51,8 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
                 },
                 count: None,
             }],
-        });
+        })
+        .unwrap();
 
     let pipeline_layout = ctx
         .device
@@ -59,7 +60,8 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
-        });
+        })
+        .unwrap();
 
     let pipelines = SHADER_SRC
         .iter()
@@ -70,7 +72,8 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
                 .create_shader_module(wgpu::ShaderModuleDescriptor {
                     label: Some(&format!("shader{i}")),
                     source: wgpu::ShaderSource::Wgsl(shader_src.into()),
-                });
+                })
+                .unwrap();
 
             ctx.device
                 .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -81,13 +84,15 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
                     compilation_options: Default::default(),
                     cache: None,
                 })
+                .unwrap()
         })
         .collect::<Vec<_>>();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .unwrap();
+    let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()).unwrap();
 
     for (i, pipeline) in pipelines.iter().enumerate() {
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -101,17 +106,17 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
                     size: Some(NonZeroU64::new(u64::try_from(8 - 4 * i).unwrap()).unwrap()),
                 }),
             }],
-        });
+        }).unwrap();
 
-        cpass.set_pipeline(pipeline);
-        cpass.set_bind_group(0, &bind_group, &[0]);
-        cpass.dispatch_workgroups(1, 1, 1);
+        cpass.set_pipeline(pipeline).unwrap();
+        cpass.set_bind_group(0, &bind_group, &[0]).unwrap();
+        cpass.dispatch_workgroups(1, 1, 1).unwrap();
     }
     drop(cpass);
 
     let data = [0u8; 8];
-    ctx.queue.write_buffer(&buffer, 0, &data);
-    ctx.queue.submit(Some(encoder.finish()));
+    ctx.queue.write_buffer(&buffer, 0, &data).unwrap();
+    ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     ctx.device.poll(PollType::Wait).unwrap();
 }
@@ -133,26 +138,25 @@ fn try_sampler_nonfiltering_layout(
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                 count: None,
             }],
-        });
+        }).unwrap();
 
-    let sampler = ctx.device.create_sampler(descriptor);
+    let sampler = ctx.device.create_sampler(descriptor).unwrap();
 
     let create_bind_group = || {
-        let _ = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label,
             layout: &bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Sampler(&sampler),
             }],
-        });
+        })
     };
 
     if good {
-        wgpu_test::valid(&ctx.device, create_bind_group);
+        wgpu_test::valid(create_bind_group);
     } else {
         wgpu_test::fail(
-            &ctx.device,
             create_bind_group,
             Some("but given a sampler with filtering"),
         );

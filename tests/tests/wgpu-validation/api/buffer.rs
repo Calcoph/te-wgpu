@@ -11,13 +11,14 @@ fn destroyed_buffer() {
         size: 1024,
         usage: wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-    encoder.clear_buffer(&buffer, 0, None);
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+        .unwrap();
+    encoder.clear_buffer(&buffer, 0, None).unwrap();
 
     buffer.destroy();
 
-    queue.submit([encoder.finish()]);
+    queue.submit([encoder.finish().unwrap()]).unwrap();
 }

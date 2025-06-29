@@ -165,7 +165,7 @@ impl crate::framework::Example for Example {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
             view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
-        });
+        }).unwrap();
 
         let rt_view = rt_target.create_view(&wgpu::TextureViewDescriptor {
             label: None,
@@ -177,7 +177,7 @@ impl crate::framework::Example for Example {
             mip_level_count: None,
             base_array_layer: 0,
             array_layer_count: None,
-        });
+        }).unwrap();
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("rt_sampler"),
@@ -188,7 +188,7 @@ impl crate::framework::Example for Example {
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
-        });
+        }).unwrap();
 
         let uniforms = {
             let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
@@ -209,7 +209,7 @@ impl crate::framework::Example for Example {
             label: Some("Uniform Buffer"),
             contents: bytemuck::cast_slice(&[uniforms]),
             usage: wgpu::BufferUsages::UNIFORM,
-        });
+        }).unwrap();
 
         let (vertex_data, index_data) = create_vertices();
 
@@ -217,13 +217,13 @@ impl crate::framework::Example for Example {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
-        });
+        }).unwrap();
 
         let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&index_data),
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
-        });
+        }).unwrap();
 
         let blas_geo_size_desc = wgpu::BlasTriangleGeometrySizeDescriptor {
             vertex_format: wgpu::VertexFormat::Float32x3,
@@ -243,7 +243,7 @@ impl crate::framework::Example for Example {
             wgpu::BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_geo_size_desc.clone()],
             },
-        );
+        ).unwrap();
 
         let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: None,
@@ -251,17 +251,17 @@ impl crate::framework::Example for Example {
                 | wgpu::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: side_count * side_count,
-        });
+        }).unwrap();
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rt_computer"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        }).unwrap();
 
         let blit_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("blit"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
-        });
+        }).unwrap();
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("rt"),
@@ -270,9 +270,9 @@ impl crate::framework::Example for Example {
             entry_point: None,
             compilation_options: Default::default(),
             cache: None,
-        });
+        }).unwrap();
 
-        let compute_bind_group_layout = compute_pipeline.get_bind_group_layout(0);
+        let compute_bind_group_layout = compute_pipeline.get_bind_group_layout(0).unwrap();
 
         let compute_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -291,7 +291,7 @@ impl crate::framework::Example for Example {
                     resource: wgpu::BindingResource::AccelerationStructure(&tlas),
                 },
             ],
-        });
+        }).unwrap();
 
         let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("blit"),
@@ -316,9 +316,9 @@ impl crate::framework::Example for Example {
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
             cache: None,
-        });
+        }).unwrap();
 
-        let blit_bind_group_layout = blit_pipeline.get_bind_group_layout(0);
+        let blit_bind_group_layout = blit_pipeline.get_bind_group_layout(0).unwrap();
 
         let blit_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -333,7 +333,7 @@ impl crate::framework::Example for Example {
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
-        });
+        }).unwrap();
 
         let mut tlas_package = wgpu::TlasPackage::new(tlas);
 
@@ -358,7 +358,7 @@ impl crate::framework::Example for Example {
         }
 
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
         encoder.build_acceleration_structures(
             iter::once(&wgpu::BlasBuildEntry {
@@ -377,9 +377,9 @@ impl crate::framework::Example for Example {
                 ]),
             }),
             iter::once(&tlas_package),
-        );
+        ).unwrap();
 
-        queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
         let start_inst = Instant::now();
 
@@ -407,8 +407,6 @@ impl crate::framework::Example for Example {
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        device.push_error_scope(wgpu::ErrorFilter::Validation);
-
         let anim_time = self.start_inst.elapsed().as_secs_f64() as f32;
 
         self.tlas_package[0].as_mut().unwrap().transform =
@@ -427,18 +425,18 @@ impl crate::framework::Example for Example {
             ));
 
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }).unwrap();
 
-        encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas_package));
+        encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas_package)).unwrap();
 
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
                 timestamp_writes: None,
-            });
-            cpass.set_pipeline(&self.compute_pipeline);
-            cpass.set_bind_group(0, Some(&self.compute_bind_group), &[]);
-            cpass.dispatch_workgroups(self.rt_target.width() / 8, self.rt_target.height() / 8, 1);
+            }).unwrap();
+            cpass.set_pipeline(&self.compute_pipeline).unwrap();
+            cpass.set_bind_group(0, Some(&self.compute_bind_group), &[]).unwrap();
+            cpass.dispatch_workgroups(self.rt_target.width() / 8, self.rt_target.height() / 8, 1).unwrap();
         }
 
         {
@@ -455,14 +453,14 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
+            }).unwrap();
 
-            rpass.set_pipeline(&self.blit_pipeline);
-            rpass.set_bind_group(0, Some(&self.blit_bind_group), &[]);
-            rpass.draw(0..3, 0..1);
+            rpass.set_pipeline(&self.blit_pipeline).unwrap();
+            rpass.set_bind_group(0, Some(&self.blit_bind_group), &[]).unwrap();
+            rpass.draw(0..3, 0..1).unwrap();
         }
 
-        queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish().unwrap())).unwrap();
     }
 }
 

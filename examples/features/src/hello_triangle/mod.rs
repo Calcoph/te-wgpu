@@ -137,7 +137,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             rpass.draw(0..3, 0..1).unwrap();
                         }
 
-                        queue.submit(Some(encoder.finish()));
+                        queue.submit(Some(encoder.finish().unwrap())).unwrap();
                         window.pre_present_notify();
                         frame.present();
                     }

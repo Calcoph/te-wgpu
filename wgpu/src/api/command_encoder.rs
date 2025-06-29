@@ -55,7 +55,7 @@ static_assertions::assert_impl_all!(TexelCopyTextureInfo<'_>: Send, Sync);
 
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
-    pub fn finish(mut self) -> Result<CommandBuffer, CommandEncoderError> {
+    pub fn finish(mut self) -> Result<CommandBuffer, wgc::command::CommandEncoderError> {
         let buffer = self.inner.finish()?;
 
         Ok(CommandBuffer { buffer })
@@ -74,7 +74,7 @@ impl CommandEncoder {
     pub fn begin_render_pass<'encoder>(
         &'encoder mut self,
         desc: &RenderPassDescriptor<'_>,
-    ) -> Result<RenderPass<'encoder>, CommandEncoderError> {
+    ) -> Result<RenderPass<'encoder>, wgc::command::CommandEncoderError> {
         let rpass = self.inner.begin_render_pass(desc)?;
         Ok(
         RenderPass {
@@ -97,7 +97,7 @@ impl CommandEncoder {
     pub fn begin_compute_pass<'encoder>(
         &'encoder mut self,
         desc: &ComputePassDescriptor<'_>,
-    ) -> Result<ComputePass<'encoder>, CommandEncoderError> {
+    ) -> Result<ComputePass<'encoder>, wgc::command::CommandEncoderError> {
         let cpass = self.inner.begin_compute_pass(desc)?;
         Ok(
         ComputePass {
@@ -203,17 +203,17 @@ impl CommandEncoder {
     }
 
     /// Inserts debug marker.
-    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), CommandEncoderError> {
+    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::CommandEncoderError> {
         self.inner.insert_debug_marker(label)
     }
 
     /// Start record commands and group it into debug marker group.
-    pub fn push_debug_group(&mut self, label: &str) -> Result<(), CommandEncoderError> {
+    pub fn push_debug_group(&mut self, label: &str) -> Result<(), wgc::command::CommandEncoderError> {
         self.inner.push_debug_group(label)
     }
 
     /// Stops command recording and creates debug group.
-    pub fn pop_debug_group(&mut self) -> Result<(), CommandEncoderError> {
+    pub fn pop_debug_group(&mut self) -> Result<(), wgc::command::CommandEncoderError> {
         self.inner.pop_debug_group()
     }
 
@@ -301,7 +301,7 @@ impl CommandEncoder {
         &self,
         blas: impl IntoIterator<Item = &'a Blas>,
         tlas: impl IntoIterator<Item = &'a Tlas>,
-    ) {
+    ) -> Result<(), wgc::ray_tracing::BuildAccelerationStructureError> {
         self.inner
             .mark_acceleration_structures_built(&mut blas.into_iter(), &mut tlas.into_iter())
     }
@@ -418,7 +418,7 @@ impl CommandEncoder {
         &mut self,
         buffer_transitions: impl Iterator<Item = wgt::BufferTransition<&'a Buffer>>,
         texture_transitions: impl Iterator<Item = wgt::TextureTransition<&'a Texture>>,
-    ) {
+    ) -> Result<(), wgc::command::transition_resources::TransitionResourcesError> {
         self.inner.transition_resources(
             &mut buffer_transitions.map(|t| wgt::BufferTransition {
                 buffer: &t.buffer.inner,
@@ -429,6 +429,6 @@ impl CommandEncoder {
                 selector: t.selector,
                 state: t.state,
             }),
-        );
+        )
     }
 }

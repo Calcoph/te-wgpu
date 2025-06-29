@@ -79,11 +79,10 @@ impl GPUCanvasContext {
 
         let device = configuration.device;
 
-        let err = device
+        device
             .instance
-            .surface_configure(self.surface_id, device.id, &conf);
-
-        device.error_handler.push_error(err);
+            .surface_configure(self.surface_id, device.id, &conf)
+            .unwrap();
 
         self.config.borrow_mut().replace(Configuration {
             device,

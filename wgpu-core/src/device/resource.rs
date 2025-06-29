@@ -806,10 +806,7 @@ impl Device {
             ) {
             Ok(bg) => Snatchable::new(bg),
             Err(e) => {
-                return (
-                    Fallible::Invalid(Arc::new(desc.label.to_string())),
-                    Some(e.into()),
-                )
+                return Err(e.into())
             }
         };
 

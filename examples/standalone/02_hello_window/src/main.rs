@@ -65,7 +65,7 @@ impl State {
             desired_maximum_frame_latency: 2,
             present_mode: wgpu::PresentMode::AutoVsync,
         };
-        self.surface.configure(&self.device, &surface_config);
+        self.surface.configure(&self.device, &surface_config).unwrap();
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -80,6 +80,7 @@ impl State {
         let surface_texture = self
             .surface
             .get_current_texture()
+            .unwrap()
             .expect("failed to acquire next swapchain texture");
         let texture_view = surface_texture
             .texture
@@ -88,10 +89,10 @@ impl State {
                 // might not be "gamma correct".
                 format: Some(self.surface_format.add_srgb_suffix()),
                 ..Default::default()
-            });
+            }).unwrap();
 
         // Renders a GREEN screen
-        let mut encoder = self.device.create_command_encoder(&Default::default());
+        let mut encoder = self.device.create_command_encoder(&Default::default()).unwrap();
         // Create the renderpass which will clear the screen.
         let renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -106,7 +107,7 @@ impl State {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        });
+        }).unwrap();
 
         // If you wanted to call any drawing commands, they would go here.
 
@@ -114,7 +115,7 @@ impl State {
         drop(renderpass);
 
         // Submit the command in the queue to execute
-        self.queue.submit([encoder.finish()]);
+        self.queue.submit([encoder.finish().unwrap()]).unwrap();
         self.window.pre_present_notify();
         surface_texture.present();
     }

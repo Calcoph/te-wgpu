@@ -197,7 +197,7 @@ static NO_TARGETLESS_RENDER: GpuTestConfiguration = GpuTestConfiguration::new()
                             cache: None,
                         })?;
                 }
-                Result::<_, wgpu::core::pipeline::CreateRenderPipelineError>::Ok(())
+                Result::<_, wgpu::wgc::pipeline::CreateRenderPipelineError>::Ok(())
             },
             Some(concat!(
                 "At least one color attachment or depth-stencil attachment was expected, ",

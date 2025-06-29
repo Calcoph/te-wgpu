@@ -20,7 +20,7 @@ fn destroyed_texture() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
-    });
+    }).unwrap();
     let texture_dst = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("dst"),
         size,
@@ -30,10 +30,11 @@ fn destroyed_texture() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
-    });
+    }).unwrap();
 
     let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+        .unwrap();
     encoder.copy_texture_to_texture(
         wgpu::TexelCopyTextureInfo {
             texture: &texture_src,
@@ -48,9 +49,9 @@ fn destroyed_texture() {
             aspect: wgpu::TextureAspect::All,
         },
         size,
-    );
+    ).unwrap();
 
     texture_dst.destroy();
 
-    queue.submit([encoder.finish()]);
+    queue.submit([encoder.finish().unwrap()]).unwrap();
 }

@@ -1,4 +1,4 @@
-use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 use core::mem::ManuallyDrop;
 
 use crate::api_log;

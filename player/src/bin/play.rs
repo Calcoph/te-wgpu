@@ -86,11 +86,7 @@ fn main() {
             log::info!("Picked '{}'", info.name);
             let device_id = wgc::id::Id::zip(0, 1);
             let queue_id = wgc::id::Id::zip(0, 1);
-            let res =
-                global.adapter_request_device(adapter, &desc, Some(device_id), Some(queue_id)).unwrap();
-            if let Err(e) = res {
-                panic!("{e:?}");
-            }
+            global.adapter_request_device(adapter, &desc, Some(device_id), Some(queue_id)).unwrap();
             (device_id, queue_id)
         }
         _ => panic!("Expected Action::Init"),
