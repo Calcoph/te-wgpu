@@ -128,6 +128,8 @@ serde = ["wgpu-core?/serde", "wgpu-types/serde"]
 ## [dxc]: https://github.com/Microsoft/DirectXShaderCompiler
 static-dxc = ["wgpu-core?/static-dxc"]
 
+skip_check_buffer_bounds = []
+
 #! ### Other
 # --------------------------------------------------------------------
 
