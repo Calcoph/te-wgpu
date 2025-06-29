@@ -202,6 +202,7 @@
 //!
 //! [wiki-debug]: https://github.com/gfx-rs/wgpu/wiki/Debugging-wgpu-Applications
 
+#![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(
     // this happens on the GL backend, where it is both thread safe and non-thread safe in the same code.
@@ -226,7 +227,10 @@
     clippy::pattern_type_mismatch,
 )]
 #![warn(
+    clippy::alloc_instead_of_core,
     clippy::ptr_as_ptr,
+    clippy::std_instead_of_alloc,
+    clippy::std_instead_of_core,
     trivial_casts,
     trivial_numeric_casts,
     unsafe_op_in_unsafe_fn,
@@ -234,17 +238,25 @@
     unused_qualifications
 )]
 
+extern crate alloc;
+extern crate wgpu_types as wgt;
+// Each of these backends needs `std` in some fashion; usually `std::thread` functions.
+#[cfg(any(dx12, gles_with_std, metal, vulkan))]
+#[macro_use]
+extern crate std;
+
 /// DirectX12 API internals.
 #[cfg(dx12)]
 pub mod dx12;
-/// A dummy API implementation.
-pub mod empty;
 /// GLES API internals.
 #[cfg(gles)]
 pub mod gles;
 /// Metal API internals.
 #[cfg(metal)]
 pub mod metal;
+/// A dummy API implementation.
+// TODO(https://github.com/gfx-rs/wgpu/issues/7120): this should have a cfg
+pub mod noop;
 /// Vulkan API internals.
 #[cfg(vulkan)]
 pub mod vulkan;
@@ -253,11 +265,11 @@ pub mod auxil;
 pub mod api {
     #[cfg(dx12)]
     pub use super::dx12::Api as Dx12;
-    pub use super::empty::Api as Empty;
     #[cfg(gles)]
     pub use super::gles::Api as Gles;
     #[cfg(metal)]
     pub use super::metal::Api as Metal;
+    pub use super::noop::Api as Noop;
     #[cfg(vulkan)]
     pub use super::vulkan::Api as Vulkan;
 }
@@ -273,13 +285,16 @@ pub use dynamic::{
     DynShaderModule, DynSurface, DynSurfaceTexture, DynTexture, DynTextureView,
 };
 
-use std::{
-    borrow::{Borrow, Cow},
+#[allow(unused)]
+use alloc::boxed::Box;
+use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
+use core::{
+    borrow::Borrow,
+    error::Error,
     fmt,
     num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
-    sync::Arc,
 };
 
 use bitflags::bitflags;
@@ -289,19 +304,24 @@ use wgt::WasmNotSendSync;
 
 // - Vertex + Fragment
 // - Compute
-pub const MAX_CONCURRENT_SHADER_STAGES: usize = 2;
+// Task + Mesh + Fragment
+pub const MAX_CONCURRENT_SHADER_STAGES: usize = 3;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
 pub const MAX_COLOR_ATTACHMENTS: usize = 8;
 pub const MAX_MIP_LEVELS: u32 = 16;
 /// Size of a single occlusion/timestamp query, when copied into a buffer, in bytes.
+/// cbindgen:ignore
 pub const QUERY_SIZE: wgt::BufferAddress = 8;
 
 pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
-pub type AtomicFenceValue = std::sync::atomic::AtomicU64;
+#[cfg(supports_64bit_atomics)]
+pub type AtomicFenceValue = core::sync::atomic::AtomicU64;
+#[cfg(not(supports_64bit_atomics))]
+pub type AtomicFenceValue = portable_atomic::AtomicU64;
 
 /// A callback to signal that wgpu is no longer using a resource.
 #[cfg(any(gles, vulkan))]
@@ -413,7 +433,7 @@ pub struct InstanceError {
 
     /// Underlying error value, if any is available.
     #[source]
-    source: Option<Arc<dyn std::error::Error + Send + Sync + 'static>>,
+    source: Option<Arc<dyn Error + Send + Sync + 'static>>,
 }
 
 impl InstanceError {
@@ -425,10 +445,7 @@ impl InstanceError {
         }
     }
     #[allow(dead_code)] // may be unused on some platforms
-    pub(crate) fn with_source(
-        message: String,
-        source: impl std::error::Error + Send + Sync + 'static,
-    ) -> Self {
+    pub(crate) fn with_source(message: String, source: impl Error + Send + Sync + 'static) -> Self {
         Self {
             message,
             source: Some(Arc::new(source)),
@@ -581,13 +598,13 @@ pub trait Surface: WasmNotSendSync {
     ///
     /// [`texture`]: AcquiredSurfaceTexture::texture
     /// [`SurfaceTexture`]: Api::SurfaceTexture
-    /// [`borrow`]: std::borrow::Borrow::borrow
+    /// [`borrow`]: alloc::borrow::Borrow::borrow
     /// [`Texture`]: Api::Texture
     /// [`Fence`]: Api::Fence
     /// [`self.discard_texture`]: Surface::discard_texture
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<core::time::Duration>,
         fence: &<Self::A as Api>::Fence,
     ) -> Result<Option<AcquiredSurfaceTexture<Self::A>>, SurfaceError>;
 
@@ -708,7 +725,7 @@ pub trait Device: WasmNotSendSync {
 
     /// Creates a new buffer.
     ///
-    /// The initial usage is `BufferUses::empty()`.
+    /// The initial usage is `wgt::BufferUses::empty()`.
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
@@ -774,8 +791,8 @@ pub trait Device: WasmNotSendSync {
     /// - The returned [`BufferMapping::ptr`] must not be used after a call to
     ///   [`Device::unmap_buffer`].
     ///
-    /// [`MAP_READ`]: BufferUses::MAP_READ
-    /// [`MAP_WRITE`]: BufferUses::MAP_WRITE
+    /// [`MAP_READ`]: wgt::BufferUses::MAP_READ
+    /// [`MAP_WRITE`]: wgt::BufferUses::MAP_WRITE
     unsafe fn map_buffer(
         &self,
         buffer: &<Self::A as Api>::Buffer,
@@ -813,7 +830,7 @@ pub trait Device: WasmNotSendSync {
 
     /// Creates a new texture.
     ///
-    /// The initial usage for all subresources is `TextureUses::UNINITIALIZED`.
+    /// The initial usage for all subresources is `wgt::TextureUses::UNINITIALIZED`.
     unsafe fn create_texture(
         &self,
         desc: &TextureDescriptor,
@@ -884,6 +901,15 @@ pub trait Device: WasmNotSendSync {
             <Self::A as Api>::PipelineCache,
         >,
     ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
+    #[allow(clippy::type_complexity)]
+    unsafe fn create_mesh_pipeline(
+        &self,
+        desc: &MeshPipelineDescriptor<
+            <Self::A as Api>::PipelineLayout,
+            <Self::A as Api>::ShaderModule,
+            <Self::A as Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
     unsafe fn destroy_render_pipeline(&self, pipeline: <Self::A as Api>::RenderPipeline);
 
     #[allow(clippy::type_complexity)]
@@ -934,6 +960,8 @@ pub trait Device: WasmNotSendSync {
     /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
     /// returns immediately.
     ///
+    /// Returns `Ok(true)` on success and `Ok(false)` on timeout.
+    ///
     /// [`Fence`]: Api::Fence
     /// [`FencePool`]: vulkan/enum.Fence.html#variant.FencePool
     unsafe fn wait(
@@ -943,8 +971,23 @@ pub trait Device: WasmNotSendSync {
         timeout_ms: u32,
     ) -> Result<bool, DeviceError>;
 
-    unsafe fn start_capture(&self) -> bool;
-    unsafe fn stop_capture(&self);
+    /// Start a graphics debugger capture.
+    ///
+    /// # Safety
+    ///
+    /// See [`wgpu::Device::start_graphics_debugger_capture`][api] for more details.
+    ///
+    /// [api]: ../wgpu/struct.Device.html#method.start_graphics_debugger_capture
+    unsafe fn start_graphics_debugger_capture(&self) -> bool;
+
+    /// Stop a graphics debugger capture.
+    ///
+    /// # Safety
+    ///
+    /// See [`wgpu::Device::stop_graphics_debugger_capture`][api] for more details.
+    ///
+    /// [api]: ../wgpu/struct.Device.html#method.stop_graphics_debugger_capture
+    unsafe fn stop_graphics_debugger_capture(&self);
 
     #[allow(unused_variables)]
     unsafe fn pipeline_cache_get_data(
@@ -1198,7 +1241,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     /// Copy from an external image to an internal texture.
     /// Works with a single array layer.
-    /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
+    /// Note: `dst` current usage has to be `wgt::TextureUses::COPY_DST`.
     /// Note: the copy extent is in physical size (rounded to the block size)
     #[cfg(webgl)]
     unsafe fn copy_external_image_to_texture<T>(
@@ -1212,12 +1255,12 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     /// Copy from one texture to another.
     /// Works with a single array layer.
-    /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
+    /// Note: `dst` current usage has to be `wgt::TextureUses::COPY_DST`.
     /// Note: the copy extent is in physical size (rounded to the block size)
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &<Self::A as Api>::Texture,
-        src_usage: TextureUses,
+        src_usage: wgt::TextureUses,
         dst: &<Self::A as Api>::Texture,
         regions: T,
     ) where
@@ -1225,7 +1268,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     /// Copy from buffer to texture.
     /// Works with a single array layer.
-    /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
+    /// Note: `dst` current usage has to be `wgt::TextureUses::COPY_DST`.
     /// Note: the copy extent is in physical size (rounded to the block size)
     unsafe fn copy_buffer_to_texture<T>(
         &mut self,
@@ -1241,12 +1284,18 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &<Self::A as Api>::Texture,
-        src_usage: TextureUses,
+        src_usage: wgt::TextureUses,
         dst: &<Self::A as Api>::Buffer,
         regions: T,
     ) where
         T: Iterator<Item = BufferTextureCopy>;
 
+    unsafe fn copy_acceleration_structure_to_acceleration_structure(
+        &mut self,
+        src: &<Self::A as Api>::AccelerationStructure,
+        dst: &<Self::A as Api>::AccelerationStructure,
+        copy: wgt::AccelerationStructureCopy,
+    );
     // pass common
 
     /// Sets the bind group at `index` to `group`.
@@ -1433,6 +1482,26 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     );
+    unsafe fn draw_mesh_tasks(
+        &mut self,
+        group_count_x: u32,
+        group_count_y: u32,
+        group_count_z: u32,
+    );
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        buffer: &<Self::A as Api>::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    );
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        buffer: &<Self::A as Api>::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &<Self::A as Api>::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
+    );
 
     // compute passes
 
@@ -1506,6 +1575,12 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
         barrier: AccelerationStructureBarrier,
+    );
+    // modeled off dx12, because this is able to be polyfilled in vulkan as opposed to the other way round
+    unsafe fn read_acceleration_structure_compact_size(
+        &mut self,
+        acceleration_structure: &<Self::A as Api>::AccelerationStructure,
+        buf: &<Self::A as Api>::Buffer,
     );
 }
 
@@ -1660,99 +1735,11 @@ bitflags!(
     }
 );
 
-bitflags::bitflags! {
-    /// Similar to `wgt::BufferUsages` but for internal use.
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct BufferUses: u16 {
-        /// The argument to a read-only mapping.
-        const MAP_READ = 1 << 0;
-        /// The argument to a write-only mapping.
-        const MAP_WRITE = 1 << 1;
-        /// The source of a hardware copy.
-        const COPY_SRC = 1 << 2;
-        /// The destination of a hardware copy.
-        const COPY_DST = 1 << 3;
-        /// The index buffer used for drawing.
-        const INDEX = 1 << 4;
-        /// A vertex buffer used for drawing.
-        const VERTEX = 1 << 5;
-        /// A uniform buffer bound in a bind group.
-        const UNIFORM = 1 << 6;
-        /// A read-only storage buffer used in a bind group.
-        const STORAGE_READ_ONLY = 1 << 7;
-        /// A read-write buffer used in a bind group.
-        const STORAGE_READ_WRITE = 1 << 8;
-        /// The indirect or count buffer in a indirect draw or dispatch.
-        const INDIRECT = 1 << 9;
-        /// A buffer used to store query results.
-        const QUERY_RESOLVE = 1 << 10;
-        const ACCELERATION_STRUCTURE_SCRATCH = 1 << 11;
-        const BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 12;
-        const TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 13;
-        /// The combination of states that a buffer may be in _at the same time_.
-        const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
-            Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
-            Self::STORAGE_READ_ONLY.bits() | Self::INDIRECT.bits() | Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits() | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits();
-        /// The combination of states that a buffer must exclusively be in.
-        const EXCLUSIVE = Self::MAP_WRITE.bits() | Self::COPY_DST.bits() | Self::STORAGE_READ_WRITE.bits() | Self::ACCELERATION_STRUCTURE_SCRATCH.bits();
-        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
-        /// If a usage is ordered, then if the buffer state doesn't change between draw calls, there
-        /// are no barriers needed for synchronization.
-        const ORDERED = Self::INCLUSIVE.bits() | Self::MAP_WRITE.bits();
-    }
-}
-
-bitflags::bitflags! {
-    /// Similar to `wgt::TextureUsages` but for internal use.
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct TextureUses: u16 {
-        /// The texture is in unknown state.
-        const UNINITIALIZED = 1 << 0;
-        /// Ready to present image to the surface.
-        const PRESENT = 1 << 1;
-        /// The source of a hardware copy.
-        const COPY_SRC = 1 << 2;
-        /// The destination of a hardware copy.
-        const COPY_DST = 1 << 3;
-        /// Read-only sampled or fetched resource.
-        const RESOURCE = 1 << 4;
-        /// The color target of a renderpass.
-        const COLOR_TARGET = 1 << 5;
-        /// Read-only depth stencil usage.
-        const DEPTH_STENCIL_READ = 1 << 6;
-        /// Read-write depth stencil usage
-        const DEPTH_STENCIL_WRITE = 1 << 7;
-        /// Read-only storage texture usage. Corresponds to a UAV in d3d, so is exclusive, despite being read only.
-        const STORAGE_READ_ONLY = 1 << 8;
-        /// Write-only storage texture usage.
-        const STORAGE_WRITE_ONLY = 1 << 9;
-        /// Read-write storage texture usage.
-        const STORAGE_READ_WRITE = 1 << 10;
-        /// Image atomic enabled storage
-        const STORAGE_ATOMIC = 1 << 11;
-        /// The combination of states that a texture may be in _at the same time_.
-        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
-        /// The combination of states that a texture must exclusively be in.
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
-        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
-        /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
-        /// are no barriers needed for synchronization.
-        const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits();
-
-        /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
-        const COMPLEX = 1 << 12;
-        /// Flag used by the wgpu-core texture tracker to say that the tracker does not know the state of the sub-resource.
-        /// This is different from UNINITIALIZED as that says the tracker does know, but the texture has not been initialized.
-        const UNKNOWN = 1 << 13;
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
     pub flags: wgt::InstanceFlags,
-    pub dx12_shader_compiler: wgt::Dx12Compiler,
-    pub gles_minor_version: wgt::Gles3MinorVersion,
+    pub backend_options: wgt::BackendOptions,
 }
 
 #[derive(Clone, Debug)]
@@ -1826,8 +1813,8 @@ pub struct SurfaceCapabilities {
 
     /// Supported texture usage flags.
     ///
-    /// Must have at least `TextureUses::COLOR_TARGET`
-    pub usage: TextureUses,
+    /// Must have at least `wgt::TextureUses::COLOR_TARGET`
+    pub usage: wgt::TextureUses,
 
     /// List of supported V-sync modes.
     ///
@@ -1865,7 +1852,7 @@ pub struct BufferMapping {
 pub struct BufferDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::BufferAddress,
-    pub usage: BufferUses,
+    pub usage: wgt::BufferUses,
     pub memory_flags: MemoryFlags,
 }
 
@@ -1877,7 +1864,7 @@ pub struct TextureDescriptor<'a> {
     pub sample_count: u32,
     pub dimension: wgt::TextureDimension,
     pub format: wgt::TextureFormat,
-    pub usage: TextureUses,
+    pub usage: wgt::TextureUses,
     pub memory_flags: MemoryFlags,
     /// Allows views of this texture to have a different format
     /// than the texture does.
@@ -1916,7 +1903,7 @@ pub struct TextureViewDescriptor<'a> {
     pub label: Label<'a>,
     pub format: wgt::TextureFormat,
     pub dimension: wgt::TextureViewDimension,
-    pub usage: TextureUses,
+    pub usage: wgt::TextureUses,
     pub range: wgt::ImageSubresourceRange,
 }
 
@@ -2028,7 +2015,7 @@ impl<'a, T: DynBuffer + ?Sized> Clone for BufferBinding<'a, T> {
 #[derive(Debug)]
 pub struct TextureBinding<'a, T: DynTextureView + ?Sized> {
     pub view: &'a T,
-    pub usage: TextureUses,
+    pub usage: wgt::TextureUses,
 }
 
 impl<'a, T: DynTextureView + ?Sized> Clone for TextureBinding<'a, T> {
@@ -2040,6 +2027,7 @@ impl<'a, T: DynTextureView + ?Sized> Clone for TextureBinding<'a, T> {
     }
 }
 
+/// cbindgen:ignore
 #[derive(Clone, Debug)]
 pub struct BindGroupEntry {
     pub binding: u32,
@@ -2081,6 +2069,7 @@ pub struct CommandEncoderDescriptor<'a, Q: DynQueue + ?Sized> {
 }
 
 /// Naga shader module.
+#[derive(Default)]
 pub struct NagaShader {
     /// Shader module IR.
     pub module: Cow<'static, naga::Module>,
@@ -2102,6 +2091,11 @@ impl fmt::Debug for NagaShader {
 #[allow(clippy::large_enum_variant)]
 pub enum ShaderInput<'a> {
     Naga(NagaShader),
+    Msl {
+        shader: String,
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+    },
     SpirV(&'a [u32]),
 }
 
@@ -2214,6 +2208,33 @@ pub struct RenderPipelineDescriptor<
     /// The cache which will be used and filled when compiling this pipeline
     pub cache: Option<&'a Pc>,
 }
+pub struct MeshPipelineDescriptor<
+    'a,
+    Pl: DynPipelineLayout + ?Sized,
+    M: DynShaderModule + ?Sized,
+    Pc: DynPipelineCache + ?Sized,
+> {
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    pub layout: &'a Pl,
+    pub task_stage: Option<ProgrammableStage<'a, M>>,
+    pub mesh_stage: ProgrammableStage<'a, M>,
+    /// The properties of the pipeline at the primitive assembly and rasterization level.
+    pub primitive: wgt::PrimitiveState,
+    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
+    pub depth_stencil: Option<wgt::DepthStencilState>,
+    /// The multi-sampling properties of the pipeline.
+    pub multisample: wgt::MultisampleState,
+    /// The fragment stage for this pipeline.
+    pub fragment_stage: Option<ProgrammableStage<'a, M>>,
+    /// The effect of draw calls on the color aspect of the output target.
+    pub color_targets: &'a [Option<wgt::ColorTargetState>],
+    /// If the pipeline will be used with a multiview render pass, this indicates how many array
+    /// layers the attachments will have.
+    pub multiview: Option<NonZeroU32>,
+    /// The cache which will be used and filled when compiling this pipeline
+    pub cache: Option<&'a Pc>,
+}
 
 #[derive(Debug, Clone)]
 pub struct SurfaceConfiguration {
@@ -2230,7 +2251,7 @@ pub struct SurfaceConfiguration {
     /// `SurfaceCapabilities::extents` range.
     pub extent: wgt::Extent3d,
     /// Allowed usage of surface textures,
-    pub usage: TextureUses,
+    pub usage: wgt::TextureUses,
     /// Allows views of swapchain texture to have a different format
     /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,
@@ -2253,14 +2274,14 @@ pub struct StateTransition<T> {
 #[derive(Debug, Clone)]
 pub struct BufferBarrier<'a, B: DynBuffer + ?Sized> {
     pub buffer: &'a B,
-    pub usage: StateTransition<BufferUses>,
+    pub usage: StateTransition<wgt::BufferUses>,
 }
 
 #[derive(Debug, Clone)]
 pub struct TextureBarrier<'a, T: DynTexture + ?Sized> {
     pub texture: &'a T,
     pub range: wgt::ImageSubresourceRange,
-    pub usage: StateTransition<TextureUses>,
+    pub usage: StateTransition<wgt::TextureUses>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2306,7 +2327,7 @@ pub struct Attachment<'a, T: DynTextureView + ?Sized> {
     pub view: &'a T,
     /// Contains either a single mutating usage as a target,
     /// or a valid combination of read-only usages.
-    pub usage: TextureUses,
+    pub usage: wgt::TextureUses,
 }
 
 #[derive(Clone, Debug)]
@@ -2397,6 +2418,7 @@ pub struct AccelerationStructureDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::BufferAddress,
     pub format: AccelerationStructureFormat,
+    pub allow_compaction: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -2483,6 +2505,11 @@ pub struct AccelerationStructureAABBs<'a, B: DynBuffer + ?Sized> {
     pub flags: AccelerationStructureGeometryFlags,
 }
 
+pub struct AccelerationStructureCopy {
+    pub copy_flags: wgt::AccelerationStructureCopy,
+    pub type_flags: wgt::AccelerationStructureType,
+}
+
 /// * `offset` - offset in bytes
 #[derive(Clone, Debug)]
 pub struct AccelerationStructureInstances<'a, B: DynBuffer + ?Sized> {
@@ -2519,6 +2546,12 @@ bitflags::bitflags! {
         const BUILD_OUTPUT = 1 << 1;
         // Tlas used in a shader
         const SHADER_INPUT = 1 << 2;
+        // Blas used to query compacted size
+        const QUERY_INPUT = 1 << 3;
+        // BLAS used as a src for a copy operation
+        const COPY_SRC = 1 << 4;
+        // BLAS used as a dst for a copy operation
+        const COPY_DST = 1 << 5;
     }
 }
 
@@ -2530,7 +2563,7 @@ pub struct AccelerationStructureBarrier {
 #[derive(Debug, Copy, Clone)]
 pub struct TlasInstance {
     pub transform: [f32; 12],
-    pub custom_index: u32,
+    pub custom_data: u32,
     pub mask: u8,
     pub blas_address: u64,
 }

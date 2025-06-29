@@ -1,6 +1,7 @@
+use core::fmt::Write;
+
 use crate::back::hlsl::BackendResult;
 use crate::{RayQueryIntersection, TypeInner};
-use std::fmt::Write;
 
 impl<W: Write> super::Writer<'_, W> {
     // constructs hlsl RayDesc from wgsl RayDesc
@@ -27,7 +28,12 @@ impl<W: Write> super::Writer<'_, W> {
     ) -> BackendResult {
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
         write!(self.out, " GetCommittedIntersection(")?;
-        self.write_value_type(module, &TypeInner::RayQuery)?;
+        self.write_value_type(
+            module,
+            &TypeInner::RayQuery {
+                vertex_return: false,
+            },
+        )?;
         writeln!(self.out, " rq) {{")?;
         write!(self.out, "    ")?;
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
@@ -42,11 +48,11 @@ impl<W: Write> super::Writer<'_, W> {
         writeln!(self.out, "        ret.t = rq.CommittedRayT();")?;
         writeln!(
             self.out,
-            "        ret.instance_custom_index = rq.CommittedInstanceID();"
+            "        ret.instance_custom_data = rq.CommittedInstanceID();"
         )?;
         writeln!(
             self.out,
-            "        ret.instance_id = rq.CommittedInstanceIndex();"
+            "        ret.instance_index = rq.CommittedInstanceIndex();"
         )?;
         writeln!(
             self.out,
@@ -93,7 +99,12 @@ impl<W: Write> super::Writer<'_, W> {
     ) -> BackendResult {
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
         write!(self.out, " GetCandidateIntersection(")?;
-        self.write_value_type(module, &TypeInner::RayQuery)?;
+        self.write_value_type(
+            module,
+            &TypeInner::RayQuery {
+                vertex_return: false,
+            },
+        )?;
         writeln!(self.out, " rq) {{")?;
         write!(self.out, "    ")?;
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
@@ -129,11 +140,11 @@ impl<W: Write> super::Writer<'_, W> {
 
         writeln!(
             self.out,
-            "    ret.instance_custom_index = rq.CandidateInstanceID();"
+            "    ret.instance_custom_data = rq.CandidateInstanceID();"
         )?;
         writeln!(
             self.out,
-            "    ret.instance_id = rq.CandidateInstanceIndex();"
+            "    ret.instance_index = rq.CandidateInstanceIndex();"
         )?;
         writeln!(
             self.out,

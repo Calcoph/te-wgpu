@@ -1,4 +1,4 @@
-use std::{ops::Range, sync::Arc};
+use core::ops::Range;
 
 use crate::{
     api::{
@@ -35,8 +35,6 @@ crate::cmp::impl_eq_ord_hash_proxy!(CommandEncoder => .inner);
 pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CommandEncoderDescriptor<'_>: Send, Sync);
 
-use wgc::command::CommandEncoderError;
-use parking_lot::Mutex;
 pub use wgt::TexelCopyBufferInfo as TexelCopyBufferInfoBase;
 /// View of a buffer which can be used to copy to/from a texture.
 ///
@@ -60,11 +58,7 @@ impl CommandEncoder {
     pub fn finish(mut self) -> Result<CommandBuffer, CommandEncoderError> {
         let buffer = self.inner.finish()?;
 
-        Ok(
-        CommandBuffer {
-            inner: Arc::new(Mutex::new(Some(buffer))),
-        }
-        )
+        Ok(CommandBuffer { buffer })
     }
 
     /// Begins recording of a render pass.
@@ -227,6 +221,8 @@ impl CommandEncoder {
     ///
     /// Occlusion and timestamp queries are 8 bytes each (see [`crate::QUERY_SIZE`]). For pipeline statistics queries,
     /// see [`PipelineStatisticsTypes`] for more information.
+    ///
+    /// `destination_offset` must be aligned to [`QUERY_RESOLVE_BUFFER_ALIGNMENT`].
     pub fn resolve_query_set(
         &mut self,
         query_set: &QuerySet,
@@ -293,6 +289,22 @@ impl CommandEncoder {
 
 /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] must be enabled on the device in order to call these functions.
 impl CommandEncoder {
+    /// Mark acceleration structures as being built. ***Should only*** be used with wgpu-hal
+    /// functions, all wgpu functions already mark acceleration structures as built.
+    ///
+    /// # Safety
+    ///
+    /// - All acceleration structures must have been build in this command encoder.
+    /// - All BLASes inputted must have been built before all TLASes that were inputted here and
+    ///   which use them.
+    pub unsafe fn mark_acceleration_structures_built<'a>(
+        &self,
+        blas: impl IntoIterator<Item = &'a Blas>,
+        tlas: impl IntoIterator<Item = &'a Tlas>,
+    ) {
+        self.inner
+            .mark_acceleration_structures_built(&mut blas.into_iter(), &mut tlas.into_iter())
+    }
     /// Build bottom and top level acceleration structures.
     ///
     /// Builds the BLASes then the TLASes, but does ***not*** build the BLASes into the TLASes,
@@ -301,16 +313,16 @@ impl CommandEncoder {
     /// # Validation
     ///
     /// - blas: Iterator of bottom level acceleration structure entries to build.
-    ///     For each entry, the provided size descriptor must be strictly smaller or equal to the descriptor given at BLAS creation, this means:
-    ///     - Less or equal number of geometries
-    ///     - Same kind of geometry (with index buffer or without) (same vertex/index format)
-    ///     - Same flags
-    ///     - Less or equal number of vertices
-    ///     - Less or equal number of indices (if applicable)
+    ///   For each entry, the provided size descriptor must be strictly smaller or equal to the descriptor given at BLAS creation, this means:
+    ///   - Less or equal number of geometries
+    ///   - Same kind of geometry (with index buffer or without) (same vertex/index format)
+    ///   - Same flags
+    ///   - Less or equal number of vertices
+    ///   - Less or equal number of indices (if applicable)
     /// - tlas: iterator of top level acceleration structure packages to build
-    ///     For each entry:
-    ///     - Each BLAS in each TLAS instance must have been being built in the current call or in a previous call to `build_acceleration_structures` or `build_acceleration_structures_unsafe_tlas`
-    ///     - The number of TLAS instances must be less than or equal to the max number of tlas instances when creating (if creating a package with `TlasPackage::new()` this is already satisfied)
+    ///   For each entry:
+    ///   - Each BLAS in each TLAS instance must have been being built in the current call or in a previous call to `build_acceleration_structures` or `build_acceleration_structures_unsafe_tlas`
+    ///   - The number of TLAS instances must be less than or equal to the max number of tlas instances when creating (if creating a package with `TlasPackage::new()` this is already satisfied)
     ///
     /// If the device the command encoder is created from does not have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled then a validation error is generated
     ///
@@ -341,7 +353,7 @@ impl CommandEncoder {
     ///
     ///    - The contents of the raw instance buffer must be valid for the underling api.
     ///    - All bottom level acceleration structures, referenced in the raw instance buffer must be valid and built,
-    ///       when the corresponding top level acceleration structure is built. (builds may happen in the same invocation of this function).
+    ///      when the corresponding top level acceleration structure is built. (builds may happen in the same invocation of this function).
     ///    - At the time when the top level acceleration structure is used in a bind group, all associated bottom level acceleration structures must be valid,
     ///      and built (no later than the time when the top level acceleration structure was built).
     pub unsafe fn build_acceleration_structures_unsafe_tlas<'a>(
@@ -353,5 +365,70 @@ impl CommandEncoder {
             &mut blas.into_iter(),
             &mut tlas.into_iter(),
         )
+    }
+
+    /// Transition resources to an underlying hal resource state.
+    ///
+    /// This is an advanced, native-only API (no-op on web) that has two main use cases:
+    ///
+    /// # Batching Barriers
+    ///
+    /// Wgpu does not have a global view of the frame when recording command buffers. When you submit multiple command buffers in a single queue submission, wgpu may need to record and
+    /// insert new command buffers (holding 1 or more barrier commands) in between the user-supplied command buffers in order to ensure that resources are transitioned to the correct state
+    /// for the start of the next user-supplied command buffer.
+    ///
+    /// Wgpu does not currently attempt to batch multiple of these generated command buffers/barriers together, which may lead to suboptimal barrier placement.
+    ///
+    /// Consider the following scenario, where the user does `queue.submit(&[a, b, c])`:
+    /// * CommandBuffer A: Use resource X as a render pass attachment
+    /// * CommandBuffer B: Use resource Y as a render pass attachment
+    /// * CommandBuffer C: Use resources X and Y in a bind group
+    ///
+    /// At submission time, wgpu will record and insert some new command buffers, resulting in a submission that looks like `queue.submit(&[0, a, 1, b, 2, c])`:
+    /// * CommandBuffer 0: Barrier to transition resource X from TextureUses::RESOURCE (from last frame) to TextureUses::COLOR_TARGET
+    /// * CommandBuffer A: Use resource X as a render pass attachment
+    /// * CommandBuffer 1: Barrier to transition resource Y from TextureUses::RESOURCE (from last frame) to TextureUses::COLOR_TARGET
+    /// * CommandBuffer B: Use resource Y as a render pass attachment
+    /// * CommandBuffer 2: Barrier to transition resources X and Y from TextureUses::COLOR_TARGET to TextureUses::RESOURCE
+    /// * CommandBuffer C: Use resources X and Y in a bind group
+    ///
+    /// To prevent this, after profiling their app, an advanced user might choose to instead do `queue.submit(&[a, b, c])`:
+    /// * CommandBuffer A:
+    ///     * Use [`CommandEncoder::transition_resources`] to transition resources X and Y from TextureUses::RESOURCE (from last frame) to TextureUses::COLOR_TARGET
+    ///     * Use resource X as a render pass attachment
+    /// * CommandBuffer B: Use resource Y as a render pass attachment
+    /// * CommandBuffer C:
+    ///     * Use [`CommandEncoder::transition_resources`] to transition resources X and Y from TextureUses::COLOR_TARGET to TextureUses::RESOURCE
+    ///     * Use resources X and Y in a bind group
+    ///
+    /// At submission time, wgpu will record and insert some new command buffers, resulting in a submission that looks like `queue.submit(&[0, a, b, 1, c])`:
+    /// * CommandBuffer 0: Barrier to transition resources X and Y from TextureUses::RESOURCE (from last frame) to TextureUses::COLOR_TARGET
+    /// * CommandBuffer A: Use resource X as a render pass attachment
+    /// * CommandBuffer B: Use resource Y as a render pass attachment
+    /// * CommandBuffer 1: Barrier to transition resources X and Y from TextureUses::COLOR_TARGET to TextureUses::RESOURCE
+    /// * CommandBuffer C: Use resources X and Y in a bind group
+    ///
+    /// Which eliminates the extra command buffer and barrier between command buffers A and B.
+    ///
+    /// # Native Interoperability
+    ///
+    /// A user wanting to interoperate with the underlying native graphics APIs (Vulkan, DirectX12, Metal, etc) can use this API to generate barriers between wgpu commands and
+    /// the native API commands, for synchronization and resource state transition purposes.
+    pub fn transition_resources<'a>(
+        &mut self,
+        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<&'a Buffer>>,
+        texture_transitions: impl Iterator<Item = wgt::TextureTransition<&'a Texture>>,
+    ) {
+        self.inner.transition_resources(
+            &mut buffer_transitions.map(|t| wgt::BufferTransition {
+                buffer: &t.buffer.inner,
+                state: t.state,
+            }),
+            &mut texture_transitions.map(|t| wgt::TextureTransition {
+                texture: &t.texture.inner,
+                selector: t.selector,
+                state: t.state,
+            }),
+        );
     }
 }

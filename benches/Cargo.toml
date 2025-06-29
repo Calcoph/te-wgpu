@@ -8,13 +8,12 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-autobenches = false
+rust-version.workspace = true
 publish = false
 
 [[bench]]
-name = "root"
+name = "wgpu-benchmark"
 harness = false
-path = "benches/root.rs"
 
 [features]
 # Uncomment these features to enable tracy and superluminal profiling.

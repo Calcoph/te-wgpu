@@ -1,5 +1,19 @@
+use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
+use core::{
+    iter,
+    mem::{self, ManuallyDrop},
+    ptr::NonNull,
+    sync::atomic::Ordering,
+};
+
+use smallvec::SmallVec;
+use thiserror::Error;
+
+use super::{life::LifetimeTracker, Device};
+use crate::device::resource::CommandIndices;
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
+use crate::scratch::ScratchBuffer;
 use crate::{
     api_log,
     command::{
@@ -24,19 +38,6 @@ use crate::{
     track::{self, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };
-
-use smallvec::SmallVec;
-
-use crate::scratch::ScratchBuffer;
-use std::{
-    iter,
-    mem::{self, ManuallyDrop},
-    ptr::NonNull,
-    sync::{atomic::Ordering, Arc},
-};
-use thiserror::Error;
-
-use super::{life::LifetimeTracker, Device};
 
 pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
@@ -73,8 +74,8 @@ impl Queue {
                 .transition_buffers(&[hal::BufferBarrier {
                     buffer: zero_buffer,
                     usage: hal::StateTransition {
-                        from: hal::BufferUses::empty(),
-                        to: hal::BufferUses::COPY_DST,
+                        from: wgt::BufferUses::empty(),
+                        to: wgt::BufferUses::COPY_DST,
                     },
                 }]);
             pending_writes
@@ -85,8 +86,8 @@ impl Queue {
                 .transition_buffers(&[hal::BufferBarrier {
                     buffer: zero_buffer,
                     usage: hal::StateTransition {
-                        from: hal::BufferUses::COPY_DST,
-                        to: hal::BufferUses::COPY_SRC,
+                        from: wgt::BufferUses::COPY_DST,
+                        to: wgt::BufferUses::COPY_SRC,
                     },
                 }]);
         }
@@ -267,6 +268,8 @@ pub(crate) struct EncoderInFlight {
     inner: crate::command::CommandEncoder,
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
+    /// We only need to keep these resources alive.
+    _indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
 
     /// These are the buffers that have been tracked by `PendingWrites`.
     pub(crate) pending_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
@@ -377,6 +380,9 @@ impl PendingWrites {
                 },
                 trackers: Tracker::new(),
                 temp_resources: mem::take(&mut self.temp_resources),
+                _indirect_draw_validation_resources: crate::indirect_validation::DrawResources::new(
+                    device.clone(),
+                ),
                 pending_buffers,
                 pending_textures,
             };
@@ -442,9 +448,7 @@ pub enum QueueSubmitError {
     #[error(transparent)]
     CommandEncoder(#[from] CommandEncoderError),
     #[error(transparent)]
-    ValidateBlasActionsError(#[from] crate::ray_tracing::ValidateBlasActionsError),
-    #[error(transparent)]
-    ValidateTlasActionsError(#[from] crate::ray_tracing::ValidateTlasActionsError),
+    ValidateAsActionsError(#[from] crate::ray_tracing::ValidateAsActionsError),
 }
 
 //TODO: move out common parts of write_xxx.
@@ -588,7 +592,7 @@ impl Queue {
             let mut trackers = self.device.trackers.lock();
             trackers
                 .buffers
-                .set_single(&buffer, hal::BufferUses::COPY_DST)
+                .set_single(&buffer, wgt::BufferUses::COPY_DST)
         };
 
         let snatch_guard = self.device.snatchable_lock.read();
@@ -606,8 +610,8 @@ impl Queue {
         let barriers = iter::once(hal::BufferBarrier {
             buffer: staging_buffer.raw(),
             usage: hal::StateTransition {
-                from: hal::BufferUses::MAP_WRITE,
-                to: hal::BufferUses::COPY_SRC,
+                from: wgt::BufferUses::MAP_WRITE,
+                to: wgt::BufferUses::COPY_SRC,
             },
         })
         .chain(transition.map(|pending| pending.into_hal(&buffer, &snatch_guard)))
@@ -697,6 +701,8 @@ impl Queue {
                 .map_err(TransferError::from)?;
         }
 
+        let snatch_guard = self.device.snatchable_lock.read();
+
         let mut pending_writes = self.pending_writes.lock();
         let encoder = pending_writes.activate();
 
@@ -719,7 +725,7 @@ impl Queue {
             if has_copy_partial_init_tracker_coverage(size, destination.mip_level, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
-                    .collect::<Vec<std::ops::Range<u32>>>()
+                    .collect::<Vec<core::ops::Range<u32>>>()
                 {
                     let mut trackers = self.device.trackers.lock();
                     crate::command::clear_texture(
@@ -732,7 +738,7 @@ impl Queue {
                         &mut trackers.textures,
                         &self.device.alignments,
                         self.device.zero_buffer.as_ref(),
-                        &self.device.snatchable_lock.read(),
+                        &snatch_guard,
                     )
                     .map_err(QueueWriteError::from)?;
                 }
@@ -741,8 +747,6 @@ impl Queue {
                     .drain(init_layer_range);
             }
         }
-
-        let snatch_guard = self.device.snatchable_lock.read();
 
         let dst_raw = dst.try_raw(&snatch_guard)?;
 
@@ -828,8 +832,8 @@ impl Queue {
             let buffer_barrier = hal::BufferBarrier {
                 buffer: staging_buffer.raw(),
                 usage: hal::StateTransition {
-                    from: hal::BufferUses::MAP_WRITE,
-                    to: hal::BufferUses::COPY_SRC,
+                    from: wgt::BufferUses::MAP_WRITE,
+                    to: wgt::BufferUses::COPY_SRC,
                 },
             };
 
@@ -837,7 +841,7 @@ impl Queue {
             let transition =
                 trackers
                     .textures
-                    .set_single(&dst, selector, hal::TextureUses::COPY_DST);
+                    .set_single(&dst, selector, wgt::TextureUses::COPY_DST);
             let texture_barriers = transition
                 .map(|pending| pending.into_hal(dst_raw))
                 .collect::<Vec<_>>();
@@ -974,7 +978,7 @@ impl Queue {
             if has_copy_partial_init_tracker_coverage(&size, destination.mip_level, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
-                    .collect::<Vec<std::ops::Range<u32>>>()
+                    .collect::<Vec<core::ops::Range<u32>>>()
                 {
                     let mut trackers = self.device.trackers.lock();
                     crate::command::clear_texture(
@@ -1014,7 +1018,7 @@ impl Queue {
         let mut trackers = self.device.trackers.lock();
         let transitions = trackers
             .textures
-            .set_single(&dst, selector, hal::TextureUses::COPY_DST);
+            .set_single(&dst, selector, wgt::TextureUses::COPY_DST);
 
         // `copy_external_image_to_texture` is exclusive to the WebGL backend.
         // Don't go through the `DynCommandEncoder` abstraction and directly to the WebGL backend.
@@ -1063,11 +1067,10 @@ impl Queue {
 
             // Fence lock must be acquired after the snatch lock everywhere to avoid deadlocks.
             let mut fence = self.device.fence.write();
-            submit_index = self
-                .device
-                .active_submission_index
-                .fetch_add(1, Ordering::SeqCst)
-                + 1;
+
+            let mut command_index_guard = self.device.command_indices.write();
+            command_index_guard.active_submission_index += 1;
+            submit_index = command_index_guard.active_submission_index;
             let mut active_executions = Vec::new();
 
             let mut used_surface_textures = track::TextureUsageScope::default();
@@ -1122,6 +1125,7 @@ impl Queue {
                                     &snatch_guard,
                                     &mut submit_surface_textures_owned,
                                     &mut used_surface_textures,
+                                    &mut command_index_guard,
                                 );
                                 if let Err(err) = res {
                                     first_error.get_or_insert(err);
@@ -1196,6 +1200,8 @@ impl Queue {
                             inner: baked.encoder,
                             trackers: baked.trackers,
                             temp_resources: baked.temp_resources,
+                            _indirect_draw_validation_resources: baked
+                                .indirect_draw_validation_resources,
                             pending_buffers: FastHashMap::default(),
                             pending_textures: FastHashMap::default(),
                         });
@@ -1221,7 +1227,7 @@ impl Queue {
 
                             unsafe {
                                 used_surface_textures
-                                    .merge_single(texture, None, hal::TextureUses::PRESENT)
+                                    .merge_single(texture, None, wgt::TextureUses::PRESENT)
                                     .unwrap()
                             };
                         }
@@ -1285,6 +1291,8 @@ impl Queue {
                     break 'error Err(e.into());
                 }
 
+                drop(command_index_guard);
+
                 // Advance the successful submission index.
                 self.device
                     .last_successful_submission_index
@@ -1301,17 +1309,22 @@ impl Queue {
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
             let fence_guard = RwLockWriteGuard::downgrade(fence);
-            let (closures, _) =
-                match self
-                    .device
-                    .maintain(fence_guard, wgt::Maintain::Poll, snatch_guard)
-                {
-                    Ok(closures) => closures,
-                    Err(WaitIdleError::Device(err)) => {
-                        break 'error Err(QueueSubmitError::Queue(err))
-                    }
-                    Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
-                };
+            let (closures, result) =
+                self.device
+                    .maintain(fence_guard, wgt::PollType::Poll, snatch_guard);
+            match result {
+                Ok(status) => {
+                    debug_assert!(matches!(
+                        status,
+                        wgt::PollStatus::QueueEmpty | wgt::PollStatus::Poll
+                    ));
+                }
+                Err(WaitIdleError::Device(err)) => break 'error Err(QueueSubmitError::Queue(err)),
+                Err(WaitIdleError::WrongSubmissionIndex(..)) => {
+                    unreachable!("Cannot get WrongSubmissionIndex from Poll")
+                }
+                Err(WaitIdleError::Timeout) => unreachable!("Cannot get Timeout from Poll"),
+            };
 
             Ok(closures)
         };
@@ -1476,6 +1489,11 @@ impl Global {
 
     pub fn queue_get_timestamp_period(&self, queue_id: QueueId) -> f32 {
         let queue = self.hub.queues.get(queue_id);
+
+        if queue.device.timestamp_normalizer.get().unwrap().enabled() {
+            return 1.0;
+        }
+
         queue.get_timestamp_period()
     }
 
@@ -1500,6 +1518,7 @@ fn validate_command_buffer(
     snatch_guard: &SnatchGuard,
     submit_surface_textures_owned: &mut FastHashMap<*const Texture, Arc<Texture>>,
     used_surface_textures: &mut track::TextureUsageScope,
+    command_index_guard: &mut RwLockWriteGuard<CommandIndices>,
 ) -> Result<(), QueueSubmitError> {
     command_buffer.same_device_as(queue)?;
 
@@ -1532,17 +1551,16 @@ fn validate_command_buffer(
                 if should_extend {
                     unsafe {
                         used_surface_textures
-                            .merge_single(texture, None, hal::TextureUses::PRESENT)
+                            .merge_single(texture, None, wgt::TextureUses::PRESENT)
                             .unwrap();
                     };
                 }
             }
         }
 
-        if let Err(e) = cmd_buf_data.validate_blas_actions() {
-            return Err(e.into());
-        }
-        if let Err(e) = cmd_buf_data.validate_tlas_actions(snatch_guard) {
+        if let Err(e) =
+            cmd_buf_data.validate_acceleration_structure_actions(snatch_guard, command_index_guard)
+        {
             return Err(e.into());
         }
     }

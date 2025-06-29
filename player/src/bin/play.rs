@@ -2,6 +2,9 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
+    extern crate wgpu_core as wgc;
+    extern crate wgpu_types as wgt;
+
     use player::GlobalPlay as _;
     use wgc::device::trace;
 
@@ -83,13 +86,11 @@ fn main() {
             log::info!("Picked '{}'", info.name);
             let device_id = wgc::id::Id::zip(0, 1);
             let queue_id = wgc::id::Id::zip(0, 1);
-            global.adapter_request_device(
-                adapter,
-                &desc,
-                None,
-                Some(device_id),
-                Some(queue_id),
-            ).unwrap();
+            let res =
+                global.adapter_request_device(adapter, &desc, Some(device_id), Some(queue_id)).unwrap();
+            if let Err(e) = res {
+                panic!("{e:?}");
+            }
             (device_id, queue_id)
         }
         _ => panic!("Expected Action::Init"),
@@ -98,14 +99,14 @@ fn main() {
     log::info!("Executing actions");
     #[cfg(not(feature = "winit"))]
     {
-        global.device_start_capture(device);
+        unsafe { global.device_start_graphics_debugger_capture(device) };
 
         while let Some(action) = actions.pop() {
             global.process(device, queue, action, &dir, &mut command_buffer_id_manager);
         }
 
-        global.device_stop_capture(device);
-        global.device_poll(device, wgt::Maintain::wait()).unwrap();
+        unsafe { global.device_stop_graphics_debugger_capture(device) };
+        global.device_poll(device, wgt::PollType::wait()).unwrap();
     }
     #[cfg(feature = "winit")]
     {
@@ -197,7 +198,7 @@ fn main() {
                     },
                     Event::LoopExiting => {
                         log::info!("Closing");
-                        global.device_poll(device, wgt::Maintain::wait()).unwrap();
+                        global.device_poll(device, wgt::PollType::wait()).unwrap();
                     }
                     _ => {}
                 }

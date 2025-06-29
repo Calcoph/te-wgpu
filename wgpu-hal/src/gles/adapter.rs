@@ -1,6 +1,8 @@
+use alloc::{borrow::ToOwned as _, format, string::String, sync::Arc, vec, vec::Vec};
+use core::sync::atomic::AtomicU8;
+
 use glow::HasContext;
 use parking_lot::Mutex;
-use std::sync::{atomic::AtomicU8, Arc};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -79,7 +81,7 @@ impl super::Adapter {
     /// resulting in an `Err`.
     pub(super) fn parse_full_version(src: &str) -> Result<(u8, u8), crate::InstanceError> {
         let (version, _vendor_info) = match src.find(' ') {
-            Some(i) => (&src[..i], src[i + 1..].to_string()),
+            Some(i) => (&src[..i], src[i + 1..].to_owned()),
             None => (src, String::new()),
         };
 
@@ -192,6 +194,7 @@ impl super::Adapter {
 
     pub(super) unsafe fn expose(
         context: super::AdapterContext,
+        backend_options: wgt::GlBackendOptions,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         let gl = context.lock();
         let extensions = gl.supported_extensions();
@@ -200,7 +203,9 @@ impl super::Adapter {
             // emscripten doesn't enable "WEBGL_debug_renderer_info" extension by default. so, we do it manually.
             // See https://github.com/gfx-rs/wgpu/issues/3245 for context
             #[cfg(Emscripten)]
-            if unsafe { super::emscripten::enable_extension("WEBGL_debug_renderer_info\0") } {
+            if unsafe {
+                super::emscripten::enable_extension(c"WEBGL_debug_renderer_info".to_str().unwrap())
+            } {
                 (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
             } else {
                 (glow::VENDOR, glow::RENDERER)
@@ -372,8 +377,9 @@ impl super::Adapter {
         } else {
             vertex_shader_storage_textures.min(fragment_shader_storage_textures)
         };
-        let indirect_execution =
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect");
+        // NOTE: GL_ARB_compute_shader adds support for indirect dispatch
+        let indirect_execution = supported((3, 1), (4, 3))
+            || (extensions.contains("GL_ARB_draw_indirect") && supports_compute);
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
@@ -684,6 +690,8 @@ impl super::Adapter {
             max_storage_buffers_per_shader_stage,
             max_storage_textures_per_shader_stage,
             max_uniform_buffers_per_shader_stage,
+            max_binding_array_elements_per_shader_stage: 0,
+            max_binding_array_sampler_elements_per_shader_stage: 0,
             max_uniform_buffer_binding_size: unsafe {
                 gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
             } as u32,
@@ -824,6 +832,8 @@ impl super::Adapter {
                     private_caps,
                     workarounds,
                     features,
+                    limits: limits.clone(),
+                    options: backend_options,
                     shading_language_version,
                     next_shader_id: Default::default(),
                     program_cache: Default::default(),
@@ -1211,7 +1221,7 @@ impl crate::Adapter for super::Adapter {
                 composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
                 maximum_frame_latency: 2..=2, //TODO, unused currently
                 current_extent: None,
-                usage: crate::TextureUses::COLOR_TARGET,
+                usage: wgt::TextureUses::COLOR_TARGET,
             })
         } else {
             None
@@ -1242,7 +1252,9 @@ impl super::AdapterShared {
             let buffer_mapping =
                 unsafe { gl.map_buffer_range(target, offset, length as _, glow::MAP_READ_BIT) };
 
-            unsafe { std::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length) };
+            unsafe {
+                core::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length)
+            };
 
             unsafe { gl.unmap_buffer(target) };
         }

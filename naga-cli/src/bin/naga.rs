@@ -52,7 +52,7 @@ struct Args {
 
     /// the shader model to use if targeting HLSL
     ///
-    /// May be `50`, 51`, or `60`
+    /// May be `50`, `51`, or `60`
     #[argh(option)]
     shader_model: Option<ShaderModelArg>,
 
@@ -444,6 +444,10 @@ fn run() -> anyhow::Result<()> {
     params.spv_out.bounds_check_policies = params.bounds_check_policies;
     params.spv_out.flags.set(
         naga::back::spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+        !params.keep_coordinate_space,
+    );
+    params.glsl.writer_flags.set(
+        naga::back::glsl::WriterFlags::ADJUST_COORDINATE_SPACE,
         !params.keep_coordinate_space,
     );
 

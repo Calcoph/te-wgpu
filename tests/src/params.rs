@@ -1,5 +1,5 @@
 use arrayvec::ArrayVec;
-use wgt::{DownlevelCapabilities, DownlevelFlags, Features, Limits};
+use wgpu::{DownlevelCapabilities, DownlevelFlags, Features, InstanceFlags, Limits};
 
 use crate::{
     report::AdapterReport, FailureApplicationReasons, FailureBehavior, FailureCase,
@@ -7,9 +7,9 @@ use crate::{
 };
 
 const LOWEST_DOWNLEVEL_PROPERTIES: wgpu::DownlevelCapabilities = DownlevelCapabilities {
-    flags: wgt::DownlevelFlags::empty(),
-    limits: wgt::DownlevelLimits {},
-    shader_model: wgt::ShaderModel::Sm2,
+    flags: wgpu::DownlevelFlags::empty(),
+    limits: wgpu::DownlevelLimits {},
+    shader_model: wgpu::ShaderModel::Sm2,
 };
 
 /// This information determines if a test should run.
@@ -18,6 +18,8 @@ pub struct TestParameters {
     pub required_features: Features,
     pub required_downlevel_caps: DownlevelCapabilities,
     pub required_limits: Limits,
+
+    pub required_instance_flags: InstanceFlags,
 
     /// On Dx12, specifically test against the Fxc compiler.
     ///
@@ -37,6 +39,7 @@ impl Default for TestParameters {
             required_features: Features::empty(),
             required_downlevel_caps: LOWEST_DOWNLEVEL_PROPERTIES,
             required_limits: Limits::downlevel_webgl2_defaults(),
+            required_instance_flags: InstanceFlags::empty(),
             force_fxc: false,
             skips: Vec::new(),
             failures: Vec::new(),
@@ -66,6 +69,12 @@ impl TestParameters {
     /// Set the limits needed for the test.
     pub fn limits(mut self, limits: Limits) -> Self {
         self.required_limits = limits;
+        self
+    }
+
+    /// Sets the instance flags that the test requires.
+    pub fn instance_flags(mut self, instance_flags: InstanceFlags) -> Self {
+        self.required_instance_flags |= instance_flags;
         self
     }
 
@@ -120,7 +129,7 @@ impl TestInfo {
 
         // Produce a lower-case version of the adapter info, for comparison against
         // `parameters.skips` and `parameters.failures`.
-        let adapter_lowercase_info = wgt::AdapterInfo {
+        let adapter_lowercase_info = wgpu::AdapterInfo {
             name: adapter.info.name.to_lowercase(),
             driver: adapter.info.driver.to_lowercase(),
             ..adapter.info.clone()

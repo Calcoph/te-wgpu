@@ -1,9 +1,4 @@
-use std::fmt::Display;
-
-use wgc::{
-    device::queue::QueueWriteError,
-    resource::{CreateBufferError, CreateTextureError},
-};
+use alloc::borrow::ToOwned as _;
 
 use wgt::TextureDataOrder;
 
@@ -16,7 +11,7 @@ pub struct BufferInitDescriptor<'a> {
     pub contents: &'a [u8],
     /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
     /// will panic.
-    pub usage: crate::BufferUsages,
+    pub usage: wgt::BufferUsages,
 }
 
 #[derive(Debug)]

@@ -1,6 +1,9 @@
+use alloc::{boxed::Box, vec::Vec};
+
+use wgt::WasmNotSendSync;
+
 use crate::dispatch;
 use crate::{Buffer, Label};
-use wgt::WasmNotSendSync;
 
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
 pub type BlasTriangleGeometrySizeDescriptor = wgt::BlasTriangleGeometrySizeDescriptor;
@@ -49,7 +52,7 @@ pub struct TlasInstance {
     ///
     /// This must only use the lower 24 bits, if any bits are outside that range (byte 4 does not equal 0) the TlasInstance becomes
     /// invalid and generates a validation error when built
-    pub custom_index: u32,
+    pub custom_data: u32,
     /// Mask for the instance used inside the shader to filter instances.
     /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`.
     pub mask: u8,
@@ -59,7 +62,7 @@ impl TlasInstance {
     /// Construct TlasInstance.
     /// - blas: Reference to the bottom level acceleration structure
     /// - transform: Transform buffer offset in bytes (optional, required if transform buffer is present)
-    /// - custom_index: Custom index for the instance used inside the shader (max 24 bits)
+    /// - custom_data: Custom index for the instance used inside the shader (max 24 bits)
     /// - mask: Mask for the instance used inside the shader to filter instances
     ///
     /// Note: while one of these contains a reference to a BLAS that BLAS will not be dropped,
@@ -67,11 +70,11 @@ impl TlasInstance {
     /// TlasInstance(s) will immediately make them invalid. If one or more of those invalid
     /// TlasInstances is inside a TlasPackage that is attempted to be built, the build will
     /// generate a validation error.
-    pub fn new(blas: &Blas, transform: [f32; 12], custom_index: u32, mask: u8) -> Self {
+    pub fn new(blas: &Blas, transform: [f32; 12], custom_data: u32, mask: u8) -> Self {
         Self {
             blas: blas.inner.clone(),
             transform,
-            custom_index,
+            custom_data,
             mask,
         }
     }
@@ -146,6 +149,30 @@ impl Blas {
     /// Raw handle to the acceleration structure, used inside raw instance buffers.
     pub fn handle(&self) -> u64 {
         self.handle
+    }
+
+    /// Returns the inner hal Acceleration Structure using a callback. The hal acceleration structure
+    /// will be `None` if the backend type argument does not match with this wgpu Blas
+    ///
+    /// This method will start the wgpu_core level command recording.
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Acceleration Structure must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::AccelerationStructure>) -> R,
+        R,
+    >(
+        &mut self,
+        hal_blas_callback: F,
+    ) -> R {
+        if let Some(blas) = self.inner.as_core_opt() {
+            unsafe { blas.context.blas_as_hal::<A, F, R>(blas, hal_blas_callback) }
+        } else {
+            hal_blas_callback(None)
+        }
     }
 }
 

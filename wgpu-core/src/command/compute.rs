@@ -1,12 +1,21 @@
+use thiserror::Error;
+use wgt::{BufferAddress, DynamicOffset};
+
+use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
+use core::{fmt, str};
+
+use crate::ray_tracing::AsAction;
 use crate::{
     binding_model::{
         BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
     },
     command::{
-        bind::Binder,
+        bind::{Binder, BinderError},
         compute_command::ArcComputeCommand,
         end_pipeline_statistics_query,
-        memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
+        memory_init::{
+            fixup_discarded_surfaces, CommandBufferTextureMemoryActions, SurfacesInDiscardState,
+        },
         validate_and_begin_pipeline_statistics_query, ArcPassTimestampWrites, BasePass,
         BindGroupStateChange, CommandBuffer, CommandEncoderError, MapPassErr, PassErrorScope,
         PassTimestampWrites, QueryUseError, StateChange,
@@ -24,13 +33,6 @@ use crate::{
     track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},
     Label,
 };
-
-use thiserror::Error;
-use wgt::{BufferAddress, DynamicOffset};
-
-use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
-use crate::ray_tracing::TlasAction;
-use std::{fmt, mem::size_of, str, sync::Arc};
 
 pub struct ComputePass {
     /// All pass data & records is stored here.
@@ -60,7 +62,7 @@ impl ComputePass {
         } = desc;
 
         Self {
-            base: Some(BasePass::new(label)),
+            base: Some(BasePass::new(&label)),
             parent,
             timestamp_writes,
 
@@ -95,17 +97,14 @@ impl fmt::Debug for ComputePass {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct ComputePassDescriptor<'a> {
+pub struct ComputePassDescriptor<'a, PTW = PassTimestampWrites> {
     pub label: Label<'a>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<&'a PassTimestampWrites>,
+    pub timestamp_writes: Option<PTW>,
 }
 
-struct ArcComputePassDescriptor<'a> {
-    pub label: &'a Label<'a>,
-    /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<ArcPassTimestampWrites>,
-}
+/// cbindgen:ignore
+type ArcComputePassDescriptor<'a> = ComputePassDescriptor<'a, ArcPassTimestampWrites>;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -209,7 +208,7 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     tracker: &'cmd_buf mut Tracker,
     buffer_memory_init_actions: &'cmd_buf mut Vec<BufferInitTrackerAction>,
     texture_memory_actions: &'cmd_buf mut CommandBufferTextureMemoryActions,
-    tlas_actions: &'cmd_buf mut Vec<TlasAction>,
+    as_actions: &'cmd_buf mut Vec<AsAction>,
 
     temp_offsets: Vec<u32>,
     dynamic_offset_count: usize,
@@ -284,7 +283,7 @@ impl Global {
     /// If successful, puts the encoder into the [`Locked`] state.
     ///
     /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
-    pub fn command_encoder_create_compute_pass(
+    pub fn command_encoder_begin_compute_pass(
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &ComputePassDescriptor<'_>,
@@ -292,7 +291,7 @@ impl Global {
         let hub = &self.hub;
 
         let mut arc_desc = ArcComputePassDescriptor {
-            label: &desc.label,
+            label: desc.label.as_deref().map(Cow::Borrowed),
             timestamp_writes: None, // Handle only once we resolved the encoder.
         };
 
@@ -305,6 +304,7 @@ impl Global {
 
         arc_desc.timestamp_writes = match desc
             .timestamp_writes
+            .as_ref()
             .map(|tw| {
                 Self::validate_pass_timestamp_writes(&cmd_buf.device, &hub.query_sets.read(), tw)
             })
@@ -360,11 +360,11 @@ impl Global {
             push_constant_data,
         } = base;
 
-        let mut compute_pass = self.command_encoder_create_compute_pass(
+        let mut compute_pass = self.command_encoder_begin_compute_pass(
             encoder_id,
             &ComputePassDescriptor {
-                label: label.as_deref().map(std::borrow::Cow::Borrowed),
-                timestamp_writes,
+                label: label.as_deref().map(Cow::Borrowed),
+                timestamp_writes: timestamp_writes.cloned(),
             },
         ).map_err(|err|ComputePassError {
             scope: pass_scope,
@@ -428,7 +428,7 @@ impl Global {
             tracker: &mut cmd_buf_data.trackers,
             buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
             texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
-            tlas_actions: &mut cmd_buf_data.tlas_actions,
+            as_actions: &mut cmd_buf_data.as_actions,
 
             temp_offsets: Vec::new(),
             dynamic_offset_count: 0,
@@ -675,12 +675,9 @@ fn set_bind_group(
         .used
         .acceleration_structures
         .into_iter()
-        .map(|tlas| TlasAction {
-            tlas: tlas.clone(),
-            kind: crate::ray_tracing::TlasActionKind::Use,
-        });
+        .map(|tlas| AsAction::UseTlas(tlas.clone()));
 
-    state.tlas_actions.extend(used_resource);
+    state.as_actions.extend(used_resource);
 
     let pipeline_layout = state.binder.pipeline_layout.clone();
     let entries = state
@@ -760,7 +757,7 @@ fn set_pipeline(
         {
             // Note that non-0 range start doesn't work anyway https://github.com/gfx-rs/wgpu/issues/4502
             let len = push_constant_range.len() / wgt::PUSH_CONSTANT_ALIGNMENT as usize;
-            state.push_constants.extend(core::iter::repeat(0).take(len));
+            state.push_constants.extend(core::iter::repeat_n(0, len));
         }
 
         // Clear push constant ranges
@@ -886,13 +883,10 @@ fn dispatch_indirect(
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-    #[cfg(feature = "indirect-validation")]
-    {
-        let params = state.device.indirect_validation.as_ref().unwrap().params(
-            &state.device.limits,
-            offset,
-            buffer.size,
-        );
+    if let Some(ref indirect_validation) = state.device.indirect_validation {
+        let params = indirect_validation
+            .dispatch
+            .params(&state.device.limits, offset, buffer.size);
 
         unsafe {
             state.raw_encoder.set_compute_pipeline(params.pipeline);
@@ -921,9 +915,10 @@ fn dispatch_indirect(
                 1,
                 Some(
                     buffer
-                        .raw_indirect_validation_bind_group
+                        .indirect_validation_bind_groups
                         .get(&state.snatch_guard)
                         .unwrap()
+                        .dispatch
                         .as_ref(),
                 ),
                 &[params.aligned_offset as u32],
@@ -933,7 +928,7 @@ fn dispatch_indirect(
         let src_transition = state
             .intermediate_trackers
             .buffers
-            .set_single(&buffer, hal::BufferUses::STORAGE_READ_ONLY);
+            .set_single(&buffer, wgt::BufferUses::STORAGE_READ_ONLY);
         let src_barrier =
             src_transition.map(|transition| transition.into_hal(&buffer, &state.snatch_guard));
         unsafe {
@@ -944,8 +939,8 @@ fn dispatch_indirect(
             state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
                 buffer: params.dst_buffer,
                 usage: hal::StateTransition {
-                    from: hal::BufferUses::INDIRECT,
-                    to: hal::BufferUses::STORAGE_READ_WRITE,
+                    from: wgt::BufferUses::INDIRECT,
+                    to: wgt::BufferUses::STORAGE_READ_WRITE,
                 },
             }]);
         }
@@ -991,8 +986,8 @@ fn dispatch_indirect(
             state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
                 buffer: params.dst_buffer,
                 usage: hal::StateTransition {
-                    from: hal::BufferUses::STORAGE_READ_WRITE,
-                    to: hal::BufferUses::INDIRECT,
+                    from: wgt::BufferUses::STORAGE_READ_WRITE,
+                    to: wgt::BufferUses::INDIRECT,
                 },
             }]);
         }
@@ -1001,13 +996,11 @@ fn dispatch_indirect(
         unsafe {
             state.raw_encoder.dispatch_indirect(params.dst_buffer, 0);
         }
-    };
-    #[cfg(not(feature = "indirect-validation"))]
-    {
+    } else {
         state
             .scope
             .buffers
-            .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
+            .merge_single(&buffer, wgt::BufferUses::INDIRECT)?;
 
         use crate::resource::Trackable;
         state.flush_states(Some(buffer.tracker_index()))?;

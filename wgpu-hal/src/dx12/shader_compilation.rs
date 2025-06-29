@@ -1,6 +1,6 @@
+use std::{ffi::CStr, path::PathBuf, string::String, vec::Vec};
+
 use crate::auxil::dxgi::result::HResult;
-use std::ffi::CStr;
-use std::path::PathBuf;
 use thiserror::Error;
 use windows::{
     core::{Interface, PCSTR, PCWSTR},
@@ -23,6 +23,7 @@ pub(super) fn compile_fxc(
     let mut shader_data = None;
     let mut compile_flags = Fxc::D3DCOMPILE_ENABLE_STRICTNESS;
     if device
+        .shared
         .private_caps
         .instance_flags
         .contains(wgt::InstanceFlags::DEBUG)
@@ -112,7 +113,7 @@ impl DxcLib {
                 -> windows_core::HRESULT;
 
             let func: libloading::Symbol<DxcCreateInstanceFn> =
-                self.lib.get(b"DxcCreateInstance\0")?;
+                self.lib.get(c"DxcCreateInstance".to_bytes())?;
             dxc_create_instance::<T>(|clsid, iid, ppv| func(clsid, iid, ppv))
         }
     }
@@ -135,6 +136,7 @@ unsafe fn dxc_create_instance<T: DxcObj>(
 
 // Destructor order should be fine since _dxil and _dxc don't rely on each other.
 pub(super) struct DxcContainer {
+    pub(super) max_shader_model: wgt::DxcShaderModel,
     compiler: Dxc::IDxcCompiler3,
     utils: Dxc::IDxcUtils,
     validator: Option<Dxc::IDxcValidator>,
@@ -157,6 +159,7 @@ pub(super) enum GetDynamicDXCContainerError {
 pub(super) fn get_dynamic_dxc_container(
     dxc_path: PathBuf,
     dxil_path: PathBuf,
+    max_shader_model: wgt::DxcShaderModel,
 ) -> Result<DxcContainer, GetDynamicDXCContainerError> {
     let dxc = DxcLib::new_dynamic(dxc_path)
         .map_err(|e| GetDynamicDXCContainerError::FailedToLoad("dxcompiler.dll", e))?;
@@ -169,6 +172,7 @@ pub(super) fn get_dynamic_dxc_container(
     let validator = dxil.create_instance::<Dxc::IDxcValidator>()?;
 
     Ok(DxcContainer {
+        max_shader_model,
         compiler,
         utils,
         validator: Some(validator),
@@ -198,6 +202,7 @@ pub(super) fn get_static_dxc_container() -> Result<DxcContainer, crate::DeviceEr
             })?;
 
             Ok(DxcContainer {
+                max_shader_model: wgt::DxcShaderModel::V6_7,
                 compiler,
                 utils,
                 validator: None,
@@ -264,7 +269,7 @@ pub(super) fn compile_dxc(
     let raw_ep = OPCWSTR::new(raw_ep);
     let full_stage = OPCWSTR::new(full_stage);
 
-    let mut compile_args = arrayvec::ArrayVec::<PCWSTR, 12>::new_const();
+    let mut compile_args = arrayvec::ArrayVec::<PCWSTR, 13>::new_const();
 
     if let Some(source_name) = source_name.as_ref() {
         compile_args.push(source_name.ptr())
@@ -286,12 +291,17 @@ pub(super) fn compile_dxc(
     }
 
     if device
+        .shared
         .private_caps
         .instance_flags
         .contains(wgt::InstanceFlags::DEBUG)
     {
         compile_args.push(Dxc::DXC_ARG_DEBUG);
         compile_args.push(Dxc::DXC_ARG_SKIP_OPTIMIZATIONS);
+    }
+
+    if device.features.contains(wgt::Features::SHADER_F16) {
+        compile_args.push(windows::core::w!("-enable-16bit-types"));
     }
 
     let buffer = Dxc::DxcBuffer {

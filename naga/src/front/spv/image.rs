@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::{
     arena::{Handle, UniqueArena},
     Scalar,
@@ -311,12 +313,51 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 
         let value_lexp = self.lookup_expression.lookup(value_id)?;
         let value = self.get_expr_handle(value_id, value_lexp, ctx, emitter, block, body_idx);
+        let value_type = self.lookup_type.lookup(value_lexp.type_id)?.handle;
+
+        // In hlsl etc, the write value may not be the vector 4.
+        let expanded_value = match ctx.module.types[value_type].inner {
+            crate::TypeInner::Scalar(_) => Some(crate::Expression::Splat {
+                value,
+                size: crate::VectorSize::Quad,
+            }),
+            crate::TypeInner::Vector { size, .. } => match size {
+                crate::VectorSize::Bi => Some(crate::Expression::Swizzle {
+                    size: crate::VectorSize::Quad,
+                    vector: value,
+                    pattern: [
+                        crate::SwizzleComponent::X,
+                        crate::SwizzleComponent::Y,
+                        crate::SwizzleComponent::Y,
+                        crate::SwizzleComponent::Y,
+                    ],
+                }),
+                crate::VectorSize::Tri => Some(crate::Expression::Swizzle {
+                    size: crate::VectorSize::Quad,
+                    vector: value,
+                    pattern: [
+                        crate::SwizzleComponent::X,
+                        crate::SwizzleComponent::Y,
+                        crate::SwizzleComponent::Z,
+                        crate::SwizzleComponent::Z,
+                    ],
+                }),
+                crate::VectorSize::Quad => None,
+            },
+            _ => return Err(Error::InvalidVectorType(value_type)),
+        };
+
+        let value_patched = if let Some(s) = expanded_value {
+            ctx.expressions.append(s, crate::Span::default())
+        } else {
+            value
+        };
 
         Ok(crate::Statement::ImageStore {
             image: image_lexp.handle,
             coordinate,
             array_index,
-            value,
+            value: value_patched,
         })
     }
 
@@ -561,16 +602,16 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     words_left -= 2;
                 }
                 spirv::ImageOperands::CONST_OFFSET => {
-                    let offset_constant = self.next()?;
-                    let offset_expr = self
-                        .lookup_constant
-                        .lookup(offset_constant)?
-                        .inner
-                        .to_expr();
-                    let offset_handle = ctx
-                        .module
-                        .global_expressions
-                        .append(offset_expr, Default::default());
+                    let offset_expr = self.next()?;
+                    let offset_lexp = self.lookup_expression.lookup(offset_expr)?;
+                    let offset_handle = self.get_expr_handle(
+                        offset_expr,
+                        offset_lexp,
+                        ctx,
+                        emitter,
+                        block,
+                        body_idx,
+                    );
                     offset = Some(offset_handle);
                     words_left -= 1;
                 }

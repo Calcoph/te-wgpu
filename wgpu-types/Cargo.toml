@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-types"
-version = "24.0.0"
+version = "25.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "Common types and utilities for wgpu, the cross-platform, safe, pure-rust graphics API"
@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version = "1.82.0"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -25,23 +25,32 @@ targets = [
     "wasm32-unknown-unknown",
 ]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+
+[lints.clippy]
+std_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+alloc_instead_of_core = "warn"
+
 [lib]
 
 [features]
 default = ["std"]
-std = ["js-sys/std", "web-sys/std"]
+std = ["js-sys/std", "web-sys/std", "thiserror/std"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
-serde = ["dep:serde"]
+serde = ["dep:serde", "bitflags/serde"]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+# Enables variants of `Trace` other than `Trace::Off`
+trace = ["std"]
 
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
+bytemuck = { workspace = true, features = ["derive"] }
 log.workspace = true
+thiserror = { workspace = true, optional = true }
 serde = { workspace = true, default-features = false, features = [
     "alloc",
     "derive",
@@ -62,8 +71,3 @@ web-sys = { workspace = true, default-features = false, features = [
 [dev-dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-
-[lints.clippy]
-std_instead_of_core = "warn"
-std_instead_of_alloc = "warn"
-alloc_instead_of_core = "warn"

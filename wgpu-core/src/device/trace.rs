@@ -1,7 +1,10 @@
-use crate::id;
-use std::ops::Range;
+use alloc::{string::String, vec::Vec};
+use core::ops::Range;
+
 #[cfg(feature = "trace")]
-use std::{borrow::Cow, io::Write as _};
+use {alloc::borrow::Cow, std::io::Write as _};
+
+use crate::id;
 
 //TODO: consider a readable Id that doesn't include the backend
 
@@ -220,12 +223,12 @@ pub struct Trace {
 
 #[cfg(feature = "trace")]
 impl Trace {
-    pub fn new(path: &std::path::Path) -> Result<Self, std::io::Error> {
+    pub fn new(path: std::path::PathBuf) -> Result<Self, std::io::Error> {
         log::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write_all(b"[\n")?;
         Ok(Self {
-            path: path.to_path_buf(),
+            path,
             file,
             config: ron::ser::PrettyConfig::default(),
             binary_id: 0,
@@ -234,7 +237,7 @@ impl Trace {
 
     pub fn make_binary(&mut self, kind: &str, data: &[u8]) -> String {
         self.binary_id += 1;
-        let name = format!("data{}.{}", self.binary_id, kind);
+        let name = std::format!("data{}.{}", self.binary_id, kind);
         let _ = std::fs::write(self.path.join(&name), data);
         name
     }

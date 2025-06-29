@@ -1,6 +1,10 @@
 use super::{conv, AsNative, TimestampQuerySupport};
 use crate::CommandEncoder as _;
-use std::{borrow::Cow, mem::size_of, ops::Range};
+use std::{
+    borrow::{Cow, ToOwned as _},
+    ops::Range,
+    vec::Vec,
+};
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -279,7 +283,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &super::Texture,
-        _src_usage: crate::TextureUses,
+        _src_usage: wgt::TextureUses,
         dst: &super::Texture,
         regions: T,
     ) where
@@ -358,7 +362,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &super::Texture,
-        _src_usage: crate::TextureUses,
+        _src_usage: wgt::TextureUses,
         dst: &super::Buffer,
         regions: T,
     ) where
@@ -390,6 +394,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 conv::get_blit_option(src.format, copy.texture_base.aspect),
             );
         }
+    }
+
+    unsafe fn copy_acceleration_structure_to_acceleration_structure(
+        &mut self,
+        _src: &super::AccelerationStructure,
+        _dst: &super::AccelerationStructure,
+        _copy: wgt::AccelerationStructureCopy,
+    ) {
+        unimplemented!()
     }
 
     unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {
@@ -1087,6 +1100,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
+    unsafe fn draw_mesh_tasks(
+        &mut self,
+        _group_count_x: u32,
+        _group_count_y: u32,
+        _group_count_z: u32,
+    ) {
+        unreachable!()
+    }
+
     unsafe fn draw_indirect(
         &mut self,
         buffer: &super::Buffer,
@@ -1121,6 +1143,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        _buffer: &<Self::A as crate::Api>::Buffer,
+        _offset: wgt::BufferAddress,
+        _draw_count: u32,
+    ) {
+        unreachable!()
+    }
+
     unsafe fn draw_indirect_count(
         &mut self,
         _buffer: &super::Buffer,
@@ -1140,6 +1171,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
         _max_count: u32,
     ) {
         //TODO
+    }
+
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        _buffer: &<Self::A as crate::Api>::Buffer,
+        _offset: wgt::BufferAddress,
+        _count_buffer: &<Self::A as crate::Api>::Buffer,
+        _count_offset: wgt::BufferAddress,
+        _max_count: u32,
+    ) {
+        unreachable!()
     }
 
     // compute
@@ -1243,8 +1285,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .zip(pipeline.work_group_memory_sizes.iter())
             .enumerate()
         {
-            const ALIGN_MASK: u32 = 0xF; // must be a multiple of 16 bytes
-            let size = ((*pipeline_size - 1) | ALIGN_MASK) + 1;
+            let size = pipeline_size.next_multiple_of(16);
             if *cur_size != size {
                 *cur_size = size;
                 encoder.set_threadgroup_memory_length(index as _, size as _);
@@ -1289,6 +1330,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
         _barriers: crate::AccelerationStructureBarrier,
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn read_acceleration_structure_compact_size(
+        &mut self,
+        _acceleration_structure: &super::AccelerationStructure,
+        _buf: &super::Buffer,
     ) {
         unimplemented!()
     }

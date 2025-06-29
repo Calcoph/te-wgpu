@@ -12,9 +12,11 @@ mod render;
 mod render_command;
 mod timestamp_writes;
 mod transfer;
+mod transition_resources;
 
-use std::mem::{self, ManuallyDrop};
-use std::sync::Arc;
+use alloc::{borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::mem::{self, ManuallyDrop};
+use core::ops;
 
 pub(crate) use self::clear::clear_texture;
 pub use self::{
@@ -34,7 +36,7 @@ use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
-use crate::ray_tracing::{BlasAction, TlasAction};
+use crate::ray_tracing::AsAction;
 use crate::resource::{Fallible, InvalidResourceError, Labeled, ParentDevice as _, QuerySet};
 use crate::storage::Storage;
 use crate::track::{DeviceTracker, Tracker, UsageScope};
@@ -201,7 +203,7 @@ impl<'a> Drop for RecordingGuard<'a> {
     }
 }
 
-impl<'a> std::ops::Deref for RecordingGuard<'a> {
+impl<'a> ops::Deref for RecordingGuard<'a> {
     type Target = CommandBufferMutable;
 
     fn deref(&self) -> &Self::Target {
@@ -212,7 +214,7 @@ impl<'a> std::ops::Deref for RecordingGuard<'a> {
     }
 }
 
-impl<'a> std::ops::DerefMut for RecordingGuard<'a> {
+impl<'a> ops::DerefMut for RecordingGuard<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self.inner {
             CommandEncoderStatus::Recording(command_buffer_mutable) => command_buffer_mutable,
@@ -434,6 +436,7 @@ pub(crate) struct BakedCommands {
     pub(crate) encoder: CommandEncoder,
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
+    pub(crate) indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
 }
@@ -460,9 +463,10 @@ pub struct CommandBufferMutable {
 
     pub(crate) pending_query_resets: QueryResetMap,
 
-    blas_actions: Vec<BlasAction>,
-    tlas_actions: Vec<TlasAction>,
+    as_actions: Vec<AsAction>,
     temp_resources: Vec<TempResource>,
+
+    indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
 
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
@@ -483,6 +487,7 @@ impl CommandBufferMutable {
             encoder: self.encoder,
             trackers: self.trackers,
             temp_resources: self.temp_resources,
+            indirect_draw_validation_resources: self.indirect_draw_validation_resources,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_actions: self.texture_memory_actions,
         }
@@ -547,9 +552,10 @@ impl CommandBuffer {
                     buffer_memory_init_actions: Default::default(),
                     texture_memory_actions: Default::default(),
                     pending_query_resets: QueryResetMap::new(),
-                    blas_actions: Default::default(),
-                    tlas_actions: Default::default(),
+                    as_actions: Default::default(),
                     temp_resources: Default::default(),
+                    indirect_draw_validation_resources:
+                        crate::indirect_validation::DrawResources::new(device.clone()),
                     #[cfg(feature = "trace")]
                     commands: if device.trace.lock().is_some() {
                         Some(Vec::new())
@@ -697,7 +703,7 @@ pub struct BasePass<C> {
 impl<C: Clone> BasePass<C> {
     fn new(label: &Label) -> Self {
         Self {
-            label: label.as_ref().map(|cow| cow.to_string()),
+            label: label.as_deref().map(str::to_owned),
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
@@ -770,7 +776,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
-            list.push(TraceCommand::PushDebugGroup(label.to_string()));
+            list.push(TraceCommand::PushDebugGroup(label.to_owned()));
         }
 
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
@@ -805,7 +811,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
-            list.push(TraceCommand::InsertDebugMarker(label.to_string()));
+            list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
         }
 
         if !cmd_buf

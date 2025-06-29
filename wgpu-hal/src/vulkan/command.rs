@@ -3,11 +3,7 @@ use super::conv;
 use arrayvec::ArrayVec;
 use ash::vk;
 
-use std::{
-    mem::{self, size_of},
-    ops::Range,
-    slice,
-};
+use std::{mem, ops::Range};
 
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
@@ -285,7 +281,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &super::Texture,
-        src_usage: crate::TextureUses,
+        src_usage: wgt::TextureUses,
         dst: &super::Texture,
         regions: T,
     ) where
@@ -345,7 +341,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &super::Texture,
-        src_usage: crate::TextureUses,
+        src_usage: wgt::TextureUses,
         dst: &super::Buffer,
         regions: T,
     ) where
@@ -385,6 +381,46 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                 set.raw,
                 index,
+            )
+        };
+    }
+    unsafe fn read_acceleration_structure_compact_size(
+        &mut self,
+        acceleration_structure: &super::AccelerationStructure,
+        buffer: &super::Buffer,
+    ) {
+        let ray_tracing_functions = self
+            .device
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
+        let query_pool = acceleration_structure
+            .compacted_size_query
+            .as_ref()
+            .unwrap();
+        unsafe {
+            self.device
+                .raw
+                .cmd_reset_query_pool(self.active, *query_pool, 0, 1);
+            ray_tracing_functions
+                .acceleration_structure
+                .cmd_write_acceleration_structures_properties(
+                    self.active,
+                    &[acceleration_structure.raw],
+                    vk::QueryType::ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
+                    *query_pool,
+                    0,
+                );
+            self.device.raw.cmd_copy_query_pool_results(
+                self.active,
+                *query_pool,
+                0,
+                1,
+                buffer.raw,
+                0,
+                wgt::QUERY_SIZE as vk::DeviceSize,
+                vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
             )
         };
     }
@@ -864,7 +900,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 layout.raw,
                 conv::map_shader_stage(stages),
                 offset_bytes,
-                slice::from_raw_parts(data.as_ptr().cast(), data.len() * 4),
+                bytemuck::cast_slice(data),
             )
         };
     }
@@ -1011,6 +1047,20 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
     }
+    unsafe fn draw_mesh_tasks(
+        &mut self,
+        group_count_x: u32,
+        group_count_y: u32,
+        group_count_z: u32,
+    ) {
+        if let Some(ref t) = self.device.extension_fns.mesh_shading {
+            unsafe {
+                t.cmd_draw_mesh_tasks(self.active, group_count_x, group_count_y, group_count_z);
+            };
+        } else {
+            panic!("Feature `MESH_SHADING` not enabled");
+        }
+    }
     unsafe fn draw_indirect(
         &mut self,
         buffer: &super::Buffer,
@@ -1042,6 +1092,26 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
             )
         };
+    }
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        buffer: &<Self::A as crate::Api>::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    ) {
+        if let Some(ref t) = self.device.extension_fns.mesh_shading {
+            unsafe {
+                t.cmd_draw_mesh_tasks_indirect(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    draw_count,
+                    size_of::<wgt::DispatchIndirectArgs>() as u32,
+                );
+            };
+        } else {
+            panic!("Feature `MESH_SHADING` not enabled");
+        }
     }
     unsafe fn draw_indirect_count(
         &mut self,
@@ -1093,6 +1163,33 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 };
             }
             None => panic!("Feature `DRAW_INDIRECT_COUNT` not enabled"),
+        }
+    }
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        buffer: &<Self::A as crate::Api>::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &super::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
+    ) {
+        if self.device.extension_fns.draw_indirect_count.is_none() {
+            panic!("Feature `DRAW_INDIRECT_COUNT` not enabled");
+        }
+        if let Some(ref t) = self.device.extension_fns.mesh_shading {
+            unsafe {
+                t.cmd_draw_mesh_tasks_indirect_count(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    count_buffer.raw,
+                    count_offset,
+                    max_count,
+                    size_of::<wgt::DispatchIndirectArgs>() as u32,
+                );
+            };
+        } else {
+            panic!("Feature `MESH_SHADING` not enabled");
         }
     }
 
@@ -1152,12 +1249,49 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .cmd_dispatch_indirect(self.active, buffer.raw, offset)
         }
     }
+
+    unsafe fn copy_acceleration_structure_to_acceleration_structure(
+        &mut self,
+        src: &super::AccelerationStructure,
+        dst: &super::AccelerationStructure,
+        copy: wgt::AccelerationStructureCopy,
+    ) {
+        let ray_tracing_functions = self
+            .device
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
+
+        let mode = match copy {
+            wgt::AccelerationStructureCopy::Clone => vk::CopyAccelerationStructureModeKHR::CLONE,
+            wgt::AccelerationStructureCopy::Compact => {
+                vk::CopyAccelerationStructureModeKHR::COMPACT
+            }
+        };
+
+        unsafe {
+            ray_tracing_functions
+                .acceleration_structure
+                .cmd_copy_acceleration_structure(
+                    self.active,
+                    &vk::CopyAccelerationStructureInfoKHR {
+                        s_type: vk::StructureType::COPY_ACCELERATION_STRUCTURE_INFO_KHR,
+                        p_next: std::ptr::null(),
+                        src: src.raw,
+                        dst: dst.raw,
+                        mode,
+                        _marker: Default::default(),
+                    },
+                );
+        }
+    }
 }
 
 #[test]
 fn check_dst_image_layout() {
     assert_eq!(
-        conv::derive_image_layout(crate::TextureUses::COPY_DST, wgt::TextureFormat::Rgba8Unorm),
+        conv::derive_image_layout(wgt::TextureUses::COPY_DST, wgt::TextureFormat::Rgba8Unorm),
         DST_IMAGE_LAYOUT
     );
 }

@@ -13,6 +13,8 @@ end of the VS buffer table.
 
 !*/
 
+#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
+
 // `MTLFeatureSet` is superseded by `MTLGpuFamily`.
 // However, `MTLGpuFamily` is only supported starting MacOS 10.15, whereas our minimum target is MacOS 10.13,
 // See https://github.com/gpuweb/gpuweb/issues/1069 for minimum spec.
@@ -22,20 +24,25 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod layer_observer;
 mod surface;
 mod time;
 
 use std::{
-    collections::HashMap,
+    borrow::ToOwned as _,
     fmt, iter, ops,
     ptr::NonNull,
+    string::String,
     sync::{atomic, Arc},
     thread,
+    vec::Vec,
 };
 
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
+use hashbrown::HashMap;
 use metal::foreign_types::ForeignTypeRef as _;
+use naga::FastHashMap;
 use parking_lot::{Mutex, RwLock};
 
 #[derive(Clone, Debug)]
@@ -261,6 +268,8 @@ struct PrivateCapabilities {
     max_vertex_buffers: ResourceIndex,
     max_textures_per_stage: ResourceIndex,
     max_samplers_per_stage: ResourceIndex,
+    max_binding_array_elements: ResourceIndex,
+    max_sampler_binding_array_elements: ResourceIndex,
     buffer_alignment: u64,
     max_buffer_size: u64,
     max_texture_size: u64,
@@ -352,6 +361,10 @@ impl Queue {
             raw: Arc::new(Mutex::new(raw)),
             timestamp_period,
         }
+    }
+
+    pub fn as_raw(&self) -> &Arc<Mutex<metal::CommandQueue>> {
+        &self.raw
     }
 }
 
@@ -600,6 +613,7 @@ impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
             naga::ShaderStage::Vertex => &self.vs,
             naga::ShaderStage::Fragment => &self.fs,
             naga::ShaderStage::Compute => &self.cs,
+            naga::ShaderStage::Task | naga::ShaderStage::Mesh => unreachable!(),
         }
     }
 }
@@ -768,8 +782,22 @@ unsafe impl Send for BindGroup {}
 unsafe impl Sync for BindGroup {}
 
 #[derive(Debug)]
+pub enum ShaderModuleSource {
+    Naga(crate::NagaShader),
+    Passthrough(PassthroughShader),
+}
+
+#[derive(Debug)]
+pub struct PassthroughShader {
+    pub library: metal::Library,
+    pub function: metal::Function,
+    pub entry_point: String,
+    pub num_workgroups: (u32, u32, u32),
+}
+
+#[derive(Debug)]
 pub struct ShaderModule {
-    naga: crate::NagaShader,
+    source: ShaderModuleSource,
     bounds_checks: wgt::ShaderRuntimeChecks,
 }
 
@@ -937,9 +965,9 @@ struct CommandState {
     /// See `device::CompiledShader::sized_bindings` for more details.
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
-    storage_buffer_length_map: rustc_hash::FxHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    storage_buffer_length_map: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
 
-    vertex_buffer_size_map: rustc_hash::FxHashMap<u64, wgt::BufferSize>,
+    vertex_buffer_size_map: FastHashMap<u64, wgt::BufferSize>,
 
     work_group_memory_sizes: Vec<u32>,
     push_constants: Vec<u32>,

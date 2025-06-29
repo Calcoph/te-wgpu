@@ -1,12 +1,13 @@
-use crate::arena::{Arena, UniqueArena};
-use crate::arena::{Handle, HandleSet};
+use alloc::{format, string::String};
 
 use super::validate_atomic_compare_exchange_struct;
-
 use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
     ExpressionError, FunctionInfo, ModuleInfo,
 };
+use crate::arena::{Arena, UniqueArena};
+use crate::arena::{Handle, HandleSet};
+use crate::proc::TypeResolution;
 use crate::span::WithSpan;
 use crate::span::{AddSpan as _, MapErrWithSpan as _};
 
@@ -22,8 +23,6 @@ pub enum CallError {
     ResultAlreadyInScope(Handle<crate::Expression>),
     #[error("Result expression {0:?} is populated by multiple `Call` statements")]
     ResultAlreadyPopulated(Handle<crate::Expression>),
-    #[error("Result value is invalid")]
-    ResultValue(#[source] ExpressionError),
     #[error("Requires {required} arguments, but {seen} are provided")]
     ArgumentCount { required: usize, seen: usize },
     #[error("Argument {index} value {seen_expression:?} doesn't match the type {required:?}")]
@@ -139,8 +138,17 @@ pub enum FunctionError {
     LastCaseFallTrough,
     #[error("The pointer {0:?} doesn't relate to a valid destination for a store")]
     InvalidStorePointer(Handle<crate::Expression>),
-    #[error("The value {0:?} can not be stored")]
-    InvalidStoreValue(Handle<crate::Expression>),
+    #[error("Image store texture parameter type mismatch")]
+    InvalidStoreTexture {
+        actual: Handle<crate::Expression>,
+        actual_ty: crate::TypeInner,
+    },
+    #[error("Image store value parameter type mismatch")]
+    InvalidStoreValue {
+        actual: Handle<crate::Expression>,
+        actual_ty: crate::TypeInner,
+        expected_ty: crate::TypeInner,
+    },
     #[error("The type of {value:?} doesn't match the type stored in {pointer:?}")]
     InvalidStoreTypes {
         pointer: Handle<crate::Expression>,
@@ -166,10 +174,18 @@ pub enum FunctionError {
     InvalidRayQueryExpression(Handle<crate::Expression>),
     #[error("Acceleration structure {0:?} is not a matching expression")]
     InvalidAccelerationStructure(Handle<crate::Expression>),
+    #[error(
+        "Acceleration structure {0:?} is missing flag vertex_return while Ray Query {1:?} does"
+    )]
+    MissingAccelerationStructureVertexReturn(Handle<crate::Expression>, Handle<crate::Expression>),
+    #[error("Ray Query {0:?} is missing flag vertex_return")]
+    MissingRayQueryVertexReturn(Handle<crate::Expression>),
     #[error("Ray descriptor {0:?} is not a matching expression")]
     InvalidRayDescriptor(Handle<crate::Expression>),
     #[error("Ray Query {0:?} does not have a matching type")]
     InvalidRayQueryType(Handle<crate::Type>),
+    #[error("Hit distance {0:?} must be an f32")]
+    InvalidHitDistanceType(Handle<crate::Expression>),
     #[error("Shader requires capability {0:?}")]
     MissingCapability(super::Capabilities),
     #[error(
@@ -283,6 +299,10 @@ impl<'a> BlockContext<'a> {
 
     fn resolve_pointer_type(&self, handle: Handle<crate::Expression>) -> &crate::TypeInner {
         self.info[handle].ty.inner_with(self.types)
+    }
+
+    fn inner_type<'t>(&'t self, ty: &'t TypeResolution) -> &'t crate::TypeInner {
+        ty.inner_with(self.types)
     }
 }
 
@@ -756,7 +776,8 @@ impl super::Validator {
                             | Ex::Math { .. }
                             | Ex::As { .. }
                             | Ex::ArrayLength(_)
-                            | Ex::RayQueryGetIntersection { .. } => {
+                            | Ex::RayQueryGetIntersection { .. }
+                            | Ex::RayQueryVertexPositions { .. } => {
                                 self.emit_expression(handle, context)?
                             }
                             Ex::CallResult(_)
@@ -1009,30 +1030,29 @@ impl super::Validator {
                     let value_ty = context.resolve_type(value, &self.valid_expression_set)?;
                     match *value_ty {
                         Ti::Image { .. } | Ti::Sampler { .. } => {
-                            return Err(FunctionError::InvalidStoreValue(value)
-                                .with_span_handle(value, context.expressions));
+                            return Err(FunctionError::InvalidStoreTexture {
+                                actual: value,
+                                actual_ty: value_ty.clone(),
+                            }
+                            .with_span_context((
+                                context.expressions.get_span(value),
+                                format!("this value is of type {value_ty:?}"),
+                            ))
+                            .with_span(span, "expects a texture argument"));
                         }
                         _ => {}
                     }
 
                     let pointer_ty = context.resolve_pointer_type(pointer);
-
-                    let good = match *pointer_ty {
-                        Ti::Pointer { base, space: _ } => match context.types[base].inner {
-                            Ti::Atomic(scalar) => *value_ty == Ti::Scalar(scalar),
-                            ref other => value_ty == other,
-                        },
-                        Ti::ValuePointer {
-                            size: Some(size),
-                            scalar,
-                            space: _,
-                        } => *value_ty == Ti::Vector { size, scalar },
-                        Ti::ValuePointer {
-                            size: None,
-                            scalar,
-                            space: _,
-                        } => *value_ty == Ti::Scalar(scalar),
-                        _ => false,
+                    let good = match pointer_ty
+                        .pointer_base_type()
+                        .as_ref()
+                        .map(|ty| context.inner_type(ty))
+                    {
+                        // The Naga IR allows storing a scalar to an atomic.
+                        Some(&Ti::Atomic(ref scalar)) => *value_ty == Ti::Scalar(*scalar),
+                        Some(other) => *value_ty == *other,
+                        None => false,
                     };
                     if !good {
                         return Err(FunctionError::InvalidStoreTypes { pointer, value }
@@ -1124,10 +1144,10 @@ impl super::Validator {
                     };
 
                     // The `coordinate` operand must be a vector of the appropriate size.
-                    if !context
+                    if context
                         .resolve_type(coordinate, &self.valid_expression_set)?
                         .image_storage_coordinates()
-                        .is_some_and(|coord_dim| coord_dim == dim)
+                        .is_none_or(|coord_dim| coord_dim != dim)
                     {
                         return Err(FunctionError::InvalidImageStore(
                             ExpressionError::InvalidImageCoordinateType(dim, coordinate),
@@ -1167,9 +1187,22 @@ impl super::Validator {
 
                     // The value we're writing had better match the scalar type
                     // for `image`'s format.
-                    if *context.resolve_type(value, &self.valid_expression_set)? != value_ty {
-                        return Err(FunctionError::InvalidStoreValue(value)
-                            .with_span_handle(value, context.expressions));
+                    let actual_value_ty =
+                        context.resolve_type(value, &self.valid_expression_set)?;
+                    if actual_value_ty != &value_ty {
+                        return Err(FunctionError::InvalidStoreValue {
+                            actual: value,
+                            actual_ty: actual_value_ty.clone(),
+                            expected_ty: value_ty.clone(),
+                        }
+                        .with_span_context((
+                            context.expressions.get_span(value),
+                            format!("this value is of type {actual_value_ty:?}"),
+                        ))
+                        .with_span(
+                            span,
+                            format!("expects a value argument of type {value_ty:?}"),
+                        ));
                     }
                 }
                 S::Call {
@@ -1422,14 +1455,14 @@ impl super::Validator {
                                 .with_span_static(span, "invalid query expression"));
                         }
                     };
-                    match context.types[query_var.ty].inner {
-                        Ti::RayQuery => {}
+                    let rq_vertex_return = match context.types[query_var.ty].inner {
+                        Ti::RayQuery { vertex_return } => vertex_return,
                         ref other => {
                             log::error!("Unexpected ray query type {other:?}");
                             return Err(FunctionError::InvalidRayQueryType(query_var.ty)
                                 .with_span_static(span, "invalid query type"));
                         }
-                    }
+                    };
                     match *fun {
                         crate::RayQueryFunction::Initialize {
                             acceleration_structure,
@@ -1438,7 +1471,11 @@ impl super::Validator {
                             match *context
                                 .resolve_type(acceleration_structure, &self.valid_expression_set)?
                             {
-                                Ti::AccelerationStructure => {}
+                                Ti::AccelerationStructure { vertex_return } => {
+                                    if (!vertex_return) && rq_vertex_return {
+                                        return Err(FunctionError::MissingAccelerationStructureVertexReturn(acceleration_structure, query).with_span_static(span, "invalid acceleration structure"));
+                                    }
+                                }
                                 _ => {
                                     return Err(FunctionError::InvalidAccelerationStructure(
                                         acceleration_structure,
@@ -1460,6 +1497,19 @@ impl super::Validator {
                         crate::RayQueryFunction::Proceed { result } => {
                             self.emit_expression(result, context)?;
                         }
+                        crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                            match *context.resolve_type(hit_t, &self.valid_expression_set)? {
+                                Ti::Scalar(crate::Scalar {
+                                    kind: crate::ScalarKind::Float,
+                                    width: _,
+                                }) => {}
+                                _ => {
+                                    return Err(FunctionError::InvalidHitDistanceType(hit_t)
+                                        .with_span_static(span, "invalid hit_t"))
+                                }
+                            }
+                        }
+                        crate::RayQueryFunction::ConfirmIntersection => {}
                         crate::RayQueryFunction::Terminate => {}
                     }
                 }
@@ -1598,7 +1648,6 @@ impl super::Validator {
         module: &crate::Module,
         mod_info: &ModuleInfo,
         entry_point: bool,
-        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
         let mut info = mod_info.process_function(fun, module, self.flags, self.capabilities)?;
 
@@ -1687,7 +1736,7 @@ impl super::Validator {
                     module,
                     &info,
                     mod_info,
-                    global_expr_kind,
+                    &local_expr_kind,
                 ) {
                     Ok(stages) => info.available_stages &= stages,
                     Err(source) => {
