@@ -40,6 +40,11 @@ Bottom level categories:
 
 ## Unreleased
 
+### v24.0.4 (2025-04-03)
+
+#### Metal
+ - Use resize observers for smoother resizing. By @madsmtm in [#7026](https://github.com/gfx-rs/wgpu/pull/7026).
+
 ### v24.0.3 (2025-03-19)
 
 #### Bug Fixes
