@@ -59,7 +59,7 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "26.0.4"
+version = "26.0.5"
 authors = ["gfx-rs developers"]
 
 [workspace.dependencies]
@@ -92,7 +92,7 @@ wgpu-core-deps-emscripten = { version = "26.0.0", path = "./wgpu-core/platform-d
 
 anyhow = { version = "1.0.87", default-features = false }
 approx = "0.5"
-arbitrary = "1.4"
+arbitrary = "1.4.2"
 argh = "0.1.13"
 arrayvec = { version = "0.7.1", default-features = false }
 bincode = "1"
