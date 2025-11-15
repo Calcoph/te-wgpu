@@ -4,7 +4,18 @@
 use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt as _;
-use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        COMPUTE_PASS_RESOURCE_OWNERSHIP,
+        COMPUTE_PASS_QUERY_SET_OWNERSHIP_PIPELINE_STATISTICS,
+        COMPUTE_PASS_QUERY_SET_OWNERSHIP_TIMESTAMPS,
+        COMPUTE_PASS_KEEP_ENCODER_ALIVE,
+    ]);
+}
 
 const SHADER_SRC: &str = "
 @group(0) @binding(0)
@@ -53,7 +64,9 @@ async fn compute_pass_resource_ownership(ctx: TestingContext) {
         drop(pipeline);
         drop(bind_group);
         drop(indirect_buffer);
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
     }
 
     assert_compute_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -102,7 +115,9 @@ async fn compute_pass_query_set_ownership_pipeline_statistics(ctx: TestingContex
 
         // Drop the query set. Then do a device poll to make sure it's not dropped too early, no matter what.
         drop(query_set);
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
     }
 
     assert_compute_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -159,7 +174,9 @@ async fn compute_pass_query_set_ownership_timestamps(ctx: TestingContext) {
         // Drop the query sets. Then do a device poll to make sure they're not dropped too early, no matter what.
         drop(query_set_timestamp_writes);
         drop(query_set_write_timestamp);
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
     }
 
     assert_compute_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -167,7 +184,11 @@ async fn compute_pass_query_set_ownership_timestamps(ctx: TestingContext) {
 
 #[gpu_test]
 static COMPUTE_PASS_KEEP_ENCODER_ALIVE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop(),
+    )
     .run_async(compute_pass_keep_encoder_alive);
 
 async fn compute_pass_keep_encoder_alive(ctx: TestingContext) {
@@ -195,7 +216,9 @@ async fn compute_pass_keep_encoder_alive(ctx: TestingContext) {
     let mut cpass = cpass.forget_lifetime();
     drop(encoder);
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     // Record some draw commands.
     cpass.set_pipeline(&pipeline).unwrap();
@@ -219,7 +242,9 @@ async fn assert_compute_pass_executed_normally(
     encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size).unwrap();
     ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = cpu_buffer.slice(..).get_mapped_range();
 

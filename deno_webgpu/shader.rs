@@ -8,146 +8,163 @@ use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use wgpu_core::pipeline;
 
+use crate::error::GPUGenericError;
 use crate::Instance;
 
 pub struct GPUShaderModule {
-    pub instance: Instance,
-    pub id: wgpu_core::id::ShaderModuleId,
-    pub label: String,
+  pub instance: Instance,
+  pub id: wgpu_core::id::ShaderModuleId,
+  pub label: String,
 }
 
 impl Drop for GPUShaderModule {
-    fn drop(&mut self) {
-        self.instance.shader_module_drop(self.id);
-    }
+  fn drop(&mut self) {
+    self.instance.shader_module_drop(self.id);
+  }
 }
 
 impl WebIdlInterfaceConverter for GPUShaderModule {
-    const NAME: &'static str = "GPUShaderModule";
+  const NAME: &'static str = "GPUShaderModule";
 }
 
-impl GarbageCollected for GPUShaderModule {}
+impl GarbageCollected for GPUShaderModule {
+  fn get_name(&self) -> &'static std::ffi::CStr {
+    c"GPUShaderModule"
+  }
+}
 
 #[op2]
 impl GPUShaderModule {
-    #[getter]
-    #[string]
-    fn label(&self) -> String {
-        self.label.clone()
-    }
-    #[setter]
-    #[string]
-    fn label(&self, #[webidl] _label: String) {
-        // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
-    }
+  #[constructor]
+  #[cppgc]
+  fn constructor(_: bool) -> Result<GPUShaderModule, GPUGenericError> {
+    Err(GPUGenericError::InvalidConstructor)
+  }
+
+  #[getter]
+  #[string]
+  fn label(&self) -> String {
+    self.label.clone()
+  }
+  #[setter]
+  #[string]
+  fn label(&self, #[webidl] _label: String) {
+    // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
+  }
 }
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
 pub(crate) struct GPUShaderModuleDescriptor {
-    #[webidl(default = String::new())]
-    pub label: String,
+  #[webidl(default = String::new())]
+  pub label: String,
 
-    pub code: String,
+  pub code: String,
 }
 
 pub struct GPUCompilationMessage {
-    message: String,
-    r#type: GPUCompilationMessageType,
-    line_num: u64,
-    line_pos: u64,
-    offset: u64,
-    length: u64,
+  message: String,
+  r#type: GPUCompilationMessageType,
+  line_num: u64,
+  line_pos: u64,
+  offset: u64,
+  length: u64,
 }
 
-impl GarbageCollected for GPUCompilationMessage {}
+impl GarbageCollected for GPUCompilationMessage {
+  fn get_name(&self) -> &'static std::ffi::CStr {
+    c"GPUCompilationMessage"
+  }
+}
 
 #[op2]
 impl GPUCompilationMessage {
-    #[getter]
-    #[string]
-    fn message(&self) -> String {
-        self.message.clone()
-    }
+  #[getter]
+  #[string]
+  fn message(&self) -> String {
+    self.message.clone()
+  }
 
-    // Naming this `type` or `r#type` does not work.
-    // https://github.com/gfx-rs/wgpu/issues/7778
-    #[getter]
-    #[string]
-    fn ty(&self) -> &'static str {
-        self.r#type.as_str()
-    }
+  #[getter]
+  #[string]
+  #[rename("type")]
+  fn r#type(&self) -> &'static str {
+    self.r#type.as_str()
+  }
 
-    #[getter]
-    #[number]
-    fn line_num(&self) -> u64 {
-        self.line_num
-    }
+  #[getter]
+  #[number]
+  fn line_num(&self) -> u64 {
+    self.line_num
+  }
 
-    #[getter]
-    #[number]
-    fn line_pos(&self) -> u64 {
-        self.line_pos
-    }
+  #[getter]
+  #[number]
+  fn line_pos(&self) -> u64 {
+    self.line_pos
+  }
 
-    #[getter]
-    #[number]
-    fn offset(&self) -> u64 {
-        self.offset
-    }
+  #[getter]
+  #[number]
+  fn offset(&self) -> u64 {
+    self.offset
+  }
 
-    #[getter]
-    #[number]
-    fn length(&self) -> u64 {
-        self.length
-    }
+  #[getter]
+  #[number]
+  fn length(&self) -> u64 {
+    self.length
+  }
 }
 
 impl GPUCompilationMessage {
-    fn new(error: &pipeline::CreateShaderModuleError, source: &str) -> Self {
-        let message = error.to_string();
+  fn new(error: &pipeline::CreateShaderModuleError, source: &str) -> Self {
+    let message = error.to_string();
 
-        let loc = match error {
-            pipeline::CreateShaderModuleError::Parsing(e) => e.inner.location(source),
-            pipeline::CreateShaderModuleError::Validation(e) => e.inner.location(source),
-            _ => None,
-        };
+    let loc = match error {
+      pipeline::CreateShaderModuleError::Parsing(e) => e.inner.location(source),
+      pipeline::CreateShaderModuleError::Validation(e) => {
+        e.inner.location(source)
+      }
+      _ => None,
+    };
 
-        match loc {
-            Some(loc) => {
-                let len_utf16 = |s: &str| s.chars().map(|c| c.len_utf16() as u64).sum();
+    match loc {
+      Some(loc) => {
+        let len_utf16 = |s: &str| s.chars().map(|c| c.len_utf16() as u64).sum();
 
-                let start = loc.offset as usize;
+        let start = loc.offset as usize;
 
-                // Naga reports a `line_pos` using UTF-8 bytes, so we cannot use it.
-                let line_start = source[0..start].rfind('\n').map(|pos| pos + 1).unwrap_or(0);
-                let line_pos = len_utf16(&source[line_start..start]) + 1;
+        // Naga reports a `line_pos` using UTF-8 bytes, so we cannot use it.
+        let line_start =
+          source[0..start].rfind('\n').map(|pos| pos + 1).unwrap_or(0);
+        let line_pos = len_utf16(&source[line_start..start]) + 1;
 
-                Self {
-                    message,
-                    r#type: GPUCompilationMessageType::Error,
-                    line_num: loc.line_number.into(),
-                    line_pos,
-                    offset: len_utf16(&source[0..start]),
-                    length: len_utf16(&source[start..start + loc.length as usize]),
-                }
-            }
-            _ => Self {
-                message,
-                r#type: GPUCompilationMessageType::Error,
-                line_num: 0,
-                line_pos: 0,
-                offset: 0,
-                length: 0,
-            },
+        Self {
+          message,
+          r#type: GPUCompilationMessageType::Error,
+          line_num: loc.line_number.into(),
+          line_pos,
+          offset: len_utf16(&source[0..start]),
+          length: len_utf16(&source[start..start + loc.length as usize]),
         }
+      }
+      _ => Self {
+        message,
+        r#type: GPUCompilationMessageType::Error,
+        line_num: 0,
+        line_pos: 0,
+        offset: 0,
+        length: 0,
+      },
     }
+  }
 }
 
 #[derive(WebIDL, Clone)]
 #[webidl(enum)]
 pub(crate) enum GPUCompilationMessageType {
-    Error,
-    Warning,
-    Info,
+  Error,
+  Warning,
+  Info,
 }

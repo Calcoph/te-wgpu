@@ -1,6 +1,7 @@
-use wgc::command::EncoderStateError;
-
-use crate::*;
+use crate::{
+    api::{impl_deferred_command_buffer_actions, SharedDeferredCommandBufferActions},
+    *,
+};
 
 /// In-progress recording of a compute pass.
 ///
@@ -11,6 +12,9 @@ use crate::*;
 #[derive(Debug)]
 pub struct ComputePass<'encoder> {
     pub(crate) inner: dispatch::DispatchComputePass,
+
+    /// Shared with CommandEncoder to enqueue deferred actions from within a pass.
+    pub(crate) actions: SharedDeferredCommandBufferActions,
 
     /// This lifetime is used to protect the [`CommandEncoder`] from being used
     /// while the pass is alive. This needs to be PhantomDrop to prevent the lifetime
@@ -39,6 +43,7 @@ impl ComputePass<'_> {
     pub fn forget_lifetime(self) -> ComputePass<'static> {
         ComputePass {
             inner: self.inner,
+            actions: self.actions,
             _encoder_guard: crate::api::PhantomDrop::default(),
         }
     }
@@ -97,10 +102,7 @@ impl ComputePass<'_> {
             .dispatch_workgroups_indirect(&indirect_buffer.inner, indirect_offset)
     }
 
-    /// Drops the ComputePass for a chance to handle its error
-    pub fn end(mut self) -> Result<(), EncoderStateError> {
-        self.inner.end()
-    }
+    impl_deferred_command_buffer_actions!();
 
     #[cfg(custom)]
     /// Returns custom implementation of ComputePass (if custom backend and is internally T)
@@ -150,6 +152,11 @@ impl ComputePass<'_> {
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::PassStateError> {
         self.inner.end_pipeline_statistics_query()
+    }
+
+    /// let handle error of drop
+    pub fn end(&mut self) -> Result<(), wgc::command::EncoderStateError> {
+        self.inner.end()
     }
 }
 

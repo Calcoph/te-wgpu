@@ -19,7 +19,7 @@ use std::fmt::Debug;
 pub use init::initialize_html_canvas;
 
 pub use self::image::ComparisonType;
-pub use config::GpuTestConfiguration;
+pub use config::{GpuTestConfiguration, GpuTestInitializer};
 #[doc(hidden)]
 pub use ctor;
 pub use expectations::{FailureApplicationReasons, FailureBehavior, FailureCase, FailureReason};
@@ -36,7 +36,7 @@ pub use wgpu_macros::gpu_test;
 /// only when `finish()` is called on the command encoder. Tests of such error
 /// cases should call `fail` with a closure that calls `finish()`, not with a
 /// closure that encodes the actual command.
-pub fn fail<T, E: Debug + ToString + std::fmt::Display>(callback: impl FnOnce() -> Result<T, E>, expected_msg_substring: Option<&'static str>,) -> E {
+pub fn fail<T, E: Debug + ToString + std::fmt::Display>(callback: impl FnOnce() -> Result<T, E>, expected_msg_substring: Option<&str>,) -> E {
     let result = callback();
     let validation_error = result.err()
         .expect("expected validation error in callback, but no validation error was emitted");
@@ -90,17 +90,22 @@ pub fn did_oom<T>(callback: impl FnOnce() -> Result<T, wgpu::wgc::resource::Crea
 }
 
 /// Adds the necessary main function for our gpu test harness.
+///
+/// Takes a single argument which is an expression that evaluates to `Vec<wgpu_test::GpuTestInitializer>`.
 #[macro_export]
 macro_rules! gpu_test_main {
-    () => {
+    ($tests: expr) => {
         #[cfg(target_arch = "wasm32")]
         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
         #[cfg(target_arch = "wasm32")]
-        fn main() {}
+        fn main() {
+            // Ensure that value is used so that warnings don't happen.
+            let _ = $tests;
+        }
 
         #[cfg(not(target_arch = "wasm32"))]
         fn main() -> $crate::native::MainResult {
-            $crate::native::main()
+            $crate::native::main($tests)
         }
     };
 }

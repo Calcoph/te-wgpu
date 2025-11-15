@@ -1,5 +1,9 @@
 use wgpu::InstanceFlags;
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(OCCLUSION_QUERY);
+}
 
 #[gpu_test]
 static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -137,7 +141,9 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
         mapping_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| ()).unwrap();
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
         let query_buffer_view = mapping_buffer.slice(..).get_mapped_range();
         let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);
 

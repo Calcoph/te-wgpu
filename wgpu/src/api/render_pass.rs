@@ -1,6 +1,9 @@
 use core::ops::Range;
 
-use crate::*;
+use crate::{
+    api::{impl_deferred_command_buffer_actions, SharedDeferredCommandBufferActions},
+    *,
+};
 pub use wgt::{LoadOp, Operations, StoreOp};
 
 /// In-progress recording of a render pass: a list of render commands in a [`CommandEncoder`].
@@ -24,6 +27,7 @@ pub use wgt::{LoadOp, Operations, StoreOp};
 #[derive(Debug)]
 pub struct RenderPass<'encoder> {
     pub(crate) inner: dispatch::DispatchRenderPass,
+    pub(crate) actions: SharedDeferredCommandBufferActions,
 
     /// This lifetime is used to protect the [`CommandEncoder`] from being used
     /// while the pass is alive. This needs to be PhantomDrop to prevent the lifetime
@@ -52,6 +56,7 @@ impl RenderPass<'_> {
     pub fn forget_lifetime(self) -> RenderPass<'static> {
         RenderPass {
             inner: self.inner,
+            actions: self.actions,
             _encoder_guard: crate::api::PhantomDrop::default(),
         }
     }
@@ -226,10 +231,24 @@ impl RenderPass<'_> {
         self.inner.draw_indexed(indices, base_vertex, instances)
     }
 
+    /// Draws using a mesh shader pipeline
+    pub fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) -> Result<(), wgc::command::RenderPassError> {
+        self.inner
+            .draw_mesh_tasks(group_count_x, group_count_y, group_count_z)
+    }
+
+    /// draw_mesh_tasks_indirect
+    pub fn draw_mesh_tasks_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: crate::BufferAddress) -> Result<(), wgc::command::PassStateError> {
+        self.inner
+            .draw_mesh_tasks_indirect(&indirect_buffer.inner, indirect_offset)
+    }
+
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
     /// This is like calling [`RenderPass::draw`] but the contents of the call are specified in the `indirect_buffer`.
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
+    ///
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
     pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) -> Result<(), wgc::command::PassStateError> {
         self.inner
             .draw_indirect(&indirect_buffer.inner, indirect_offset)
@@ -240,6 +259,8 @@ impl RenderPass<'_> {
     ///
     /// This is like calling [`RenderPass::draw_indexed`] but the contents of the call are specified in the `indirect_buffer`.
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
+    ///
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &Buffer,
@@ -248,6 +269,8 @@ impl RenderPass<'_> {
         self.inner
             .draw_indexed_indirect(&indirect_buffer.inner, indirect_offset)
     }
+
+    impl_deferred_command_buffer_actions!();
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
     /// that can be run together.
@@ -267,10 +290,7 @@ impl RenderPass<'_> {
     pub fn end(mut self) -> Result<(), wgc::command::EncoderStateError> {
         self.inner.end()
     }
-}
 
-/// [`Features::MULTI_DRAW_INDIRECT`] must be enabled on the device in order to call these functions.
-impl RenderPass<'_> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// `count` draw calls are issued.
     ///
@@ -278,6 +298,8 @@ impl RenderPass<'_> {
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     /// These draw structures are expected to be tightly packed.
+    ///
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.
@@ -300,6 +322,8 @@ impl RenderPass<'_> {
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     /// These draw structures are expected to be tightly packed.
     ///
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
+    ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect(
@@ -310,6 +334,23 @@ impl RenderPass<'_> {
     ) -> Result<(), wgc::command::PassStateError> {
         self.inner
             .multi_draw_indexed_indirect(&indirect_buffer.inner, indirect_offset, count)
+    }
+
+    /// Dispatches multiple draw calls based on the contents of the `indirect_buffer`.
+    /// `count` draw calls are issued.
+    ///
+    /// The structure expected in the `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
+    pub fn multi_draw_mesh_tasks_indirect(
+        &mut self,
+        indirect_buffer: &Buffer,
+        indirect_offset: BufferAddress,
+        count: u32,
+    ) -> Result<(), wgc::command::PassStateError> {
+        self.inner
+            .multi_draw_mesh_tasks_indirect(&indirect_buffer.inner, indirect_offset, count)
     }
 
     #[cfg(custom)]
@@ -393,6 +434,34 @@ impl RenderPass<'_> {
         max_count: u32,
     ) -> Result<(), wgc::command::PassStateError> {
         self.inner.multi_draw_indexed_indirect_count(
+            &indirect_buffer.inner,
+            indirect_offset,
+            &count_buffer.inner,
+            count_offset,
+            max_count,
+        )
+    }
+
+    /// Dispatches multiple draw calls based on the contents of the `indirect_buffer`. The count buffer is read to determine how many draws to issue.
+    ///
+    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count`
+    /// draws will be read. If `count` is greater than `max_count`, `max_count` will be used.
+    ///
+    /// The structure expected in the `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
+    ///
+    /// These draw structures are expected to be tightly packed.
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
+    pub fn multi_draw_mesh_tasks_indirect_count(
+        &mut self,
+        indirect_buffer: &Buffer,
+        indirect_offset: BufferAddress,
+        count_buffer: &Buffer,
+        count_offset: BufferAddress,
+        max_count: u32,
+    ) -> Result<(), wgc::command::PassStateError> {
+        self.inner.multi_draw_mesh_tasks_indirect_count(
             &indirect_buffer.inner,
             indirect_offset,
             &count_buffer.inner,

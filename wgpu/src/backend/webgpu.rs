@@ -10,6 +10,7 @@ use alloc::{
     format,
     rc::Rc,
     string::{String, ToString as _},
+    sync::Arc,
     vec,
     vec::Vec,
 };
@@ -50,6 +51,7 @@ macro_rules! impl_send_sync {
     };
 }
 
+#[derive(Clone)]
 pub struct ContextWebGpu {
     /// `None` if browser does not advertise support for WebGPU.
     gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
@@ -85,7 +87,7 @@ impl crate::Error {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebShaderModule {
     module: webgpu_sys::GpuShaderModule,
     compilation_info: WebShaderCompilationInfo,
@@ -116,11 +118,7 @@ fn map_utf16_to_utf8_offset(utf16_offset: u32, text: &str) -> u32 {
     if utf16_i >= utf16_offset {
         text.len() as u32
     } else {
-        log::error!(
-            "UTF16 offset {} is out of bounds for string {}",
-            utf16_offset,
-            text
-        );
+        log::error!("UTF16 offset {utf16_offset} is out of bounds for string {text}");
         u32::MAX
     }
 }
@@ -775,8 +773,7 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 15] = [
 ];
 
 fn map_wgt_features(supported_features: webgpu_sys::GpuSupportedFeatures) -> wgt::Features {
-    // We emulate MDI.
-    let mut features = wgt::Features::MULTI_DRAW_INDIRECT;
+    let mut features = wgt::Features::empty();
     for (wgpu_feat, web_feat) in FEATURES_MAPPING {
         match wasm_bindgen::JsValue::from(web_feat).as_string() {
             Some(value) if supported_features.has(&value) => features |= wgpu_feat,
@@ -827,6 +824,12 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_push_constant_size: wgt::Limits::default().max_push_constant_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
         max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
+
+        max_task_workgroup_total_count: wgt::Limits::default().max_task_workgroup_total_count,
+        max_task_workgroups_per_dimension: wgt::Limits::default().max_task_workgroups_per_dimension,
+        max_mesh_output_layers: wgt::Limits::default().max_mesh_output_layers,
+        max_mesh_multiview_count: wgt::Limits::default().max_mesh_multiview_count,
+
         max_blas_primitive_count: wgt::Limits::default().max_blas_primitive_count,
         max_blas_geometry_count: wgt::Limits::default().max_blas_geometry_count,
         max_tlas_instance_count: wgt::Limits::default().max_tlas_instance_count,
@@ -1105,7 +1108,7 @@ extern "C" {
     fn worker(this: &Global) -> JsValue;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Canvas {
     Canvas(web_sys::HtmlCanvasElement),
     Offscreen(web_sys::OffscreenCanvas),
@@ -1145,49 +1148,49 @@ pub fn get_browser_gpu_property(
     Ok(DefinedNonNullJsValue::new(maybe_undefined_gpu))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebAdapter {
     pub(crate) inner: webgpu_sys::GpuAdapter,
     /// Unique identifier for this Adapter.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebDevice {
     pub(crate) inner: webgpu_sys::GpuDevice,
     /// Unique identifier for this Device.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebQueue {
     pub(crate) inner: webgpu_sys::GpuQueue,
     /// Unique identifier for this Queue.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebBindGroupLayout {
     pub(crate) inner: webgpu_sys::GpuBindGroupLayout,
     /// Unique identifier for this BindGroupLayout.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebBindGroup {
     pub(crate) inner: webgpu_sys::GpuBindGroup,
     /// Unique identifier for this BindGroup.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebTextureView {
     pub(crate) inner: webgpu_sys::GpuTextureView,
     /// Unique identifier for this TextureView.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebSampler {
     pub(crate) inner: webgpu_sys::GpuSampler,
     /// Unique identifier for this Sampler.
@@ -1196,7 +1199,7 @@ pub struct WebSampler {
 
 /// Remembers which portion of a buffer has been mapped, along with a reference
 /// to the mapped portion.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct WebBufferMapState {
     /// The mapped memory of the buffer.
     pub mapped_buffer: Option<js_sys::ArrayBuffer>,
@@ -1208,7 +1211,7 @@ struct WebBufferMapState {
 /// The WebGPU specification forbids calling `getMappedRange` on a `webgpu_sys::GpuBuffer` more than
 /// once, so this struct stores the initial mapped range and re-uses it, allowing for multiple `get_mapped_range`
 /// calls on the Rust-side.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebBuffer {
     /// The associated GPU buffer.
     inner: webgpu_sys::GpuBuffer,
@@ -1256,60 +1259,66 @@ impl WebBuffer {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebTexture {
     pub(crate) inner: webgpu_sys::GpuTexture,
     /// Unique identifier for this Texture.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct WebExternalTexture {
+    /// Unique identifier for this ExternalTexture.
+    ident: crate::cmp::Identifier,
+}
+
+#[derive(Debug, Clone)]
 pub struct WebBlas {
     /// Unique identifier for this Blas.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebTlas {
     /// Unique identifier for this Blas.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebQuerySet {
     pub(crate) inner: webgpu_sys::GpuQuerySet,
     /// Unique identifier for this QuerySet.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebPipelineLayout {
     pub(crate) inner: webgpu_sys::GpuPipelineLayout,
     /// Unique identifier for this PipelineLayout.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebRenderPipeline {
     pub(crate) inner: webgpu_sys::GpuRenderPipeline,
     /// Unique identifier for this RenderPipeline.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebComputePipeline {
     pub(crate) inner: webgpu_sys::GpuComputePipeline,
     /// Unique identifier for this ComputePipeline.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebPipelineCache {
     /// Unique identifier for this PipelineCache.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebCommandEncoder {
     pub(crate) inner: webgpu_sys::GpuCommandEncoder,
     /// Unique identifier for this CommandEncoder.
@@ -1337,21 +1346,21 @@ pub struct WebCommandBuffer {
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebRenderBundleEncoder {
     pub(crate) inner: webgpu_sys::GpuRenderBundleEncoder,
     /// Unique identifier for this RenderBundleEncoder.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebRenderBundle {
     pub(crate) inner: webgpu_sys::GpuRenderBundle,
     /// Unique identifier for this RenderBundle.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebSurface {
     gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
     canvas: Canvas,
@@ -1360,7 +1369,7 @@ pub struct WebSurface {
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebSurfaceOutputDetail {
     /// Unique identifier for this SurfaceOutputDetail.
     ident: crate::cmp::Identifier,
@@ -1396,6 +1405,7 @@ impl_send_sync!(WebTextureView);
 impl_send_sync!(WebSampler);
 impl_send_sync!(WebBuffer);
 impl_send_sync!(WebTexture);
+impl_send_sync!(WebExternalTexture);
 impl_send_sync!(WebBlas);
 impl_send_sync!(WebTlas);
 impl_send_sync!(WebQuerySet);
@@ -1425,6 +1435,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebTextureView => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebSampler => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebBuffer => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebTexture => .ident);
+crate::cmp::impl_eq_ord_hash_proxy!(WebExternalTexture => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebBlas => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebTlas => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebQuerySet => .ident);
@@ -1851,9 +1862,43 @@ impl dispatch::DeviceInterface for WebDevice {
 
     unsafe fn create_shader_module_passthrough(
         &self,
-        _desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
+        desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> dispatch::DispatchShaderModule {
-        unreachable!("No XXX_SHADER_PASSTHROUGH feature enabled for this backend")
+        let shader_module_result = if let Some(ref code) = desc.wgsl {
+            let shader_module = webgpu_sys::GpuShaderModuleDescriptor::new(code);
+            Ok((
+                shader_module,
+                WebShaderCompilationInfo::Wgsl {
+                    source: code.to_string(),
+                },
+            ))
+        } else {
+            Err(crate::CompilationInfo {
+                messages: vec![crate::CompilationMessage {
+                    message:
+                        "Passthrough shader not compiled for WGSL on WebGPU backend (wgpu error)"
+                            .to_string(),
+                    location: None,
+                    message_type: crate::CompilationMessageType::Error,
+                }],
+            })
+        };
+        let (descriptor, compilation_info) = match shader_module_result {
+            Ok(v) => v,
+            Err(compilation_info) => (
+                webgpu_sys::GpuShaderModuleDescriptor::new(""),
+                WebShaderCompilationInfo::Transformed { compilation_info },
+            ),
+        };
+        if let Some(label) = desc.label {
+            descriptor.set_label(label);
+        }
+        WebShaderModule {
+            module: self.inner.create_shader_module(&descriptor),
+            compilation_info,
+            ident: crate::cmp::Identifier::create(),
+        }
+        .into()
     }
 
     fn create_bind_group_layout(
@@ -2013,6 +2058,9 @@ impl dispatch::DeviceInterface for WebDevice {
                     crate::BindingResource::AccelerationStructure(_) => {
                         unimplemented!("Raytracing not implemented for web")
                     }
+                    crate::BindingResource::ExternalTexture(_) => {
+                        unimplemented!("ExternalTexture not implemented for web")
+                    }
                 };
 
                 webgpu_sys::GpuBindGroupEntry::new(binding.binding, &mapped_resource)
@@ -2167,6 +2215,13 @@ impl dispatch::DeviceInterface for WebDevice {
         .into()
     }
 
+    fn create_mesh_pipeline(
+        &self,
+        _desc: &crate::MeshPipelineDescriptor<'_>,
+    ) -> dispatch::DispatchRenderPipeline {
+        panic!("MESH_SHADER feature must be enabled to call create_mesh_pipeline")
+    }
+
     fn create_compute_pipeline(
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
@@ -2245,6 +2300,14 @@ impl dispatch::DeviceInterface for WebDevice {
             ident: crate::cmp::Identifier::create(),
         }
         .into()
+    }
+
+    fn create_external_texture(
+        &self,
+        _desc: &crate::ExternalTextureDescriptor<'_>,
+        _planes: &[&crate::TextureView],
+    ) -> dispatch::DispatchExternalTexture {
+        unimplemented!("ExternalTexture not implemented for web");
     }
 
     fn create_blas(
@@ -2376,16 +2439,20 @@ impl dispatch::DeviceInterface for WebDevice {
             );
         });
         let _ = self.inner.lost().then(&closure);
+        // Release memory management of this closure from Rust to the JS GC.
+        // TODO: This will leak if weak references is not supported.
+        closure.forget();
     }
 
-    fn on_uncaptured_error(&self, handler: Box<dyn crate::UncapturedErrorHandler>) {
+    fn on_uncaptured_error(&self, handler: Arc<dyn crate::UncapturedErrorHandler>) {
         let f = Closure::wrap(Box::new(move |event: webgpu_sys::GpuUncapturedErrorEvent| {
             let error = crate::Error::from_js(event.error().value_of());
             handler(error);
         }) as Box<dyn FnMut(_)>);
         self.inner
             .set_onuncapturederror(Some(f.as_ref().unchecked_ref()));
-        // TODO: This will leak the memory associated with the error handler by default.
+        // Release memory management of this closure from Rust to the JS GC.
+        // TODO: This will leak if weak references is not supported.
         f.forget();
     }
 
@@ -2493,16 +2560,12 @@ impl dispatch::QueueInterface for WebQueue {
         }
         let write_size = u64::from(size);
         if write_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            log::error!(
-                "Copy size {} does not respect `COPY_BUFFER_ALIGNMENT`",
-                size
-            );
+            log::error!("Copy size {size} does not respect `COPY_BUFFER_ALIGNMENT`");
             return None;
         }
         if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             log::error!(
-                "Buffer offset {} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`",
-                offset
+                "Buffer offset {offset} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`"
             );
             return None;
         }
@@ -2600,7 +2663,7 @@ impl dispatch::QueueInterface for WebQueue {
             match wasm_bindgen_futures::JsFuture::from(promise).await {
                 Ok(_) => callback(),
                 Err(error) => {
-                    log::error!("on_submitted_work_done promise failed: {:?}", error);
+                    log::error!("on_submitted_work_done promise failed: {error:?}");
                     callback();
                 }
             }
@@ -2756,6 +2819,17 @@ impl dispatch::TextureInterface for WebTexture {
 impl Drop for WebTexture {
     fn drop(&mut self) {
         // no-op
+    }
+}
+
+impl dispatch::ExternalTextureInterface for WebExternalTexture {
+    fn destroy(&self) {
+        unimplemented!("ExternalTexture not implemented for web");
+    }
+}
+impl Drop for WebExternalTexture {
+    fn drop(&mut self) {
+        unimplemented!("ExternalTexture not implemented for web");
     }
 }
 
@@ -3389,6 +3463,10 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
             )
     }
 
+    fn draw_mesh_tasks(&mut self, _group_count_x: u32, _group_count_y: u32, _group_count_z: u32) {
+        panic!("MESH_SHADER feature must be enabled to call draw_mesh_tasks")
+    }
+
     fn draw_indirect(
         &mut self,
         indirect_buffer: &dispatch::DispatchBuffer,
@@ -3407,6 +3485,14 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         let buffer = indirect_buffer.as_webgpu();
         self.inner
             .draw_indexed_indirect_with_f64(&buffer.inner, indirect_offset as f64);
+    }
+
+    fn draw_mesh_tasks_indirect(
+        &mut self,
+        _indirect_buffer: &dispatch::DispatchBuffer,
+        _indirect_offset: crate::BufferAddress,
+    ) {
+        panic!("MESH_SHADER feature must be enabled to call draw_mesh_tasks_indirect")
     }
 
     fn multi_draw_indirect(
@@ -3439,6 +3525,15 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         }
     }
 
+    fn multi_draw_mesh_tasks_indirect(
+        &mut self,
+        _indirect_buffer: &dispatch::DispatchBuffer,
+        _indirect_offset: crate::BufferAddress,
+        _count: u32,
+    ) {
+        panic!("MESH_SHADER feature must be enabled to call multi_draw_mesh_tasks_indirect")
+    }
+
     fn multi_draw_indirect_count(
         &mut self,
         _indirect_buffer: &dispatch::DispatchBuffer,
@@ -3461,6 +3556,17 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         _max_count: u32,
     ) {
         panic!("MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indexed_indirect_count")
+    }
+
+    fn multi_draw_mesh_tasks_indirect_count(
+        &mut self,
+        _indirect_buffer: &dispatch::DispatchBuffer,
+        _indirect_offset: crate::BufferAddress,
+        _count_buffer: &dispatch::DispatchBuffer,
+        _count_buffer_offset: crate::BufferAddress,
+        _max_count: u32,
+    ) {
+        panic!("MESH_SHADER feature must be enabled to call multi_draw_mesh_tasks_indirect_count")
     }
 
     fn insert_debug_marker(&mut self, _label: &str) {

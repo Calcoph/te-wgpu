@@ -1,4 +1,14 @@
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE,
+        COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX,
+        RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE,
+        RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX,
+        NO_TARGETLESS_RENDER,
+    ]);
+}
 
 const INVALID_SHADER_DESC: wgpu::ShaderModuleDescriptor = wgpu::ShaderModuleDescriptor {
     label: Some("invalid shader"),
@@ -32,7 +42,7 @@ const TRIVIAL_FRAGMENT_SHADER_DESC: wgpu::ShaderModuleDescriptor = wgpu::ShaderM
 #[gpu_test]
 static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             fail(
                 || {
@@ -59,7 +69,11 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
 #[gpu_test]
 static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default().test_features_limits())
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .enable_noop(),
+        )
         .run_sync(|ctx| {
             fail(
                 || {
@@ -85,7 +99,7 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
 #[gpu_test]
 static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             fail(
                 || {
@@ -119,7 +133,11 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
 #[gpu_test]
 static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default().test_features_limits())
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .enable_noop(),
+        )
         .run_sync(|ctx| {
             fail(
                 || {
@@ -165,7 +183,7 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
 
 #[gpu_test]
 static NO_TARGETLESS_RENDER: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         fail(
             || {

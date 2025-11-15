@@ -7,6 +7,7 @@ use anyhow::Context;
 use pico_args::Arguments;
 
 mod cts;
+mod miri;
 mod run_wasm;
 mod test;
 mod util;
@@ -16,11 +17,15 @@ const HELP: &str = "\
 Usage: xtask <COMMAND>
 
 Commands:
-  cts [--skip-checkout] [<test selector> | -f <test list file>]...
+  cts [<options>] [<test selector...> | -f <test list file...> | -- <args...>]
     Check out, build, and run CTS tests
 
-    --skip-checkout     Don't check out the pinned CTS version, use whatever is
-                        already checked out.
+    --skip-checkout         Don't check out the pinned CTS version, use whatever
+                            is already checked out.
+    --release               Build and run in release mode
+    --llvm-cov              Run with LLVM code coverage
+    --backend <backend>     Specify the backend (metal, dx12, or vulkan). Used
+                            to evaluate `fails-if` conditions in the test list.
 
   run-wasm
     Build and run web examples
@@ -36,6 +41,14 @@ Commands:
     --retries   Number of times to retry failing tests
 
     All extra arguments will be forwarded to cargo-nextest (NOT wgpu-info)
+
+  miri
+    Run all miri-compatible tests under miri. Requires a nightly toolchain
+    with the x86_64-unknown-linux-gnu target and miri component installed.
+
+    --toolchain <toolchain>   The toolchain to use for miri tests.
+                              Must be a nightly toolchain.
+                              Defaults to `nightly`.
 
   vendor-web-sys
     Re-vendor the WebGPU web-sys bindings.
@@ -66,7 +79,12 @@ fn main() -> anyhow::Result<ExitCode> {
         .format_indent(Some(0))
         .init();
 
-    let mut args = Arguments::from_env();
+    let mut args = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let passthrough_args = args
+        .iter()
+        .position(|arg| arg == "--")
+        .map(|pos| args.drain(pos..).skip(1).collect());
+    let mut args = Arguments::from_vec(args);
 
     if args.contains(["-h", "--help"]) {
         eprint!("{HELP}");
@@ -83,9 +101,10 @@ fn main() -> anyhow::Result<ExitCode> {
     shell.change_dir(String::from(env!("CARGO_MANIFEST_DIR")) + "/..");
 
     match subcommand.as_deref() {
-        Some("cts") => cts::run_cts(shell, args)?,
-        Some("run-wasm") => run_wasm::run_wasm(shell, args)?,
-        Some("test") => test::run_tests(shell, args)?,
+        Some("cts") => cts::run_cts(shell, args, passthrough_args)?,
+        Some("run-wasm") => run_wasm::run_wasm(shell, args, passthrough_args)?,
+        Some("miri") => miri::run_miri(shell, args)?,
+        Some("test") => test::run_tests(shell, args, passthrough_args)?,
         Some("vendor-web-sys") => vendor_web_sys::run_vendor_web_sys(shell, args)?,
         Some(subcommand) => {
             bad_arguments!("Unknown subcommand: {}", subcommand)

@@ -2,7 +2,19 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     vertex_attr_array,
 };
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        DRAW_TO_2D_VIEW,
+        DRAW_TO_2D_ARRAY_VIEW,
+        RESOLVE_TO_2D_VIEW,
+        RESOLVE_TO_2D_ARRAY_VIEW,
+        DRAW_TO_3D_VIEW,
+    ]);
+}
 
 #[gpu_test]
 static DRAW_TO_2D_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -227,7 +239,9 @@ async fn run_test(
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = slice.get_mapped_range();
     let succeeded = data.iter().all(|b| *b == u8::MAX);
@@ -408,7 +422,9 @@ async fn run_test_3d(ctx: TestingContext) {
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = slice.get_mapped_range();
     let succeeded = data.iter().all(|b| *b == u8::MAX);

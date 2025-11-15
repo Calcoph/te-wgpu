@@ -503,7 +503,7 @@ fn run_bench(ctx: &mut Criterion) {
                             state
                                 .device_state
                                 .device
-                                .poll(wgpu::PollType::Wait)
+                                .poll(wgpu::PollType::wait_indefinitely())
                                 .unwrap();
                         }
 
@@ -550,7 +550,7 @@ fn run_bench(ctx: &mut Criterion) {
                     state
                         .device_state
                         .device
-                        .poll(wgpu::PollType::Wait)
+                        .poll(wgpu::PollType::wait_indefinitely())
                         .unwrap();
                 }
 
@@ -590,7 +590,7 @@ fn run_bench(ctx: &mut Criterion) {
                 state
                     .device_state
                     .device
-                    .poll(wgpu::PollType::Wait)
+                    .poll(wgpu::PollType::wait_indefinitely())
                     .unwrap();
             }
 

@@ -87,7 +87,7 @@ fn run_bench(ctx: &mut Criterion) {
     for &count in count_list {
         group.throughput(Throughput::Elements(count as u64));
         group.bench_with_input(
-            format!("{} Element Bind Group", count),
+            format!("{count} Element Bind Group"),
             &count,
             |b, &count| {
                 b.iter_custom(|iters| {
@@ -155,7 +155,7 @@ fn run_bench(ctx: &mut Criterion) {
                         state
                             .device_state
                             .device
-                            .poll(wgpu::PollType::Wait)
+                            .poll(wgpu::PollType::wait_indefinitely())
                             .unwrap();
                     }
 

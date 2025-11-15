@@ -1,6 +1,13 @@
 use wgpu::{Backend, Backends};
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.extend([
+        RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET,
+        D3D12_RESTRICT_DYNAMIC_BUFFERS,
+    ]);
+}
+
 /// Tests that writing and reading to the max length of a container (vec, mat, array)
 /// in the workgroup, private and function address spaces + let declarations
 /// will instead write to and read from the last element.
@@ -43,7 +50,9 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
             .map_async(wgpu::MapMode::Read, |_| {})
             .unwrap();
 
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
 
         let view = test_resources.readback_buffer.slice(..).get_mapped_range();
 
@@ -449,7 +458,9 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
         .map_async(wgpu::MapMode::Read, |_| {})
         .unwrap();
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let view = readback_buffer.slice(..).get_mapped_range();
 

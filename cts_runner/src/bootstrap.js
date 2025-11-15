@@ -138,10 +138,6 @@ class Navigator {
   constructor() {
     webidl.illegalConstructor();
   }
-
-  [Symbol.for("Deno.customInspect")](inspect) {
-    return `${this.constructor.name} ${inspect({})}`;
-  }
 }
 const NavigatorPrototype = Navigator.prototype;
 
@@ -220,8 +216,10 @@ const windowOrWorkerGlobalScope = {
   GPURenderBundle: util.nonEnumerable(webgpu.GPURenderBundle),
   GPUQuerySet: util.nonEnumerable(webgpu.GPUQuerySet),
   GPUError: util.nonEnumerable(webgpu.GPUError),
+  GPUInternalError: util.nonEnumerable(webgpu.GPUInternalError),
   GPUValidationError: util.nonEnumerable(webgpu.GPUValidationError),
   GPUOutOfMemoryError: util.nonEnumerable(webgpu.GPUOutOfMemoryError),
+  GPUUncapturedErrorEvent: util.nonEnumerable(webgpu.GPUUncapturedErrorEvent),
 };
 
 windowOrWorkerGlobalScope.console.enumerable = false;

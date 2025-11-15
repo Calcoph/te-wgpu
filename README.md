@@ -35,13 +35,13 @@ The API is based on the [WebGPU standard][webgpu]. It serves as the core of the 
 
 | Docs                  | Examples                  | Changelog               |
 |:---------------------:|:-------------------------:|:-----------------------:|
-| [v26][rel-docs]       | [v26][rel-examples]       | [v26][rel-change]       |
+| [v27][rel-docs]       | [v27][rel-examples]       | [v27][rel-change]       |
 | [`trunk`][trunk-docs] | [`trunk`][trunk-examples] | [`trunk`][trunk-change] |
 
 Contributors are welcome! See [CONTRIBUTING.md][contrib] for more information.
 
 [rel-docs]: https://docs.rs/wgpu/
-[rel-examples]: https://github.com/gfx-rs/wgpu/tree/v26/examples#readme
+[rel-examples]: https://github.com/gfx-rs/wgpu/tree/v27/examples#readme
 [rel-change]: https://github.com/gfx-rs/wgpu/releases
 [trunk-docs]: https://wgpu.rs/doc/wgpu/
 [trunk-examples]: https://github.com/gfx-rs/wgpu/tree/trunk/examples#readme
@@ -167,8 +167,8 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 
 Due to complex dependants, we have two MSRV policies:
 
-- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**.
-- The rest of the workspace has an MSRV of **1.84**.
+- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.82**.
+- The rest of the workspace has an MSRV of **1.88**.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
 This version can only be upgraded in breaking releases, though we release a breaking version every three months.
@@ -273,12 +273,11 @@ as the implementation catches up.
 
 Exactly which WGSL features `wgpu` supports depends on how you are using it:
 
-- When running as native code, `wgpu` uses the [Naga][naga] crate
+- When running as native code, `wgpu` uses [Naga][naga]
   to translate WGSL code into the shading language of your platform's native GPU API.
-  Naga has [a milestone][naga wgsl milestone]
-  for catching up to the WGSL specification,
-  but in general, there is no up-to-date summary
-  of the differences between Naga and the WGSL spec.
+  Naga is working on catching up to the WGSL specification,
+  with [bugs][naga bugs] tracking various issues,
+  but there is no concise summary of differences from the specification.
 
 - When running in a web browser (by compilation to WebAssembly)
   without the `"webgl"` feature enabled,
@@ -292,8 +291,8 @@ Exactly which WGSL features `wgpu` supports depends on how you are using it:
 
 [webgpu spec]: https://www.w3.org/TR/webgpu/
 [wgsl spec]: https://gpuweb.github.io/gpuweb/wgsl/
-[naga]: https://github.com/gfx-rs/naga/
-[naga wgsl milestone]: https://github.com/gfx-rs/naga/milestone/4
+[naga]: https://github.com/gfx-rs/wgpu/tree/trunk/naga/
+[naga bugs]: https://github.com/gfx-rs/wgpu/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22naga%22
 
 ## Coordinate Systems
 

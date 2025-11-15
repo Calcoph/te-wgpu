@@ -161,6 +161,13 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn create_mesh_pipeline(
+        &self,
+        _desc: &wgpu::MeshPipelineDescriptor<'_>,
+    ) -> Result<wgpu::custom::DispatchRenderPipeline, wgpu::wgc::pipeline::CreateRenderPipelineError> {
+        unimplemented!()
+    }
+
     fn create_compute_pipeline(
         &self,
         desc: &wgpu::ComputePipelineDescriptor<'_>,
@@ -181,6 +188,14 @@ impl DeviceInterface for CustomDevice {
     }
 
     fn create_texture(&self, _desc: &wgpu::TextureDescriptor<'_>) -> Result<wgpu::custom::DispatchTexture, wgpu::wgc::resource::CreateTextureError> {
+        unimplemented!()
+    }
+
+    fn create_external_texture(
+        &self,
+        _desc: &wgpu::ExternalTextureDescriptor<'_>,
+        _planes: &[&wgpu::TextureView],
+    ) -> Result<wgpu::custom::DispatchExternalTexture, wgpu::wgc::resource::CreateExternalTextureError> {
         unimplemented!()
     }
 

@@ -12,7 +12,18 @@
 use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt as _;
-use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        RENDER_PASS_RESOURCE_OWNERSHIP,
+        RENDER_PASS_QUERY_SET_OWNERSHIP_PIPELINE_STATISTICS,
+        RENDER_PASS_QUERY_SET_OWNERSHIP_TIMESTAMPS,
+        RENDER_PASS_KEEP_ENCODER_ALIVE,
+    ]);
+}
 
 // Minimal shader with buffer based side effect - only needed to check whether the render pass has executed at all.
 const SHADER_SRC: &str = "
@@ -103,7 +114,9 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
         drop(vertex_buffer);
         drop(index_buffer);
         drop(occlusion_query_set);
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
     }
 
     assert_render_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -174,7 +187,9 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
 
         // Drop the query set. Then do a device poll to make sure it's not dropped too early, no matter what.
         drop(query_set);
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
     }
 
     assert_render_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -252,7 +267,9 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
         // Drop the query sets. Then do a device poll to make sure they're not dropped too early, no matter what.
         drop(query_set_timestamp_writes);
         drop(query_set_write_timestamp);
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
     }
 
     assert_render_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -260,7 +277,11 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
 
 #[gpu_test]
 static RENDER_PASS_KEEP_ENCODER_ALIVE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop(),
+    )
     .run_async(render_pass_keep_encoder_alive);
 
 async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
@@ -301,7 +322,9 @@ async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
     let mut rpass = rpass.forget_lifetime();
     drop(encoder);
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     // Record some a draw command.
     rpass.set_pipeline(&pipeline).unwrap();
@@ -327,7 +350,9 @@ async fn assert_render_pass_executed_normally(
     encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size).unwrap();
     ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = cpu_buffer.slice(..).get_mapped_range();
 

@@ -147,6 +147,10 @@ pub trait DeviceInterface: CommonTraits {
         &self,
         desc: &crate::RenderPipelineDescriptor<'_>,
     ) -> Result<DispatchRenderPipeline, CreateRenderPipelineError>;
+    fn create_mesh_pipeline(
+        &self,
+        desc: &crate::MeshPipelineDescriptor<'_>,
+    ) -> Result<DispatchRenderPipeline, wgc::pipeline::CreateRenderPipelineError> ;
     fn create_compute_pipeline(
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
@@ -157,6 +161,11 @@ pub trait DeviceInterface: CommonTraits {
     ) -> Result<DispatchPipelineCache, pipeline::CreatePipelineCacheError>;
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> Result<DispatchBuffer, CreateBufferError>;
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> Result<DispatchTexture, CreateTextureError> ;
+    fn create_external_texture(
+        &self,
+        desc: &crate::ExternalTextureDescriptor<'_>,
+        planes: &[&crate::TextureView],
+    ) -> Result<DispatchExternalTexture, resource::CreateExternalTextureError>;
     fn create_blas(
         &self,
         desc: &crate::CreateBlasDescriptor<'_>,
@@ -219,6 +228,7 @@ pub trait QueueInterface: CommonTraits {
         size: crate::Extent3d,
     );
 
+    /// Submit must always drain the iterator, even in the case of error.
     fn submit(&self, command_buffers: &mut dyn Iterator<Item = DispatchCommandBuffer>) -> Result<u64, (u64, QueueSubmitError)>;
 
     fn get_timestamp_period(&self) -> f32;
@@ -251,6 +261,9 @@ pub trait BufferInterface: CommonTraits {
 pub trait TextureInterface: CommonTraits {
     fn create_view(&self, desc: &crate::TextureViewDescriptor<'_>) -> Result<DispatchTextureView, CreateTextureViewError>;
 
+    fn destroy(&self);
+}
+pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);
 }
 pub trait BlasInterface: CommonTraits {
@@ -408,12 +421,18 @@ pub trait RenderPassInterface: CommonTraits {
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::PassStateError>;
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::PassStateError>;
+    fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) -> Result<(), wgc::command::RenderPassError>;
     fn draw_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
     ) -> Result<(), wgc::command::PassStateError>;
     fn draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+    ) -> Result<(), wgc::command::PassStateError>;
+    fn draw_mesh_tasks_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
@@ -439,7 +458,21 @@ pub trait RenderPassInterface: CommonTraits {
         count_buffer_offset: crate::BufferAddress,
         max_count: u32,
     ) -> Result<(), wgc::command::PassStateError>;
+    fn multi_draw_mesh_tasks_indirect(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+        count: u32,
+    ) -> Result<(), wgc::command::PassStateError> ;
     fn multi_draw_indexed_indirect_count(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+        count_buffer: &DispatchBuffer,
+        count_buffer_offset: crate::BufferAddress,
+        max_count: u32,
+    ) -> Result<(), wgc::command::PassStateError>;
+    fn multi_draw_mesh_tasks_indirect_count(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
@@ -559,7 +592,7 @@ macro_rules! dispatch_types {
             #[cfg(wgpu_core)]
             Core(Arc<$core_type>),
             #[cfg(webgpu)]
-            WebGPU(Arc<$webgpu_type>),
+            WebGPU($webgpu_type),
             #[allow(clippy::allow_attributes, private_interfaces)]
             #[cfg(custom)]
             Custom($custom_type),
@@ -635,7 +668,7 @@ macro_rules! dispatch_types {
         impl From<$webgpu_type> for $name {
             #[inline]
             fn from(value: $webgpu_type) -> Self {
-                Self::WebGPU(Arc::new(value))
+                Self::WebGPU(value)
             }
         }
 
@@ -648,7 +681,7 @@ macro_rules! dispatch_types {
                     #[cfg(wgpu_core)]
                     Self::Core(value) => value.as_ref(),
                     #[cfg(webgpu)]
-                    Self::WebGPU(value) => value.as_ref(),
+                    Self::WebGPU(value) => value,
                     #[cfg(custom)]
                     Self::Custom(value) => value.deref(),
                     #[cfg(not(any(wgpu_core, webgpu)))]
@@ -836,6 +869,7 @@ dispatch_types! {ref type DispatchTextureView: TextureViewInterface = CoreTextur
 dispatch_types! {ref type DispatchSampler: SamplerInterface = CoreSampler, WebSampler, DynSampler}
 dispatch_types! {ref type DispatchBuffer: BufferInterface = CoreBuffer, WebBuffer, DynBuffer}
 dispatch_types! {ref type DispatchTexture: TextureInterface = CoreTexture, WebTexture, DynTexture}
+dispatch_types! {ref type DispatchExternalTexture: ExternalTextureInterface = CoreExternalTexture, WebExternalTexture, DynExternalTexture}
 dispatch_types! {ref type DispatchBlas: BlasInterface = CoreBlas, WebBlas, DynBlas}
 dispatch_types! {ref type DispatchTlas: TlasInterface = CoreTlas, WebTlas, DynTlas}
 dispatch_types! {ref type DispatchQuerySet: QuerySetInterface = CoreQuerySet, WebQuerySet, DynQuerySet}
@@ -846,7 +880,7 @@ dispatch_types! {ref type DispatchPipelineCache: PipelineCacheInterface = CorePi
 dispatch_types! {mut type DispatchCommandEncoder: CommandEncoderInterface = CoreCommandEncoder, WebCommandEncoder, DynCommandEncoder}
 dispatch_types! {mut type DispatchComputePass: ComputePassInterface = CoreComputePass, WebComputePassEncoder, DynComputePass}
 dispatch_types! {mut type DispatchRenderPass: RenderPassInterface = CoreRenderPass, WebRenderPassEncoder, DynRenderPass}
-dispatch_types! {ref type DispatchCommandBuffer: CommandBufferInterface = CoreCommandBuffer, WebCommandBuffer, DynCommandBuffer}
+dispatch_types! {mut type DispatchCommandBuffer: CommandBufferInterface = CoreCommandBuffer, WebCommandBuffer, DynCommandBuffer}
 dispatch_types! {mut type DispatchRenderBundleEncoder: RenderBundleEncoderInterface = CoreRenderBundleEncoder, WebRenderBundleEncoder, DynRenderBundleEncoder}
 dispatch_types! {ref type DispatchRenderBundle: RenderBundleInterface = CoreRenderBundle, WebRenderBundle, DynRenderBundle}
 dispatch_types! {ref type DispatchSurface: SurfaceInterface = CoreSurface, WebSurface, DynSurface}

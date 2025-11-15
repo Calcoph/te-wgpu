@@ -3,8 +3,6 @@ use core::{fmt, num::NonZeroU32};
 
 use crate::{
     binding_model,
-    hub::Hub,
-    id::{BindGroupLayoutId, PipelineLayoutId},
     ray_tracing::BlasCompactReadyPendingClosure,
     resource::{
         Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
@@ -36,10 +34,6 @@ pub const SHADER_STAGE_COUNT: usize = hal::MAX_CONCURRENT_SHADER_STAGES;
 // Should be large enough for the largest possible texture row. This
 // value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
-
-// If a submission is not completed within this time, we go off into UB land.
-// See https://github.com/gfx-rs/wgpu/issues/4589. 60s to reduce the chances of this.
-const CLEANUP_WAIT_MS: u32 = 60000;
 
 pub(crate) const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
 
@@ -385,32 +379,19 @@ impl WebGpuError for MissingDownlevelFlags {
     }
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImplicitPipelineContext {
-    pub root_id: PipelineLayoutId,
-    pub group_ids: ArrayVec<BindGroupLayoutId, { hal::MAX_BIND_GROUPS }>,
-}
-
-pub struct ImplicitPipelineIds<'a> {
-    pub root_id: PipelineLayoutId,
-    pub group_ids: &'a [BindGroupLayoutId],
-}
-
-impl ImplicitPipelineIds<'_> {
-    fn prepare(self, hub: &Hub) -> ImplicitPipelineContext {
-        ImplicitPipelineContext {
-            root_id: hub.pipeline_layouts.prepare(Some(self.root_id)).id(),
-            group_ids: self
-                .group_ids
-                .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare(Some(*id_in)).id())
-                .collect(),
-        }
-    }
-}
-
-/// Create a validator with the given validation flags.
+/// Create a validator for Naga [`Module`]s.
+///
+/// Create a Naga [`Validator`] that ensures that each [`naga::Module`]
+/// presented to it is valid, and uses no features not included in
+/// `features` and `downlevel`.
+///
+/// The validator can only catch invalid modules and feature misuse
+/// reliably when the `flags` argument includes all the flags in
+/// [`ValidationFlags::default()`].
+///
+/// [`Validator`]: naga::valid::Validator
+/// [`Module`]: naga::Module
+/// [`ValidationFlags::default()`]: naga::valid::ValidationFlags::default
 pub fn create_validator(
     features: wgt::Features,
     downlevel: wgt::DownlevelFlags,
@@ -426,6 +407,10 @@ pub fn create_validator(
     caps.set(
         Caps::SHADER_FLOAT16,
         features.contains(wgt::Features::SHADER_F16),
+    );
+    caps.set(
+        Caps::SHADER_FLOAT16_IN_FLOAT32,
+        downlevel.contains(wgt::DownlevelFlags::SHADER_F16_IN_F32),
     );
     caps.set(
         Caps::PRIMITIVE_INDEX,
@@ -520,6 +505,10 @@ pub fn create_validator(
     caps.set(
         Caps::RAY_HIT_VERTEX_POSITION,
         features.intersects(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN),
+    );
+    caps.set(
+        Caps::TEXTURE_EXTERNAL,
+        features.intersects(wgt::Features::EXTERNAL_TEXTURE),
     );
 
     naga::valid::Validator::new(flags, caps)

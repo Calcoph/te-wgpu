@@ -108,7 +108,7 @@ impl StagingBelt {
         offset: BufferAddress,
         size: BufferSize,
         device: &Device,
-    ) -> Result<BufferViewMut<'_>, WriteBufferError> {
+    ) -> Result<BufferViewMut, WriteBufferError> {
         let slice_of_belt = self.allocate(
             size,
             const { BufferSize::new(crate::COPY_BUFFER_ALIGNMENT).unwrap() },

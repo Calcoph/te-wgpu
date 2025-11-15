@@ -26,7 +26,7 @@ use crate::{
         dxgi::{name::ObjectExt, result::HResult},
     },
     dx12::{
-        borrow_optional_interface_temporarily, shader_compilation, suballocation,
+        borrow_optional_interface_temporarily, shader_compilation, suballocation, DCompLib,
         DynamicStorageBufferOffsets, Event, ShaderCacheKey, ShaderCacheValue,
     },
     AccelerationStructureEntries, TlasInstance,
@@ -46,8 +46,10 @@ impl super::Device {
         memory_hints: &wgt::MemoryHints,
         private_caps: super::PrivateCapabilities,
         library: &Arc<D3D12Lib>,
+        dcomp_lib: &Arc<DCompLib>,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         compiler_container: Arc<shader_compilation::CompilerContainer>,
+        backend_options: wgt::Dx12BackendOptions,
     ) -> Result<Self, crate::DeviceError> {
         if private_caps
             .instance_flags
@@ -138,6 +140,16 @@ impl super::Device {
                     }],
                     0,
                 )?,
+                draw_mesh: Self::create_command_signature(
+                    &raw,
+                    None,
+                    size_of::<wgt::DispatchIndirectArgs>(),
+                    &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                        Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH,
+                        ..Default::default()
+                    }],
+                    0,
+                )?,
                 dispatch: Self::create_command_signature(
                     &raw,
                     None,
@@ -183,10 +195,7 @@ impl super::Device {
         Ok(super::Device {
             raw: raw.clone(),
             present_queue,
-            idler: super::Idler {
-                fence: idle_fence,
-                event: Event::create(false, false)?,
-            },
+            idler: super::Idler { fence: idle_fence },
             features,
             shared: Arc::new(shared),
             rtv_pool: Arc::new(Mutex::new(rtv_pool)),
@@ -198,7 +207,9 @@ impl super::Device {
                 raw.clone(),
                 Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             )),
+            options: backend_options,
             library: Arc::clone(library),
+            dcomp_lib: Arc::clone(dcomp_lib),
             #[cfg(feature = "renderdoc")]
             render_doc: Default::default(),
             null_rtv_handle,
@@ -242,16 +253,14 @@ impl super::Device {
             return Err(crate::DeviceError::Lost);
         }
 
+        let event = Event::create(false, false)?;
+
         let value = cur_value + 1;
         unsafe { self.present_queue.Signal(&self.idler.fence, value) }
             .into_device_result("Signal")?;
-        let hr = unsafe {
-            self.idler
-                .fence
-                .SetEventOnCompletion(value, self.idler.event.0)
-        };
+        let hr = unsafe { self.idler.fence.SetEventOnCompletion(value, event.0) };
         hr.into_device_result("Set event")?;
-        unsafe { Threading::WaitForSingleObject(self.idler.event.0, Threading::INFINITE) };
+        unsafe { Threading::WaitForSingleObject(event.0, Threading::INFINITE) };
         Ok(())
     }
 
@@ -342,10 +351,7 @@ impl super::Device {
                     (source, entry_point)
                 };
                 log::info!(
-                    "Naga generated shader for {:?} at {:?}:\n{}",
-                    entry_point,
-                    naga_stage,
-                    source
+                    "Naga generated shader for {entry_point:?} at {naga_stage:?}:\n{source}"
                 );
 
                 ShaderCacheKey {
@@ -810,7 +816,8 @@ impl crate::Device for super::Device {
                 | wgt::BindingType::StorageTexture { .. }
                 | wgt::BindingType::AccelerationStructure { .. } => num_views += count,
                 wgt::BindingType::Sampler { .. } => has_sampler_in_group = true,
-                wgt::BindingType::ExternalTexture => unimplemented!(),
+                // Three texture planes and one params buffer
+                wgt::BindingType::ExternalTexture => num_views += 4 * count,
             }
         }
 
@@ -883,6 +890,7 @@ impl crate::Device for super::Device {
 
         let mut binding_map = hlsl::BindingMap::default();
         let mut sampler_buffer_binding_map = hlsl::SamplerIndexBufferBindingMap::default();
+        let mut external_texture_binding_map = hlsl::ExternalTextureBindingMap::default();
         let mut bind_cbv = hlsl::BindTarget::default();
         let mut bind_srv = hlsl::BindTarget::default();
         let mut bind_uav = hlsl::BindTarget::default();
@@ -942,6 +950,8 @@ impl crate::Device for super::Device {
                         ..
                     } => {}
                     wgt::BindingType::Sampler(_) => sampler_in_bind_group = true,
+                    // Three texture planes and one params buffer
+                    wgt::BindingType::ExternalTexture => total_non_dynamic_entries += 4,
                     _ => total_non_dynamic_entries += 1,
                 }
             }
@@ -996,61 +1006,110 @@ impl crate::Device for super::Device {
             // SRV/CBV/UAV descriptor tables
             let range_base = ranges.len();
             for entry in bgl.entries.iter() {
-                let (range_ty, has_dynamic_offset) = match entry.ty {
-                    wgt::BindingType::Buffer {
-                        ty,
-                        has_dynamic_offset: true,
-                        ..
-                    } => match ty {
-                        wgt::BufferBindingType::Uniform => continue,
-                        wgt::BufferBindingType::Storage { .. } => {
-                            (conv::map_binding_type(&entry.ty), true)
-                        }
-                    },
-                    ref other => (conv::map_binding_type(other), false),
-                };
-                let bt = match range_ty {
-                    Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_CBV => &mut bind_cbv,
-                    Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV => &mut bind_srv,
-                    Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_UAV => &mut bind_uav,
-                    Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER => continue,
-                    _ => todo!(),
-                };
-
-                let binding_array_size = entry.count.map(NonZeroU32::get);
-
-                let dynamic_storage_buffer_offsets_index = if has_dynamic_offset {
-                    debug_assert!(
-                        binding_array_size.is_none(),
-                        "binding arrays and dynamic buffers are mutually exclusive"
+                let count = entry.count.map_or(1, NonZeroU32::get);
+                if let wgt::BindingType::ExternalTexture = entry.ty {
+                    // External textures need 3 SRVs (a texture for each plane)
+                    // and 1 CBV for the parameters buffer.
+                    let bind_target = hlsl::ExternalTextureBindTarget {
+                        planes: core::array::from_fn(|_| hlsl::BindTarget {
+                            register: {
+                                let register = bind_srv.register;
+                                bind_srv.register += count;
+                                register
+                            },
+                            ..bind_srv
+                        }),
+                        params: hlsl::BindTarget {
+                            register: {
+                                let register = bind_cbv.register;
+                                bind_cbv.register += count;
+                                register
+                            },
+                            ..bind_cbv
+                        },
+                    };
+                    external_texture_binding_map.insert(
+                        naga::ResourceBinding {
+                            group: index as u32,
+                            binding: entry.binding,
+                        },
+                        bind_target,
                     );
-                    let ret = Some(dynamic_storage_buffers);
-                    dynamic_storage_buffers += 1;
-                    ret
+                    for bt in bind_target.planes {
+                        ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
+                            RangeType: Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+                            NumDescriptors: count,
+                            BaseShaderRegister: bt.register,
+                            RegisterSpace: bt.space as u32,
+                            OffsetInDescriptorsFromTableStart:
+                                Direct3D12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                        });
+                    }
+                    ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
+                        RangeType: Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+                        NumDescriptors: count,
+                        BaseShaderRegister: bind_target.params.register,
+                        RegisterSpace: bind_target.params.space as u32,
+                        OffsetInDescriptorsFromTableStart:
+                            Direct3D12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                    });
                 } else {
-                    None
-                };
+                    let (range_ty, has_dynamic_offset) = match entry.ty {
+                        wgt::BindingType::Buffer {
+                            ty,
+                            has_dynamic_offset: true,
+                            ..
+                        } => match ty {
+                            wgt::BufferBindingType::Uniform => continue,
+                            wgt::BufferBindingType::Storage { .. } => {
+                                (conv::map_binding_type(&entry.ty), true)
+                            }
+                        },
+                        ref other => (conv::map_binding_type(other), false),
+                    };
+                    let bt = match range_ty {
+                        Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_CBV => &mut bind_cbv,
+                        Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV => &mut bind_srv,
+                        Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_UAV => &mut bind_uav,
+                        Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER => continue,
+                        _ => todo!(),
+                    };
 
-                binding_map.insert(
-                    naga::ResourceBinding {
-                        group: index as u32,
-                        binding: entry.binding,
-                    },
-                    hlsl::BindTarget {
-                        binding_array_size,
-                        dynamic_storage_buffer_offsets_index,
-                        ..*bt
-                    },
-                );
-                ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
-                    RangeType: range_ty,
-                    NumDescriptors: entry.count.map_or(1, |count| count.get()),
-                    BaseShaderRegister: bt.register,
-                    RegisterSpace: bt.space as u32,
-                    OffsetInDescriptorsFromTableStart:
-                        Direct3D12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
-                });
-                bt.register += entry.count.map(NonZeroU32::get).unwrap_or(1);
+                    let binding_array_size = entry.count.map(NonZeroU32::get);
+
+                    let dynamic_storage_buffer_offsets_index = if has_dynamic_offset {
+                        debug_assert!(
+                            binding_array_size.is_none(),
+                            "binding arrays and dynamic buffers are mutually exclusive"
+                        );
+                        let ret = Some(dynamic_storage_buffers);
+                        dynamic_storage_buffers += 1;
+                        ret
+                    } else {
+                        None
+                    };
+
+                    binding_map.insert(
+                        naga::ResourceBinding {
+                            group: index as u32,
+                            binding: entry.binding,
+                        },
+                        hlsl::BindTarget {
+                            binding_array_size,
+                            dynamic_storage_buffer_offsets_index,
+                            ..*bt
+                        },
+                    );
+                    ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
+                        RangeType: range_ty,
+                        NumDescriptors: count,
+                        BaseShaderRegister: bt.register,
+                        RegisterSpace: bt.space as u32,
+                        OffsetInDescriptorsFromTableStart:
+                            Direct3D12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                    });
+                    bt.register += count;
+                }
             }
 
             let mut sampler_index_within_bind_group = 0;
@@ -1340,6 +1399,19 @@ impl crate::Device for super::Device {
                         ],
                         0,
                     )?,
+                    draw_mesh: Self::create_command_signature(
+                        &self.raw,
+                        Some(&raw),
+                        special_constant_buffer_args_len + size_of::<wgt::DispatchIndirectArgs>(),
+                        &[
+                            constant_indirect_argument_desc,
+                            Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH,
+                                ..Default::default()
+                            },
+                        ],
+                        0,
+                    )?,
                     dispatch: Self::create_command_signature(
                         &self.raw,
                         Some(&raw),
@@ -1391,6 +1463,7 @@ impl crate::Device for super::Device {
                 restrict_indexing: true,
                 sampler_heap_target,
                 sampler_buffer_binding_map,
+                external_texture_binding_map,
                 force_loop_bounding: true,
             },
         })
@@ -1442,7 +1515,7 @@ impl crate::Device for super::Device {
                     let end = start + entry.count as usize;
                     for data in &desc.buffers[start..end] {
                         let gpu_address = data.resolve_address();
-                        let mut size = data.resolve_size() as u32;
+                        let mut size = data.resolve_size().try_into().unwrap();
 
                         if has_dynamic_offset {
                             match ty {
@@ -1576,7 +1649,31 @@ impl crate::Device for super::Device {
                         inner.stage.push(handle);
                     }
                 }
-                wgt::BindingType::ExternalTexture => unimplemented!(),
+                wgt::BindingType::ExternalTexture => {
+                    // We don't yet support binding arrays of external textures.
+                    // https://github.com/gfx-rs/wgpu/issues/8027
+                    assert_eq!(entry.count, 1);
+                    let external_texture = &desc.external_textures[entry.resource_index as usize];
+                    for plane in &external_texture.planes {
+                        let plane_handle = plane.view.handle_srv.unwrap();
+                        cpu_views.as_mut().unwrap().stage.push(plane_handle.raw);
+                    }
+                    let gpu_address = external_texture.params.resolve_address();
+                    let size = external_texture.params.resolve_size() as u32;
+                    let inner = cpu_views.as_mut().unwrap();
+                    let cpu_index = inner.stage.len() as u32;
+                    let params_handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);
+                    let size_mask = Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1;
+                    let raw_desc = Direct3D12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
+                        BufferLocation: gpu_address,
+                        SizeInBytes: ((size - 1) | size_mask) + 1,
+                    };
+                    unsafe {
+                        self.raw
+                            .CreateConstantBufferView(Some(&raw_desc), params_handle)
+                    };
+                    inner.stage.push(params_handle);
+                }
             }
         }
 
@@ -1584,7 +1681,7 @@ impl crate::Device for super::Device {
             let buffer_size = (sampler_indexes.len() * size_of::<u32>()) as u64;
 
             let label = if let Some(label) = desc.label {
-                Cow::Owned(format!("{} (Internal Sampler Index Buffer)", label))
+                Cow::Owned(format!("{label} (Internal Sampler Index Buffer)"))
             } else {
                 Cow::Borrowed("Internal Sampler Index Buffer")
             };
@@ -1700,12 +1797,6 @@ impl crate::Device for super::Device {
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
-            crate::ShaderInput::SpirV(_) => {
-                panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
-            }
-            crate::ShaderInput::Msl { .. } => {
-                panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
-            }
             crate::ShaderInput::Dxil {
                 shader,
                 entry_point,
@@ -1732,6 +1823,11 @@ impl crate::Device for super::Device {
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
+            crate::ShaderInput::SpirV(_)
+            | crate::ShaderInput::Msl { .. }
+            | crate::ShaderInput::Glsl { .. } => {
+                unreachable!()
+            }
         }
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {
@@ -1747,52 +1843,10 @@ impl crate::Device for super::Device {
             super::PipelineCache,
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
+        let mut shader_stages = wgt::ShaderStages::empty();
+        let root_signature =
+            unsafe { borrow_optional_interface_temporarily(&desc.layout.shared.signature) };
         let (topology_class, topology) = conv::map_topology(desc.primitive.topology);
-        let mut shader_stages = wgt::ShaderStages::VERTEX;
-
-        let blob_vs = self.load_shader(
-            &desc.vertex_stage,
-            desc.layout,
-            naga::ShaderStage::Vertex,
-            desc.fragment_stage.as_ref(),
-        )?;
-        let blob_fs = match desc.fragment_stage {
-            Some(ref stage) => {
-                shader_stages |= wgt::ShaderStages::FRAGMENT;
-                Some(self.load_shader(stage, desc.layout, naga::ShaderStage::Fragment, None)?)
-            }
-            None => None,
-        };
-
-        let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
-        let mut input_element_descs = Vec::new();
-        for (i, (stride, vbuf)) in vertex_strides
-            .iter_mut()
-            .zip(desc.vertex_buffers)
-            .enumerate()
-        {
-            *stride = NonZeroU32::new(vbuf.array_stride as u32);
-            let (slot_class, step_rate) = match vbuf.step_mode {
-                wgt::VertexStepMode::Vertex => {
-                    (Direct3D12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0)
-                }
-                wgt::VertexStepMode::Instance => {
-                    (Direct3D12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1)
-                }
-            };
-            for attribute in vbuf.attributes {
-                input_element_descs.push(Direct3D12::D3D12_INPUT_ELEMENT_DESC {
-                    SemanticName: windows::core::PCSTR(NAGA_LOCATION_SEMANTIC.as_ptr()),
-                    SemanticIndex: attribute.shader_location,
-                    Format: auxil::dxgi::conv::map_vertex_format(attribute.format),
-                    InputSlot: i as u32,
-                    AlignedByteOffset: attribute.offset as u32,
-                    InputSlotClass: slot_class,
-                    InstanceDataStepRate: step_rate,
-                });
-            }
-        }
-
         let mut rtv_formats = [Dxgi::Common::DXGI_FORMAT_UNKNOWN;
             Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
         for (rtv_format, ct) in rtv_formats.iter_mut().zip(desc.color_targets) {
@@ -1807,7 +1861,7 @@ impl crate::Device for super::Device {
             .map(|ds| ds.bias)
             .unwrap_or_default();
 
-        let raw_rasterizer = Direct3D12::D3D12_RASTERIZER_DESC {
+        let rasterizer_state = Direct3D12::D3D12_RASTERIZER_DESC {
             FillMode: conv::map_polygon_mode(desc.primitive.polygon_mode),
             CullMode: match desc.primitive.cull_mode {
                 None => Direct3D12::D3D12_CULL_MODE_NONE,
@@ -1831,80 +1885,193 @@ impl crate::Device for super::Device {
                 Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
             },
         };
-
-        let raw_desc = Direct3D12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-            pRootSignature: unsafe {
-                borrow_optional_interface_temporarily(&desc.layout.shared.signature)
-            },
-            VS: blob_vs.create_native_shader(),
-            PS: match &blob_fs {
-                Some(shader) => shader.create_native_shader(),
-                None => Direct3D12::D3D12_SHADER_BYTECODE::default(),
-            },
-            GS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
-            DS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
-            HS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
-            StreamOutput: Direct3D12::D3D12_STREAM_OUTPUT_DESC {
-                pSODeclaration: ptr::null(),
-                NumEntries: 0,
-                pBufferStrides: ptr::null(),
-                NumStrides: 0,
-                RasterizedStream: 0,
-            },
-            BlendState: Direct3D12::D3D12_BLEND_DESC {
-                AlphaToCoverageEnable: Foundation::BOOL::from(
-                    desc.multisample.alpha_to_coverage_enabled,
-                ),
-                IndependentBlendEnable: true.into(),
-                RenderTarget: conv::map_render_targets(desc.color_targets),
-            },
-            SampleMask: desc.multisample.mask as u32,
-            RasterizerState: raw_rasterizer,
-            DepthStencilState: match desc.depth_stencil {
-                Some(ref ds) => conv::map_depth_stencil(ds),
-                None => Default::default(),
-            },
-            InputLayout: Direct3D12::D3D12_INPUT_LAYOUT_DESC {
-                pInputElementDescs: if input_element_descs.is_empty() {
-                    ptr::null()
-                } else {
-                    input_element_descs.as_ptr()
-                },
-                NumElements: input_element_descs.len() as u32,
-            },
-            IBStripCutValue: match desc.primitive.strip_index_format {
-                Some(wgt::IndexFormat::Uint16) => {
-                    Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF
-                }
-                Some(wgt::IndexFormat::Uint32) => {
-                    Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF
-                }
-                None => Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
-            },
-            PrimitiveTopologyType: topology_class,
-            NumRenderTargets: desc.color_targets.len() as u32,
-            RTVFormats: rtv_formats,
-            DSVFormat: desc
-                .depth_stencil
-                .as_ref()
-                .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |ds| {
-                    auxil::dxgi::conv::map_texture_format(ds.format)
-                }),
-            SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
-                Count: desc.multisample.count,
-                Quality: 0,
-            },
-            NodeMask: 0,
-            CachedPSO: Direct3D12::D3D12_CACHED_PIPELINE_STATE {
-                pCachedBlob: ptr::null(),
-                CachedBlobSizeInBytes: 0,
-            },
-            Flags: Direct3D12::D3D12_PIPELINE_STATE_FLAG_NONE,
+        let blob_fs = match desc.fragment_stage {
+            Some(ref stage) => {
+                shader_stages |= wgt::ShaderStages::FRAGMENT;
+                Some(self.load_shader(stage, desc.layout, naga::ShaderStage::Fragment, None)?)
+            }
+            None => None,
         };
+        let pixel_shader = match &blob_fs {
+            Some(shader) => shader.create_native_shader(),
+            None => Direct3D12::D3D12_SHADER_BYTECODE::default(),
+        };
+        let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
+        let stream_output = Direct3D12::D3D12_STREAM_OUTPUT_DESC {
+            pSODeclaration: ptr::null(),
+            NumEntries: 0,
+            pBufferStrides: ptr::null(),
+            NumStrides: 0,
+            RasterizedStream: 0,
+        };
+        let blend_state = Direct3D12::D3D12_BLEND_DESC {
+            AlphaToCoverageEnable: Foundation::BOOL::from(
+                desc.multisample.alpha_to_coverage_enabled,
+            ),
+            IndependentBlendEnable: true.into(),
+            RenderTarget: conv::map_render_targets(desc.color_targets),
+        };
+        let depth_stencil_state = match desc.depth_stencil {
+            Some(ref ds) => conv::map_depth_stencil(ds),
+            None => Default::default(),
+        };
+        let dsv_format = desc
+            .depth_stencil
+            .as_ref()
+            .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |ds| {
+                auxil::dxgi::conv::map_texture_format(ds.format)
+            });
+        let sample_desc = Dxgi::Common::DXGI_SAMPLE_DESC {
+            Count: desc.multisample.count,
+            Quality: 0,
+        };
+        let cached_pso = Direct3D12::D3D12_CACHED_PIPELINE_STATE {
+            pCachedBlob: ptr::null(),
+            CachedBlobSizeInBytes: 0,
+        };
+        let flags = Direct3D12::D3D12_PIPELINE_STATE_FLAG_NONE;
 
-        let raw: Direct3D12::ID3D12PipelineState = {
-            profiling::scope!("ID3D12Device::CreateGraphicsPipelineState");
-            unsafe { self.raw.CreateGraphicsPipelineState(&raw_desc) }
+        let raw: Direct3D12::ID3D12PipelineState = match &desc.vertex_processor {
+            &crate::VertexProcessor::Standard {
+                vertex_buffers,
+                ref vertex_stage,
+            } => {
+                shader_stages |= wgt::ShaderStages::VERTEX;
+                let blob_vs = self.load_shader(
+                    vertex_stage,
+                    desc.layout,
+                    naga::ShaderStage::Vertex,
+                    desc.fragment_stage.as_ref(),
+                )?;
+
+                let mut input_element_descs = Vec::new();
+                for (i, (stride, vbuf)) in vertex_strides.iter_mut().zip(vertex_buffers).enumerate()
+                {
+                    *stride = Some(vbuf.array_stride as u32);
+                    let (slot_class, step_rate) = match vbuf.step_mode {
+                        wgt::VertexStepMode::Vertex => {
+                            (Direct3D12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0)
+                        }
+                        wgt::VertexStepMode::Instance => {
+                            (Direct3D12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1)
+                        }
+                    };
+                    for attribute in vbuf.attributes {
+                        input_element_descs.push(Direct3D12::D3D12_INPUT_ELEMENT_DESC {
+                            SemanticName: windows::core::PCSTR(NAGA_LOCATION_SEMANTIC.as_ptr()),
+                            SemanticIndex: attribute.shader_location,
+                            Format: auxil::dxgi::conv::map_vertex_format(attribute.format),
+                            InputSlot: i as u32,
+                            AlignedByteOffset: attribute.offset as u32,
+                            InputSlotClass: slot_class,
+                            InstanceDataStepRate: step_rate,
+                        });
+                    }
+                }
+                let raw_desc = Direct3D12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
+                    pRootSignature: root_signature,
+                    VS: blob_vs.create_native_shader(),
+                    PS: pixel_shader,
+                    GS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
+                    DS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
+                    HS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
+                    StreamOutput: stream_output,
+                    BlendState: blend_state,
+                    SampleMask: desc.multisample.mask as u32,
+                    RasterizerState: rasterizer_state,
+                    DepthStencilState: depth_stencil_state,
+                    InputLayout: Direct3D12::D3D12_INPUT_LAYOUT_DESC {
+                        pInputElementDescs: if input_element_descs.is_empty() {
+                            ptr::null()
+                        } else {
+                            input_element_descs.as_ptr()
+                        },
+                        NumElements: input_element_descs.len() as u32,
+                    },
+                    IBStripCutValue: match desc.primitive.strip_index_format {
+                        Some(wgt::IndexFormat::Uint16) => {
+                            Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF
+                        }
+                        Some(wgt::IndexFormat::Uint32) => {
+                            Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF
+                        }
+                        None => Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
+                    },
+                    PrimitiveTopologyType: topology_class,
+                    NumRenderTargets: desc.color_targets.len() as u32,
+                    RTVFormats: rtv_formats,
+                    DSVFormat: dsv_format,
+                    SampleDesc: sample_desc,
+                    NodeMask: 0,
+                    CachedPSO: cached_pso,
+                    Flags: flags,
+                };
+                unsafe {
+                    profiling::scope!("ID3D12Device::CreateGraphicsPipelineState");
+                    self.raw.CreateGraphicsPipelineState(&raw_desc)
+                }
+            }
+            crate::VertexProcessor::Mesh {
+                task_stage,
+                mesh_stage,
+            } => {
+                let blob_ts = if let Some(ts) = task_stage {
+                    shader_stages |= wgt::ShaderStages::TASK;
+                    Some(self.load_shader(
+                        ts,
+                        desc.layout,
+                        naga::ShaderStage::Task,
+                        desc.fragment_stage.as_ref(),
+                    )?)
+                } else {
+                    None
+                };
+                let task_shader = if let Some(ts) = &blob_ts {
+                    ts.create_native_shader()
+                } else {
+                    Default::default()
+                };
+                shader_stages |= wgt::ShaderStages::MESH;
+                let blob_ms = self.load_shader(
+                    mesh_stage,
+                    desc.layout,
+                    naga::ShaderStage::Mesh,
+                    desc.fragment_stage.as_ref(),
+                )?;
+                let desc = super::MeshShaderPipelineStateStream {
+                    root_signature: root_signature
+                        .as_ref()
+                        .map(|a| a.as_raw().cast())
+                        .unwrap_or(ptr::null_mut()),
+                    task_shader,
+                    pixel_shader,
+                    mesh_shader: blob_ms.create_native_shader(),
+                    blend_state,
+                    sample_mask: desc.multisample.mask as u32,
+                    rasterizer_state,
+                    depth_stencil_state,
+                    primitive_topology_type: topology_class,
+                    rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY {
+                        RTFormats: rtv_formats,
+                        NumRenderTargets: desc.color_targets.len() as u32,
+                    },
+                    dsv_format,
+                    sample_desc,
+                    node_mask: 0,
+                    cached_pso,
+                    flags,
+                };
+                let mut raw_desc = unsafe { desc.to_bytes() };
+                let stream_desc = Direct3D12::D3D12_PIPELINE_STATE_STREAM_DESC {
+                    SizeInBytes: raw_desc.len(),
+                    pPipelineStateSubobjectStream: raw_desc.as_mut_ptr().cast(),
+                };
+                let device: Direct3D12::ID3D12Device2 = self.raw.cast().unwrap();
+                unsafe {
+                    profiling::scope!("ID3D12Device2::CreatePipelineState");
+                    device.CreatePipelineState(&stream_desc)
+                }
+            }
         }
         .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.to_string()))?;
 
@@ -1920,17 +2087,6 @@ impl crate::Device for super::Device {
             topology,
             vertex_strides,
         })
-    }
-
-    unsafe fn create_mesh_pipeline(
-        &self,
-        _desc: &crate::MeshPipelineDescriptor<
-            <Self::A as crate::Api>::PipelineLayout,
-            <Self::A as crate::Api>::ShaderModule,
-            <Self::A as crate::Api>::PipelineCache,
-        >,
-    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
-        unreachable!()
     }
 
     unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {
@@ -2081,9 +2237,9 @@ impl crate::Device for super::Device {
         &self,
         fence: &super::Fence,
         value: crate::FenceValue,
-        timeout_ms: u32,
+        timeout: Option<Duration>,
     ) -> Result<bool, crate::DeviceError> {
-        let timeout_duration = Duration::from_millis(timeout_ms as u64);
+        let timeout = timeout.unwrap_or(Duration::MAX);
 
         // We first check if the fence has already reached the value we're waiting for.
         let mut fence_value = unsafe { fence.raw.GetCompletedValue() };
@@ -2091,7 +2247,9 @@ impl crate::Device for super::Device {
             return Ok(true);
         }
 
-        unsafe { fence.raw.SetEventOnCompletion(value, self.idler.event.0) }
+        let event = Event::create(false, false)?;
+
+        unsafe { fence.raw.SetEventOnCompletion(value, event.0) }
             .into_device_result("Set event")?;
 
         let start_time = Instant::now();
@@ -2115,7 +2273,7 @@ impl crate::Device for super::Device {
             //
             // This happens when a previous iteration WaitForSingleObject succeeded with a previous fence value,
             // right before the timeout would have been hit.
-            let remaining_wait_duration = match timeout_duration.checked_sub(elapsed) {
+            let remaining_wait_duration = match timeout.checked_sub(elapsed) {
                 Some(remaining) => remaining,
                 None => {
                     log::trace!("Timeout elapsed in between waits!");
@@ -2123,16 +2281,12 @@ impl crate::Device for super::Device {
                 }
             };
 
-            log::trace!(
-                "Waiting for fence value {} for {:?}",
-                value,
-                remaining_wait_duration
-            );
+            log::trace!("Waiting for fence value {value} for {remaining_wait_duration:?}");
 
             match unsafe {
                 Threading::WaitForSingleObject(
-                    self.idler.event.0,
-                    remaining_wait_duration.as_millis().try_into().unwrap(),
+                    event.0,
+                    remaining_wait_duration.as_millis().min(u32::MAX as u128) as u32,
                 )
             } {
                 Foundation::WAIT_OBJECT_0 => {}
@@ -2145,13 +2299,13 @@ impl crate::Device for super::Device {
                     break Ok(false);
                 }
                 other => {
-                    log::error!("Unexpected wait status: 0x{:?}", other);
+                    log::error!("Unexpected wait status: 0x{other:?}");
                     break Err(crate::DeviceError::Lost);
                 }
             };
 
             fence_value = unsafe { fence.raw.GetCompletedValue() };
-            log::trace!("Wait complete! Fence actual value: {}", fence_value);
+            log::trace!("Wait complete! Fence actual value: {fence_value}");
 
             if fence_value >= value {
                 break Ok(true);

@@ -2,6 +2,10 @@ use std::{fmt::Write, num::NonZeroU64};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.push(PIPELINE_CACHE);
+}
+
 /// We want to test that using a pipeline cache doesn't cause failure
 ///
 /// It would be nice if we could also assert that reusing a pipeline cache would make compilation
@@ -176,7 +180,9 @@ async fn validate_pipeline(
     encoder.copy_buffer_to_buffer(gpu_buffer, 0, cpu_buffer, 0, ARRAY_SIZE * 4).unwrap();
     ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ()).unwrap();
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = cpu_buffer.slice(..).get_mapped_range();
 

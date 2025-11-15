@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([TEST_SINGLE_WRITE, TEST_SCATTER]);
+}
 
 #[gpu_test]
 static TEST_SINGLE_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -73,7 +79,7 @@ async fn run_test(ctx: TestingContext, use_many_writes: bool) {
             let result_cell = result_cell.clone();
             move |result| result_cell.set(result).unwrap()
         }).unwrap();
-        device.poll(wgpu::PollType::Wait).unwrap();
+        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
         result_cell
             .get()
             .as_ref()

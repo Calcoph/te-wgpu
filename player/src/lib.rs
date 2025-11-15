@@ -6,7 +6,7 @@
 extern crate wgpu_core as wgc;
 extern crate wgpu_types as wgt;
 
-use wgc::device::trace;
+use wgc::{command::Command, device::trace, identity::IdentityManager};
 
 use std::{borrow::Cow, fs, path::Path};
 
@@ -14,7 +14,8 @@ pub trait GlobalPlay {
     fn encode_commands(
         &self,
         encoder: wgc::id::CommandEncoderId,
-        commands: Vec<trace::Command>,
+        commands: Vec<Command>,
+        command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     ) -> wgc::id::CommandBufferId;
     fn process(
         &self,
@@ -22,7 +23,8 @@ pub trait GlobalPlay {
         queue: wgc::id::QueueId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::markers::CommandBuffer>,
+        command_encoder_id_manager: &mut IdentityManager<wgc::id::markers::CommandEncoder>,
+        command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     );
 }
 
@@ -30,11 +32,12 @@ impl GlobalPlay for wgc::global::Global {
     fn encode_commands(
         &self,
         encoder: wgc::id::CommandEncoderId,
-        commands: Vec<trace::Command>,
+        commands: Vec<Command>,
+        command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     ) -> wgc::id::CommandBufferId {
         for command in commands {
             match command {
-                trace::Command::CopyBufferToBuffer {
+                Command::CopyBufferToBuffer {
                     src,
                     src_offset,
                     dst,
@@ -45,31 +48,31 @@ impl GlobalPlay for wgc::global::Global {
                         encoder, src, src_offset, dst, dst_offset, size,
                     )
                     .unwrap(),
-                trace::Command::CopyBufferToTexture { src, dst, size } => self
+                Command::CopyBufferToTexture { src, dst, size } => self
                     .command_encoder_copy_buffer_to_texture(encoder, &src, &dst, &size)
                     .unwrap(),
-                trace::Command::CopyTextureToBuffer { src, dst, size } => self
+                Command::CopyTextureToBuffer { src, dst, size } => self
                     .command_encoder_copy_texture_to_buffer(encoder, &src, &dst, &size)
                     .unwrap(),
-                trace::Command::CopyTextureToTexture { src, dst, size } => self
+                Command::CopyTextureToTexture { src, dst, size } => self
                     .command_encoder_copy_texture_to_texture(encoder, &src, &dst, &size)
                     .unwrap(),
-                trace::Command::ClearBuffer { dst, offset, size } => self
+                Command::ClearBuffer { dst, offset, size } => self
                     .command_encoder_clear_buffer(encoder, dst, offset, size)
                     .unwrap(),
-                trace::Command::ClearTexture {
+                Command::ClearTexture {
                     dst,
                     subresource_range,
                 } => self
                     .command_encoder_clear_texture(encoder, dst, &subresource_range)
                     .unwrap(),
-                trace::Command::WriteTimestamp {
+                Command::WriteTimestamp {
                     query_set_id,
                     query_index,
                 } => self
                     .command_encoder_write_timestamp(encoder, query_set_id, query_index)
                     .unwrap(),
-                trace::Command::ResolveQuerySet {
+                Command::ResolveQuerySet {
                     query_set_id,
                     start_query,
                     query_count,
@@ -85,16 +88,14 @@ impl GlobalPlay for wgc::global::Global {
                         destination_offset,
                     )
                     .unwrap(),
-                trace::Command::PushDebugGroup(marker) => self
+                Command::PushDebugGroup(marker) => self
                     .command_encoder_push_debug_group(encoder, &marker)
                     .unwrap(),
-                trace::Command::PopDebugGroup => {
-                    self.command_encoder_pop_debug_group(encoder).unwrap()
-                }
-                trace::Command::InsertDebugMarker(marker) => self
+                Command::PopDebugGroup => self.command_encoder_pop_debug_group(encoder).unwrap(),
+                Command::InsertDebugMarker(marker) => self
                     .command_encoder_insert_debug_marker(encoder, &marker)
                     .unwrap(),
-                trace::Command::RunComputePass {
+                Command::RunComputePass {
                     base,
                     timestamp_writes,
                 } => {
@@ -104,7 +105,7 @@ impl GlobalPlay for wgc::global::Global {
                         timestamp_writes.as_ref(),
                     );
                 }
-                trace::Command::RunRenderPass {
+                Command::RunRenderPass {
                     base,
                     target_colors,
                     target_depth_stencil,
@@ -120,7 +121,7 @@ impl GlobalPlay for wgc::global::Global {
                         occlusion_query_set_id,
                     );
                 }
-                trace::Command::BuildAccelerationStructures { blas, tlas } => {
+                Command::BuildAccelerationStructures { blas, tlas } => {
                     let blas_iter = blas.iter().map(|x| {
                         let geometries = match &x.geometries {
                             wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(
@@ -172,8 +173,11 @@ impl GlobalPlay for wgc::global::Global {
                 }
             }
         }
-        let cmd_buf =
-            self.command_encoder_finish(encoder, &wgt::CommandBufferDescriptor { label: None }).unwrap();
+        let cmd_buf = self.command_encoder_finish(
+            encoder,
+            &wgt::CommandBufferDescriptor { label: None },
+            Some(command_buffer_id_manager.process()),
+        ).unwrap();
 
         cmd_buf
     }
@@ -184,10 +188,11 @@ impl GlobalPlay for wgc::global::Global {
         queue: wgc::id::QueueId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::markers::CommandBuffer>,
+        command_encoder_id_manager: &mut IdentityManager<wgc::id::markers::CommandEncoder>,
+        command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     ) {
         use wgc::device::trace::Action;
-        log::debug!("action {:?}", action);
+        log::debug!("action {action:?}");
         //TODO: find a way to force ID perishing without excessive `maintain()` calls.
         match action {
             Action::Init { .. } => {
@@ -229,6 +234,15 @@ impl GlobalPlay for wgc::global::Global {
             Action::DestroyTextureView(id) => {
                 self.texture_view_drop(id).unwrap();
             }
+            Action::CreateExternalTexture { id, desc, planes } => {
+                self.device_create_external_texture(device, &desc, &planes, Some(id)).unwrap();
+            }
+            Action::FreeExternalTexture(id) => {
+                self.external_texture_destroy(id);
+            }
+            Action::DestroyExternalTexture(id) => {
+                self.external_texture_drop(id);
+            }
             Action::CreateSampler(id, desc) => {
                 self.device_create_sampler(device, &desc, Some(id))
                     .unwrap();
@@ -264,7 +278,7 @@ impl GlobalPlay for wgc::global::Global {
                 self.bind_group_drop(id);
             }
             Action::CreateShaderModule { id, desc, data } => {
-                log::debug!("Creating shader from {}", data);
+                log::debug!("Creating shader from {data}");
                 let code = fs::read_to_string(dir.join(&data)).unwrap();
                 let source = if data.ends_with(".wgsl") {
                     wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code.clone()))
@@ -279,41 +293,95 @@ impl GlobalPlay for wgc::global::Global {
                     println!("shader compilation error:\n---{code}\n---\n{e}");
                 }
             }
+            Action::CreateShaderModulePassthrough {
+                id,
+                data,
+                entry_point,
+                label,
+                num_workgroups,
+                runtime_checks,
+            } => {
+                let spirv = data.iter().find_map(|a| {
+                    if a.ends_with(".spv") {
+                        let data = fs::read(dir.join(a)).unwrap();
+                        assert!(data.len() % 4 == 0);
+
+                        Some(Cow::Owned(bytemuck::pod_collect_to_vec(&data)))
+                    } else {
+                        None
+                    }
+                });
+                let dxil = data.iter().find_map(|a| {
+                    if a.ends_with(".dxil") {
+                        let vec = std::fs::read(dir.join(a)).unwrap();
+                        Some(Cow::Owned(vec))
+                    } else {
+                        None
+                    }
+                });
+                let hlsl = data.iter().find_map(|a| {
+                    if a.ends_with(".hlsl") {
+                        let code = fs::read_to_string(dir.join(a)).unwrap();
+                        Some(Cow::Owned(code))
+                    } else {
+                        None
+                    }
+                });
+                let msl = data.iter().find_map(|a| {
+                    if a.ends_with(".msl") {
+                        let code = fs::read_to_string(dir.join(a)).unwrap();
+                        Some(Cow::Owned(code))
+                    } else {
+                        None
+                    }
+                });
+                let glsl = data.iter().find_map(|a| {
+                    if a.ends_with(".glsl") {
+                        let code = fs::read_to_string(dir.join(a)).unwrap();
+                        Some(Cow::Owned(code))
+                    } else {
+                        None
+                    }
+                });
+                let wgsl = data.iter().find_map(|a| {
+                    if a.ends_with(".wgsl") {
+                        let code = fs::read_to_string(dir.join(a)).unwrap();
+                        Some(Cow::Owned(code))
+                    } else {
+                        None
+                    }
+                });
+                let desc = wgt::CreateShaderModuleDescriptorPassthrough {
+                    entry_point,
+                    label,
+                    num_workgroups,
+                    runtime_checks,
+
+                    spirv,
+                    dxil,
+                    hlsl,
+                    msl,
+                    glsl,
+                    wgsl,
+                };
+                let _ = unsafe {
+                    self.device_create_shader_module_passthrough(device, &desc, Some(id))
+                }.unwrap();
+            }
             Action::DestroyShaderModule(id) => {
                 self.shader_module_drop(id);
             }
-            Action::CreateComputePipeline {
-                id,
-                desc,
-                implicit_context,
-            } => {
-                let implicit_ids =
-                    implicit_context
-                        .as_ref()
-                        .map(|ic| wgc::device::ImplicitPipelineIds {
-                            root_id: ic.root_id,
-                            group_ids: &ic.group_ids,
-                        });
-                self.device_create_compute_pipeline(device, &desc, Some(id), implicit_ids)
-                    .unwrap();
+            Action::CreateComputePipeline { id, desc } => {
+                self.device_create_compute_pipeline(device, &desc, Some(id)).unwrap();
             }
             Action::DestroyComputePipeline(id) => {
                 self.compute_pipeline_drop(id);
             }
-            Action::CreateRenderPipeline {
-                id,
-                desc,
-                implicit_context,
-            } => {
-                let implicit_ids =
-                    implicit_context
-                        .as_ref()
-                        .map(|ic| wgc::device::ImplicitPipelineIds {
-                            root_id: ic.root_id,
-                            group_ids: &ic.group_ids,
-                        });
-                self.device_create_render_pipeline(device, &desc, Some(id), implicit_ids)
-                    .unwrap();
+            Action::CreateRenderPipeline { id, desc } => {
+                self.device_create_render_pipeline(device, &desc, Some(id)).unwrap();
+            }
+            Action::CreateMeshPipeline { id, desc } => {
+                self.device_create_mesh_pipeline(device, &desc, Some(id)).unwrap();
             }
             Action::DestroyRenderPipeline(id) => {
                 self.render_pipeline_drop(id);
@@ -377,9 +445,9 @@ impl GlobalPlay for wgc::global::Global {
                 let encoder = self.device_create_command_encoder(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
-                    Some(comb_manager.process().into_command_encoder_id()),
+                    Some(command_encoder_id_manager.process()),
                 ).unwrap();
-                let cmdbuf = self.encode_commands(encoder, commands);
+                let cmdbuf = self.encode_commands(encoder, commands, command_buffer_id_manager);
                 self.queue_submit(queue, &[cmdbuf]).unwrap();
             }
             Action::CreateBlas { id, desc, sizes } => {

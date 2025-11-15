@@ -1,9 +1,19 @@
-use wgpu::{util::DeviceExt, Backends};
-use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu::util::DeviceExt;
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        BUFFER_DESTROY,
+        TEXTURE_DESTROY,
+        BUFFER_DESTROY_BEFORE_SUBMIT,
+        TEXTURE_DESTROY_BEFORE_SUBMIT,
+    ]);
+}
 
 #[gpu_test]
-static BUFFER_DESTROY: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("buffer"),
             size: 256,
@@ -15,7 +25,9 @@ static BUFFER_DESTROY: GpuTestConfiguration =
 
         buffer.destroy();
 
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
 
         fail(
             || {
@@ -28,7 +40,9 @@ static BUFFER_DESTROY: GpuTestConfiguration =
 
         buffer.destroy();
 
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
 
         buffer.destroy();
 
@@ -50,7 +64,9 @@ static BUFFER_DESTROY: GpuTestConfiguration =
         }
         let buffer = ctx.device.create_buffer(&descriptor).unwrap();
         buffer.destroy();
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
         let buffer = ctx.device.create_buffer(&descriptor).unwrap();
         buffer.destroy();
         {
@@ -59,17 +75,22 @@ static BUFFER_DESTROY: GpuTestConfiguration =
             let buffer = ctx.device.create_buffer(&descriptor).unwrap();
             buffer.destroy();
             let buffer = ctx.device.create_buffer(&descriptor).unwrap();
-            ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+            ctx.async_poll(wgpu::PollType::wait_indefinitely())
+                .await
+                .unwrap();
             buffer.destroy();
         }
         let buffer = ctx.device.create_buffer(&descriptor).unwrap();
         buffer.destroy();
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
     });
 
 #[gpu_test]
-static TEXTURE_DESTROY: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static TEXTURE_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         let texture = ctx
             .device
             .create_texture(&wgpu::TextureDescriptor {
@@ -92,11 +113,15 @@ static TEXTURE_DESTROY: GpuTestConfiguration =
 
         texture.destroy();
 
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
 
         texture.destroy();
 
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
 
         texture.destroy();
 
@@ -107,10 +132,7 @@ static TEXTURE_DESTROY: GpuTestConfiguration =
 // submission fails gracefully.
 #[gpu_test]
 static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        // https://github.com/gfx-rs/wgpu/issues/7854
-        TestParameters::default().skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
-    )
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let buffer_source = ctx
             .device
@@ -130,7 +152,7 @@ static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
             .unwrap();
-        encoder.copy_buffer_to_buffer(&buffer_source, 0, &buffer_dest, 0, 4);
+        encoder.copy_buffer_to_buffer(&buffer_source, 0, &buffer_dest, 0, 4).unwrap();
 
         buffer_source.destroy();
         buffer_dest.destroy();
@@ -147,10 +169,7 @@ static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration
 // submission fails gracefully.
 #[gpu_test]
 static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        // https://github.com/gfx-rs/wgpu/issues/7854
-        TestParameters::default().skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
-    )
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let descriptor = wgpu::TextureDescriptor {
             label: None,
@@ -194,7 +213,7 @@ static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguratio
                 height: 128,
                 depth_or_array_layers: 1,
             },
-        );
+        ).unwrap();
 
         texture_1.destroy();
         texture_2.destroy();

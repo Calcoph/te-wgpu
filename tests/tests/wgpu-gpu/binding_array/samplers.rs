@@ -1,7 +1,13 @@
 use std::num::{NonZeroU32, NonZeroU64};
 
 use wgpu::*;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([BINDING_ARRAY_SAMPLERS, PARTIAL_BINDING_ARRAY_SAMPLERS]);
+}
 
 #[gpu_test]
 static BINDING_ARRAY_SAMPLERS: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -246,7 +252,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     ctx.queue.submit(Some(encoder.finish().unwrap())).unwrap();
 
     readback_buffer.slice(..).map_async(MapMode::Read, |_| {}).unwrap();
-    ctx.device.poll(PollType::Wait).unwrap();
+    ctx.device.poll(PollType::wait_indefinitely()).unwrap();
 
     let readback_buffer_slice = readback_buffer.slice(..).get_mapped_range();
 
