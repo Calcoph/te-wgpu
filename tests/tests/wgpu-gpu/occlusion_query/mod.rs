@@ -91,7 +91,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: Some(&query_set),
-            }).unwrap();
+            }).unwrap().unwrap();
             render_pass.set_pipeline(&pipeline).unwrap();
 
             // Not occluded (z = 1.0, nothing drawn yet)

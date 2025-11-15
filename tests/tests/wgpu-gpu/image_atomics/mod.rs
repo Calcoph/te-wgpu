@@ -138,7 +138,7 @@ async fn test_format(
     let mut rpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    }).unwrap();
+    }).unwrap().unwrap();
     rpass.set_pipeline(&pipeline).unwrap();
     rpass.set_bind_group(0, Some(&bind_group), &[]).unwrap();
     rpass.dispatch_workgroups(size.width, size.height, 1).unwrap();

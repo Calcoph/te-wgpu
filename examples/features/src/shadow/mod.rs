@@ -818,7 +818,7 @@ impl crate::framework::Example for Example {
                     }),
                     timestamp_writes: None,
                     occlusion_query_set: None,
-                }).unwrap();
+                }).unwrap().unwrap();
                 pass.set_pipeline(&self.shadow_pass.pipeline).unwrap();
                 pass.set_bind_group(0, &self.shadow_pass.bind_group, &[]).unwrap();
 
@@ -863,7 +863,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
             pass.set_pipeline(&self.forward_pass.pipeline).unwrap();
             pass.set_bind_group(0, &self.forward_pass.bind_group, &[]).unwrap();
 

@@ -54,7 +54,7 @@ pub async fn execute_gpu_inner(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("compute pass descriptor"),
             timestamp_writes: None,
-        }).unwrap();
+        }).unwrap().unwrap();
         cpass.set_pipeline(&compute_pipeline).unwrap();
         cpass.set_bind_group(0, Some(&bind_group), &[]).unwrap();
 

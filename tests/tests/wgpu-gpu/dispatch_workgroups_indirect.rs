@@ -77,7 +77,7 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
         {
-            let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap();
+            let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap().unwrap();
             compute_pass.set_pipeline(&test_resources.pipeline).unwrap();
             compute_pass.set_push_constants(0, &[0, 0, 0, 0]).unwrap();
             // compute_pass.set_bind_group(0, &test_resources.bind_group, &[]);
@@ -116,7 +116,7 @@ static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
         {
-            let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap();
+            let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap().unwrap();
             compute_pass.set_pipeline(&test_resources.pipeline).unwrap();
             compute_pass.set_push_constants(0, &[0, 0, 0, 0]).unwrap();
             compute_pass.set_bind_group(0, &test_resources.bind_group, &[]).unwrap();
@@ -272,7 +272,7 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
 
         let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
         {
-            let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap();
+            let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap().unwrap();
             compute_pass.set_pipeline(&test_resources.pipeline).unwrap();
             compute_pass.set_push_constants(0, &[0, 0, 0, 0]).unwrap();
             compute_pass.set_bind_group(0, &test_resources.bind_group, &[]).unwrap();

@@ -80,14 +80,13 @@ pub fn fail_if<T, E: Debug + ToString + std::fmt::Display>(
     }
 }
 
-/// Returns true if the provided callback fails validation.
-pub fn did_fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool, T) {
-    did_fill_error_scope(device, callback, wgpu::ErrorFilter::Validation)
-}
-
 /// Returns true if the provided callback encounters an out-of-memory error.
-pub fn did_oom<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool, T) {
-    did_fill_error_scope(device, callback, wgpu::ErrorFilter::OutOfMemory)
+pub fn did_oom<T>(callback: impl FnOnce() -> Result<T, wgpu::wgc::resource::CreateSamplerError>) -> (bool, Option<T>) {
+    match callback() {
+        Ok(t) => (false, Some(t)),
+        Err(wgpu::wgc::resource::CreateSamplerError::Device(wgpu::wgc::device::DeviceError::OutOfMemory)) => (true, None),
+        _ => (false, None)
+    }
 }
 
 /// Adds the necessary main function for our gpu test harness.

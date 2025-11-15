@@ -276,7 +276,7 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
 
             rpass.set_pipeline(&self.pipeline_triangle_conservative).unwrap();
             rpass.draw(0..3, 0..1).unwrap();
@@ -298,7 +298,7 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
 
             rpass.set_pipeline(&self.pipeline_upscale).unwrap();
             rpass.set_bind_group(0, &self.bind_group_upscale, &[]).unwrap();

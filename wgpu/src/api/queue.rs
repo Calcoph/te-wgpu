@@ -315,11 +315,11 @@ impl Queue {
     ///
     /// The returned BLAS is more restricted than a normal BLAS because it may not be rebuilt or
     /// compacted.
-    pub fn compact_blas(&self, blas: &Blas) -> Blas {
-        let (handle, dispatch) = self.inner.compact_blas(&blas.inner);
-        Blas {
+    pub fn compact_blas(&self, blas: &Blas) -> Result<Blas, wgc::ray_tracing::CompactBlasError> {
+        let (handle, dispatch) = self.inner.compact_blas(&blas.inner)?;
+        Ok(Blas {
             handle,
             inner: dispatch,
-        }
+        })
     }
 }

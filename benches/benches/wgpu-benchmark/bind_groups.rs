@@ -58,11 +58,11 @@ impl BindGroupState {
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
-                });
+                }).unwrap();
             texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("Texture View {i}")),
                 ..Default::default()
-            }));
+            }).unwrap());
         }
         random.shuffle(&mut texture_views);
 
@@ -126,7 +126,7 @@ fn run_bench(ctx: &mut Criterion) {
                                 count: Some(NonZeroU32::new(count).unwrap()),
                             }],
                         },
-                    );
+                    ).unwrap();
 
                     let texture_view_refs: Vec<_> =
                         state.texture_views.iter().take(count as usize).collect();

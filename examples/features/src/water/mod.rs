@@ -786,7 +786,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
 
             rpass.execute_bundles([&self.terrain_bundle]).unwrap();
         }
@@ -814,7 +814,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
             rpass.set_pipeline(&self.terrain_pipeline).unwrap();
             rpass.set_bind_group(0, &self.terrain_normal_bind_group, &[]).unwrap();
             rpass.set_vertex_buffer(0, self.terrain_vertex_buf.slice(..)).unwrap();
@@ -841,7 +841,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
 
             rpass.set_pipeline(&self.water_pipeline).unwrap();
             rpass.set_bind_group(0, &self.water_bind_group, &[]).unwrap();

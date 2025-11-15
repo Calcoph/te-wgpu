@@ -193,7 +193,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
         let mut render_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        }).unwrap();
+        }).unwrap().unwrap();
         render_pass.set_pipeline(&pipeline).unwrap();
         render_pass.set_bind_group(0, &bind_group, &[]).unwrap();
         render_pass.dispatch_workgroups(1, 1, 1).unwrap();

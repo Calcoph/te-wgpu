@@ -176,7 +176,7 @@ impl Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
             if let Some(ref query_sets) = query_sets {
                 rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base).unwrap();
                 rpass.begin_pipeline_statistics_query(
@@ -529,7 +529,7 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
             rpass.set_pipeline(&self.draw_pipeline).unwrap();
             rpass.set_bind_group(0, &self.bind_group, &[]).unwrap();
             rpass.draw(0..4, 0..1).unwrap();

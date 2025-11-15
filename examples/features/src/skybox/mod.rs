@@ -470,7 +470,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
 
             rpass.set_bind_group(0, &self.bind_group, &[]).unwrap();
             rpass.set_pipeline(&self.entity_pipeline).unwrap();

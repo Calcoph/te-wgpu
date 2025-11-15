@@ -206,7 +206,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
             rpass.push_debug_group("Prepare data for draw.").unwrap();
             rpass.set_pipeline(&self.pipeline).unwrap();
             rpass.set_bind_group(0, &self.bind_group, &[]).unwrap();

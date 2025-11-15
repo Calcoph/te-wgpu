@@ -81,7 +81,7 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
             }),
             timestamp_writes: None,
             occlusion_query_set: Some(&occlusion_query_set),
-        }).unwrap();
+        }).unwrap().unwrap();
 
         // Drop render pass attachments right away.
         drop(color_attachment_view);
@@ -163,7 +163,7 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
                 stencil_ops: None,
             }),
             ..Default::default()
-        }).unwrap();
+        }).unwrap().unwrap();
         rpass.set_pipeline(&pipeline).unwrap();
         rpass.set_bind_group(0, &bind_group, &[]).unwrap();
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..)).unwrap();
@@ -240,7 +240,7 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
                 end_of_pass_write_index: Some(1),
             }),
             ..Default::default()
-        }).unwrap();
+        }).unwrap().unwrap();
         rpass.write_timestamp(&query_set_write_timestamp, 0).unwrap();
 
         rpass.set_pipeline(&pipeline).unwrap();
@@ -294,7 +294,7 @@ async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
             stencil_ops: None,
         }),
         ..Default::default()
-    }).unwrap();
+    }).unwrap().unwrap();
 
     // Now drop the encoder - it is kept alive by the compute pass.
     // To do so, we have to make the compute pass forget the lifetime constraint first.

@@ -375,7 +375,7 @@ impl RenderpassState {
             occlusion_query_set: None,
             timestamp_writes: None,
             depth_stencil_attachment: None,
-        }).unwrap();
+        }).unwrap().unwrap();
 
         let start_idx = pass_number * draws_per_pass;
         let end_idx = start_idx + draws_per_pass;
@@ -423,7 +423,7 @@ impl RenderpassState {
             occlusion_query_set: None,
             timestamp_writes: None,
             depth_stencil_attachment: None,
-        }).unwrap();
+        }).unwrap().unwrap();
 
         render_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap()).unwrap();
         render_pass.set_bind_group(0, Some(self.bindless_bind_group.as_ref().unwrap()), &[]).unwrap();
@@ -494,7 +494,7 @@ fn run_bench(ctx: &mut Criterion) {
                                 duration += start.elapsed();
                             }
 
-                            state.device_state.queue.submit(buffers);
+                            state.device_state.queue.submit(buffers).unwrap();
 
                             if time_submit {
                                 duration += start.elapsed();
@@ -546,7 +546,7 @@ fn run_bench(ctx: &mut Criterion) {
 
                     duration += start.elapsed();
 
-                    state.device_state.queue.submit(buffers);
+                    state.device_state.queue.submit(buffers).unwrap();
                     state
                         .device_state
                         .device
@@ -586,7 +586,7 @@ fn run_bench(ctx: &mut Criterion) {
 
                 duration += start.elapsed();
 
-                state.device_state.queue.submit([buffer]);
+                state.device_state.queue.submit([buffer]).unwrap();
                 state
                     .device_state
                     .device

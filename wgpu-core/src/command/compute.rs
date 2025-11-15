@@ -78,16 +78,6 @@ impl ComputePass {
         }
     }
 
-    fn new_invalid(parent: Arc<CommandBuffer>, label: &Label, err: ComputePassError) -> Self {
-        Self {
-            base: BasePass::new_invalid(label, err),
-            parent: Some(parent),
-            timestamp_writes: None,
-            current_bind_groups: BindGroupStateChange::new(),
-            current_pipeline: StateChange::new(),
-        }
-    }
-
     #[inline]
     pub fn label(&self) -> Option<&str> {
         self.base.label.as_deref()
@@ -334,7 +324,7 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &ComputePassDescriptor<'_>,
-    ) -> Result<ComputePass, CommandEncoderError> {
+    ) -> Result<Option<ComputePass>, CommandEncoderError> {
         use EncoderStateError as SErr;
 
         let scope = PassErrorScope::Pass;
@@ -349,10 +339,7 @@ impl Global {
             Ok(()) => {
                 drop(cmd_buf_data);
                 if let Err(err) = cmd_buf.device.check_is_valid() {
-                    return (
-                        ComputePass::new_invalid(cmd_buf, &label, err.map_pass_err(scope)),
-                        None,
-                    );
+                    return Ok(None);
                 }
 
                 match desc
@@ -372,12 +359,9 @@ impl Global {
                             label,
                             timestamp_writes,
                         };
-                        (ComputePass::new(cmd_buf, arc_desc), None)
+                        Ok(Some(ComputePass::new(cmd_buf, arc_desc)))
                     }
-                    Err(err) => (
-                        ComputePass::new_invalid(cmd_buf, &label, err.map_pass_err(scope)),
-                        None,
-                    ),
+                    Err(err) => Ok(None),
                 }
             }
             Err(err @ SErr::Locked) => {
@@ -386,19 +370,13 @@ impl Global {
                 // error.
                 cmd_buf_data.invalidate(err.clone());
                 drop(cmd_buf_data);
-                (
-                    ComputePass::new_invalid(cmd_buf, &label, err.map_pass_err(scope)),
-                    None,
-                )
+                Ok(None)
             }
             Err(err @ (SErr::Ended | SErr::Submitted)) => {
                 // Attempting to open a new pass after the encode has ended
                 // generates an immediate validation error.
                 drop(cmd_buf_data);
-                (
-                    ComputePass::new_invalid(cmd_buf, &label, err.clone().map_pass_err(scope)),
-                    Some(err.into()),
-                )
+                Err(CommandEncoderError::State(err))?
             }
             Err(err @ SErr::Invalid) => {
                 // Passes can be opened even on an invalid encoder. Such passes
@@ -407,10 +385,7 @@ impl Global {
                 // commands that will ultimately be discarded, we open an
                 // invalid pass to save that work.
                 drop(cmd_buf_data);
-                (
-                    ComputePass::new_invalid(cmd_buf, &label, err.map_pass_err(scope)),
-                    None,
-                )
+                Ok(None)
             }
             Err(SErr::Unlocked) => {
                 unreachable!("lock_encoder cannot fail due to the encoder being unlocked")
@@ -464,13 +439,17 @@ impl Global {
             push_constant_data,
         } = base;
 
-        let mut compute_pass = self.command_encoder_begin_compute_pass(
+        let compute_pass = self.command_encoder_begin_compute_pass(
             encoder_id,
             &ComputePassDescriptor {
                 label: label.as_deref().map(Cow::Borrowed),
                 timestamp_writes: timestamp_writes.cloned(),
             },
         ).unwrap();
+
+        let Some(mut compute_pass) = compute_pass else {
+            return
+        };
 
         compute_pass.base = BasePass {
             label,

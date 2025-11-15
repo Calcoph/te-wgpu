@@ -92,7 +92,7 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
         .unwrap();
-    let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()).unwrap();
+    let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()).unwrap().unwrap();
 
     for (i, pipeline) in pipelines.iter().enumerate() {
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {

@@ -164,7 +164,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        }).unwrap();
+        }).unwrap().unwrap();
 
         double_rpass.set_pipeline(&double_pipeline).unwrap();
         double_rpass.set_vertex_buffer(0, vertex_buffer1.slice(..)).unwrap();
@@ -201,7 +201,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        }).unwrap();
+        }).unwrap().unwrap();
 
         single_rpass.set_pipeline(&single_pipeline).unwrap();
         single_rpass.set_vertex_buffer(0, vertex_buffer1.slice(..)).unwrap();

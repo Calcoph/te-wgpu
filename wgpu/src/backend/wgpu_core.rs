@@ -7,7 +7,6 @@ use alloc::{
     vec::Vec,
 };
 use core::{
-    error::Error,
     fmt,
     future::ready,
     ops::{Deref, Range},
@@ -19,11 +18,10 @@ use core::{
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 use wgc::{
-    command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError,
+    command::bundle_ffi::*, pipeline::CreateShaderModuleError,
     resource::BlasPrepareCompactResult,
 };
 use wgt::{
-    error::{ErrorType, WebGpuError},
     WasmNotSendSync,
 };
 
@@ -32,7 +30,7 @@ use crate::{
     api,
     dispatch::{self, BlasCompactCallback, BufferMappedRangeInterface},
     BindingResource, Blas, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
-    CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
+    CompilationMessageType, Features, LoadOp, MapMode, Operations,
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas,
 };
 
@@ -141,7 +139,7 @@ impl ContextWgpuCore {
         hal_texture: A::Texture,
         device: &CoreDevice,
         desc: &TextureDescriptor<'_>,
-    ) -> Result<CoreTexture, CreateTextureError> {
+    ) -> Result<CoreTexture, wgc::resource::CreateTextureError> {
         let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let id = unsafe {
             self.0
@@ -158,7 +156,7 @@ impl ContextWgpuCore {
         hal_buffer: A::Buffer,
         device: &CoreDevice,
         desc: &BufferDescriptor<'_>,
-    ) -> Result<CoreBuffer, CreateBufferError> {
+    ) -> Result<CoreBuffer, wgc::resource::CreateBufferError> {
         let id = unsafe {
             self.0.create_buffer_from_hal::<A>(
                 hal_buffer,
@@ -846,7 +844,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor<'_>,
-    ) -> Result<dispatch::DispatchBindGroupLayout, CreateBindGroupLayoutError> {
+    ) -> Result<dispatch::DispatchBindGroupLayout, wgc::binding_model::CreateBindGroupLayoutError> {
         let descriptor = wgc::binding_model::BindGroupLayoutDescriptor {
             label: desc.label.map(Borrowed),
             entries: Borrowed(desc.entries),
@@ -865,7 +863,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_bind_group(
         &self,
         desc: &crate::BindGroupDescriptor<'_>,
-    ) -> Result<dispatch::DispatchBindGroup, CreateBindGroupError> {
+    ) -> Result<dispatch::DispatchBindGroup, wgc::binding_model::CreateBindGroupError> {
         use wgc::binding_model as bm;
 
         let mut arrayed_texture_views = Vec::new();
@@ -966,7 +964,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_pipeline_layout(
         &self,
         desc: &crate::PipelineLayoutDescriptor<'_>,
-    ) -> Result<dispatch::DispatchPipelineLayout, CreatePipelineLayoutError> {
+    ) -> Result<dispatch::DispatchPipelineLayout, wgc::binding_model::CreatePipelineLayoutError> {
         // Limit is always less or equal to hal::MAX_BIND_GROUPS, so this is always right
         // Guards following ArrayVec
         assert!(
@@ -1001,7 +999,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_render_pipeline(
         &self,
         desc: &crate::RenderPipelineDescriptor<'_>,
-    ) -> Result<dispatch::DispatchRenderPipeline, CreateRenderPipelineError> {
+    ) -> Result<dispatch::DispatchRenderPipeline, wgc::pipeline::CreateRenderPipelineError> {
         use wgc::pipeline as pipe;
 
         let vertex_buffers: ArrayVec<_, { wgc::MAX_VERTEX_BUFFERS }> = desc
@@ -1089,7 +1087,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_compute_pipeline(
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
-    ) -> Result<dispatch::DispatchComputePipeline, CreateComputePipelineError> {
+    ) -> Result<dispatch::DispatchComputePipeline, wgc::pipeline::CreateComputePipelineError> {
         use wgc::pipeline as pipe;
 
         let constants = desc
@@ -1127,7 +1125,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,
-    ) -> Result<dispatch::DispatchPipelineCache, pipeline::CreatePipelineCacheError> {
+    ) -> Result<dispatch::DispatchPipelineCache, wgc::pipeline::CreatePipelineCacheError> {
         use wgc::pipeline as pipe;
 
         let descriptor = pipe::PipelineCacheDescriptor {
@@ -1148,7 +1146,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into())
     }
 
-    fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> Result<dispatch::DispatchBuffer, CreateBufferError> {
+    fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> Result<dispatch::DispatchBuffer, wgc::resource::CreateBufferError> {
         let id = self.context.0.device_create_buffer(
             self.id,
             &desc.map_label(|l| l.map(Borrowed)),
@@ -1162,7 +1160,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into())
     }
 
-    fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> Result<dispatch::DispatchTexture, CreateTextureError> {
+    fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> Result<dispatch::DispatchTexture, wgc::resource::CreateTextureError> {
         let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let id = self
             .context
@@ -1180,7 +1178,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         &self,
         desc: &crate::CreateBlasDescriptor<'_>,
         sizes: crate::BlasGeometrySizeDescriptors,
-    ) -> Result<(u64, dispatch::DispatchBlas), CreateBlasError> {
+    ) -> Result<(u64, dispatch::DispatchBlas), wgc::ray_tracing::CreateBlasError> {
         let global = &self.context.0;
         let (id, handle) =
             global.device_create_blas(self.id, &desc.map_label(|l| l.map(Borrowed)), sizes, None)?;
@@ -1194,7 +1192,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         ))
     }
 
-    fn create_tlas(&self, desc: &crate::CreateTlasDescriptor<'_>) -> Result<dispatch::DispatchTlas, CreateTlasError> {
+    fn create_tlas(&self, desc: &crate::CreateTlasDescriptor<'_>) -> Result<dispatch::DispatchTlas, wgc::ray_tracing::CreateTlasError> {
         let global = &self.context.0;
         let id =
             global.device_create_tlas(self.id, &desc.map_label(|l| l.map(Borrowed)), None)?;
@@ -1205,7 +1203,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into())
     }
 
-    fn create_sampler(&self, desc: &crate::SamplerDescriptor<'_>) -> Result<dispatch::DispatchSampler, resource::CreateSamplerError> {
+    fn create_sampler(&self, desc: &crate::SamplerDescriptor<'_>) -> Result<dispatch::DispatchSampler, wgc::resource::CreateSamplerError> {
         let descriptor = wgc::resource::SamplerDescriptor {
             label: desc.label.map(Borrowed),
             address_modes: [
@@ -1234,7 +1232,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into())
     }
 
-    fn create_query_set(&self, desc: &crate::QuerySetDescriptor<'_>) -> Result<dispatch::DispatchQuerySet, resource::CreateQuerySetError> {
+    fn create_query_set(&self, desc: &crate::QuerySetDescriptor<'_>) -> Result<dispatch::DispatchQuerySet, wgc::resource::CreateQuerySetError> {
         let id = self.context.0.device_create_query_set(
             self.id,
             &desc.map_label(|l| l.map(Borrowed)),
@@ -1251,7 +1249,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_command_encoder(
         &self,
         desc: &crate::CommandEncoderDescriptor<'_>,
-    ) -> Result<dispatch::DispatchCommandEncoder, DeviceError> {
+    ) -> Result<dispatch::DispatchCommandEncoder, wgc::device::DeviceError> {
         let id = self.context.0.device_create_command_encoder(
             self.id,
             &desc.map_label(|l| l.map(Borrowed)),
@@ -1361,7 +1359,7 @@ impl dispatch::QueueInterface for CoreQueue {
     fn create_staging_buffer(
         &self,
         size: crate::BufferSize,
-    ) -> Result<dispatch::DispatchQueueWriteBuffer, QueueWriteError> {
+    ) -> Result<dispatch::DispatchQueueWriteBuffer, wgc::device::queue::QueueWriteError> {
         match self
             .context
             .0
@@ -1450,7 +1448,7 @@ impl dispatch::QueueInterface for CoreQueue {
     fn submit(
         &self,
         command_buffers: &mut dyn Iterator<Item = dispatch::DispatchCommandBuffer>,
-    ) -> Result<u64, (u64, QueueSubmitError)> {
+    ) -> Result<u64, (u64, wgc::device::queue::QueueSubmitError)> {
         let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
         let command_buffer_ids = temp_command_buffers
             .iter()
@@ -1474,25 +1472,20 @@ impl dispatch::QueueInterface for CoreQueue {
             .queue_on_submitted_work_done(self.id, callback);
     }
 
-    fn compact_blas(&self, blas: &dispatch::DispatchBlas) -> (Option<u64>, dispatch::DispatchBlas) {
-        let (id, handle, error) =
+    fn compact_blas(&self, blas: &dispatch::DispatchBlas) -> Result<(u64, dispatch::DispatchBlas), wgc::ray_tracing::CompactBlasError> {
+        let (id, handle) =
             self.context
                 .0
-                .queue_compact_blas(self.id, blas.as_core().id, None);
+                .queue_compact_blas(self.id, blas.as_core().id, None)?;
 
-        if let Some(cause) = error {
-            self.context
-                .handle_error_nolabel(&self.error_sink, cause, "Queue::compact_blas");
-        }
-        (
+        Ok((
             handle,
             CoreBlas {
                 context: self.context.clone(),
                 id,
-                error_sink: Arc::clone(&self.error_sink),
             }
             .into(),
-        )
+        ))
     }
 }
 
@@ -1553,7 +1546,7 @@ impl dispatch::BufferInterface for CoreBuffer {
         mode: crate::MapMode,
         range: Range<crate::BufferAddress>,
         callback: dispatch::BufferMapCallback,
-    ) -> Result<(), resource::BufferAccessError> {
+    ) -> Result<(), wgc::resource::BufferAccessError> {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
                 MapMode::Read => wgc::device::HostMap::Read,
@@ -1591,14 +1584,8 @@ impl dispatch::BufferInterface for CoreBuffer {
         }
     }
 
-    fn unmap(&self) {
-        match self.context.0.buffer_unmap(self.id) {
-            Ok(()) => (),
-            Err(cause) => {
-                self.context
-                    .handle_error_nolabel(&self.error_sink, cause, "Buffer::buffer_unmap")
-            }
-        }
+    fn unmap(&self) -> wgc::resource::BufferAccessResult {
+        self.context.0.buffer_unmap(self.id)
     }
 
     fn destroy(&self) {
@@ -1616,7 +1603,7 @@ impl dispatch::TextureInterface for CoreTexture {
     fn create_view(
         &self,
         desc: &crate::TextureViewDescriptor<'_>,
-    ) -> Result<dispatch::DispatchTextureView, CreateTextureViewError> {
+    ) -> Result<dispatch::DispatchTextureView, wgc::resource::CreateTextureViewError> {
         let descriptor = wgc::resource::TextureViewDescriptor {
             label: desc.label.map(Borrowed),
             format: desc.format,
@@ -1654,36 +1641,18 @@ impl Drop for CoreTexture {
 }
 
 impl dispatch::BlasInterface for CoreBlas {
-    fn prepare_compact_async(&self, callback: BlasCompactCallback) {
+    fn prepare_compact_async(&self, callback: BlasCompactCallback) -> Result<wgc::SubmissionIndex, wgc::ray_tracing::BlasPrepareCompactError> {
         let callback: Option<wgc::resource::BlasCompactCallback> =
             Some(Box::new(|status: BlasPrepareCompactResult| {
                 let res = status.map_err(|_| crate::BlasAsyncError);
                 callback(res);
             }));
 
-        match self.context.0.blas_prepare_compact_async(self.id, callback) {
-            Ok(_) => (),
-            Err(cause) => self.context.handle_error_nolabel(
-                &self.error_sink,
-                cause,
-                "Blas::prepare_compact_async",
-            ),
-        }
+        self.context.0.blas_prepare_compact_async(self.id, callback)
     }
 
-    fn ready_for_compaction(&self) -> bool {
-        match self.context.0.ready_for_compaction(self.id) {
-            Ok(ready) => ready,
-            Err(cause) => {
-                self.context.handle_error_nolabel(
-                    &self.error_sink,
-                    cause,
-                    "Blas::ready_for_compaction",
-                );
-                // A BLAS is definitely not ready for compaction if it's not valid
-                false
-            }
-        }
+    fn ready_for_compaction(&self) -> Result<bool, wgc::resource::InvalidResourceError> {
+        self.context.0.ready_for_compaction(self.id)
     }
 }
 
@@ -1718,7 +1687,7 @@ impl Drop for CorePipelineLayout {
 }
 
 impl dispatch::RenderPipelineInterface for CoreRenderPipeline {
-    fn get_bind_group_layout(&self, index: u32) -> Result<dispatch::DispatchBindGroupLayout, binding_model::GetBindGroupLayoutError> {
+    fn get_bind_group_layout(&self, index: u32) -> Result<dispatch::DispatchBindGroupLayout, wgc::binding_model::GetBindGroupLayoutError> {
         let id = self
             .context
             .0
@@ -1738,7 +1707,7 @@ impl Drop for CoreRenderPipeline {
 }
 
 impl dispatch::ComputePipelineInterface for CoreComputePipeline {
-    fn get_bind_group_layout(&self, index: u32) -> Result<dispatch::DispatchBindGroupLayout, binding_model::GetBindGroupLayoutError> {
+    fn get_bind_group_layout(&self, index: u32) -> Result<dispatch::DispatchBindGroupLayout, wgc::binding_model::GetBindGroupLayoutError> {
         let id = self
             .context
             .0
@@ -1778,7 +1747,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         destination: &dispatch::DispatchBuffer,
         destination_offset: crate::BufferAddress,
         copy_size: Option<crate::BufferAddress>,
-    ) -> Result<(), wgc::command::CopyError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         let source = source.as_core();
         let destination = destination.as_core();
 
@@ -1797,7 +1766,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         source: crate::TexelCopyBufferInfo<'_>,
         destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: crate::Extent3d,
-    ) -> Result<(), wgc::command::CopyError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.context.0.command_encoder_copy_buffer_to_texture(
             self.id,
             &map_buffer_copy_view(source),
@@ -1811,7 +1780,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         source: crate::TexelCopyTextureInfo<'_>,
         destination: crate::TexelCopyBufferInfo<'_>,
         copy_size: crate::Extent3d,
-    ) -> Result<(), wgc::command::CopyError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.context.0.command_encoder_copy_texture_to_buffer(
             self.id,
             &map_texture_copy_view(source),
@@ -1825,7 +1794,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         source: crate::TexelCopyTextureInfo<'_>,
         destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: crate::Extent3d,
-    ) -> Result<(), wgc::command::CopyError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.context.0.command_encoder_copy_texture_to_texture(
             self.id,
             &map_texture_copy_view(source),
@@ -1837,7 +1806,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
     fn begin_compute_pass(
         &self,
         desc: &crate::ComputePassDescriptor<'_>,
-    ) -> Result<dispatch::DispatchComputePass, CommandEncoderError> {
+    ) -> Result<Option<dispatch::DispatchComputePass>, wgc::command::CommandEncoderError> {
         let timestamp_writes =
             desc.timestamp_writes
                 .as_ref()
@@ -1855,18 +1824,22 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             },
         )?;
 
-        Ok(CoreComputePass {
+        let Some(pass) = pass else {
+            return Ok(None)
+        };
+
+        Ok(Some(CoreComputePass {
             context: self.context.clone(),
             pass,
             id: crate::cmp::Identifier::create(),
         }
-        .into())
+        .into()))
     }
 
     fn begin_render_pass(
         &self,
         desc: &crate::RenderPassDescriptor<'_>,
-    ) -> Result<dispatch::DispatchRenderPass, CommandEncoderError> {
+    ) -> Result<Option<dispatch::DispatchRenderPass>, wgc::command::CommandEncoderError> {
         let colors = desc
             .color_attachments
             .iter()
@@ -1910,16 +1883,20 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             },
         )?;
 
-        Ok(CoreRenderPass {
+        let Some(pass) = pass else {
+            return Ok(None)
+        };
+
+        Ok(Some(CoreRenderPass {
             context: self.context.clone(),
             pass,
             id: crate::cmp::Identifier::create(),
             ended: false,
         }
-        .into())
+        .into()))
     }
 
-    fn finish(&mut self) -> Result<dispatch::DispatchCommandBuffer, CommandEncoderError> {
+    fn finish(&mut self) -> Result<dispatch::DispatchCommandBuffer, wgc::command::CommandEncoderError> {
         let descriptor = wgt::CommandBufferDescriptor::default();
         self.open = false; // prevent the drop
         let id = self.context.0.command_encoder_finish(self.id, &descriptor)?;
@@ -1935,7 +1912,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         &self,
         texture: &dispatch::DispatchTexture,
         subresource_range: &crate::ImageSubresourceRange,
-    ) -> Result<(), wgc::command::ClearError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         let texture = texture.as_core();
 
         self.context
@@ -1948,7 +1925,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         buffer: &dispatch::DispatchBuffer,
         offset: crate::BufferAddress,
         size: Option<crate::BufferAddress>,
-    ) -> Result<(), wgc::command::ClearError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         let buffer = buffer.as_core();
 
         self
@@ -1957,25 +1934,25 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             .command_encoder_clear_buffer(self.id, buffer.id, offset, size)
     }
 
-    fn insert_debug_marker(&self, label: &str) -> Result<(), CommandEncoderError> {
+    fn insert_debug_marker(&self, label: &str) -> Result<(), wgc::command::EncoderStateError> {
         self
             .context
             .0
             .command_encoder_insert_debug_marker(self.id, label)
     }
 
-    fn push_debug_group(&self, label: &str) -> Result<(), CommandEncoderError> {
+    fn push_debug_group(&self, label: &str) -> Result<(), wgc::command::EncoderStateError> {
         self
             .context
             .0
             .command_encoder_push_debug_group(self.id, label)
     }
 
-    fn pop_debug_group(&self) -> Result<(), CommandEncoderError> {
+    fn pop_debug_group(&self) -> Result<(), wgc::command::EncoderStateError> {
         self.context.0.command_encoder_pop_debug_group(self.id)
     }
 
-    fn write_timestamp(&self, query_set: &dispatch::DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::QueryError> {
+    fn write_timestamp(&self, query_set: &dispatch::DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::EncoderStateError> {
         let query_set = query_set.as_core();
 
         self.context
@@ -1990,7 +1967,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         query_count: u32,
         destination: &dispatch::DispatchBuffer,
         destination_offset: crate::BufferAddress,
-    ) -> Result<(), wgc::command::QueryError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         let query_set = query_set.as_core();
         let destination = destination.as_core();
 
@@ -2008,7 +1985,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         &self,
         blas: &mut dyn Iterator<Item = &'a Blas>,
         tlas: &mut dyn Iterator<Item = &'a Tlas>,
-    ) -> Result<(), BuildAccelerationStructureError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         let blas = blas
             .map(|b| b.inner.as_core().id)
             .collect::<SmallVec<[_; 4]>>();
@@ -2025,7 +2002,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
         tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
-    ) -> Result<(), wgc::ray_tracing::BuildAccelerationStructureError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         let blas = blas.map(|e: &crate::BlasBuildEntry<'_>| {
             let geometries = match e.geometry {
                 crate::BlasGeometries::TriangleGeometries(ref triangle_geometries) => {
@@ -2085,7 +2062,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         texture_transitions: &mut dyn Iterator<
             Item = wgt::TextureTransition<&'a dispatch::DispatchTexture>,
         >,
-    ) -> Result<(), TransitionResourcesError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.context.0.command_encoder_transition_resources(
             self.id,
             buffer_transitions.map(|t| wgt::BufferTransition {
@@ -2118,7 +2095,7 @@ impl Drop for CoreCommandBuffer {
 }
 
 impl dispatch::ComputePassInterface for CoreComputePass {
-    fn set_pipeline(&mut self, pipeline: &dispatch::DispatchComputePipeline) -> Result<(), wgc::command::ComputePassError> {
+    fn set_pipeline(&mut self, pipeline: &dispatch::DispatchComputePipeline) -> Result<(), wgc::command::PassStateError> {
         let pipeline = pipeline.as_core();
 
         self
@@ -2132,7 +2109,7 @@ impl dispatch::ComputePassInterface for CoreComputePass {
         index: u32,
         bind_group: Option<&dispatch::DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
-    ) -> Result<(), wgc::command::ComputePassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let bg = bind_group.map(|bg| bg.as_core().id);
 
         self.context
@@ -2140,29 +2117,29 @@ impl dispatch::ComputePassInterface for CoreComputePass {
             .compute_pass_set_bind_group(&mut self.pass, index, bg, offsets)
     }
 
-    fn set_push_constants(&mut self, offset: u32, data: &[u8]) -> Result<(), wgc::command::ComputePassError> {
+    fn set_push_constants(&mut self, offset: u32, data: &[u8]) -> Result<(), wgc::command::PassStateError> {
         self.context
             .0
             .compute_pass_set_push_constants(&mut self.pass, offset, data)
     }
 
-    fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::ComputePassError> {
+    fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::PassStateError> {
         self.context
             .0
             .compute_pass_insert_debug_marker(&mut self.pass, label, 0)
     }
 
-    fn push_debug_group(&mut self, group_label: &str) -> Result<(), wgc::command::ComputePassError> {
+    fn push_debug_group(&mut self, group_label: &str) -> Result<(), wgc::command::PassStateError> {
         self.context
             .0
             .compute_pass_push_debug_group(&mut self.pass, group_label, 0)
     }
 
-    fn pop_debug_group(&mut self) -> Result<(), wgc::command::ComputePassError> {
+    fn pop_debug_group(&mut self) -> Result<(), wgc::command::PassStateError> {
         self.context.0.compute_pass_pop_debug_group(&mut self.pass)
     }
 
-    fn write_timestamp(&mut self, query_set: &dispatch::DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::ComputePassError> {
+    fn write_timestamp(&mut self, query_set: &dispatch::DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::PassStateError> {
         let query_set = query_set.as_core();
 
         self.context
@@ -2174,7 +2151,7 @@ impl dispatch::ComputePassInterface for CoreComputePass {
         &mut self,
         query_set: &dispatch::DispatchQuerySet,
         query_index: u32,
-    ) -> Result<(), ComputePassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let query_set = query_set.as_core();
 
         self.context.0.compute_pass_begin_pipeline_statistics_query(
@@ -2184,14 +2161,14 @@ impl dispatch::ComputePassInterface for CoreComputePass {
         )
     }
 
-    fn end_pipeline_statistics_query(&mut self) -> Result<(), ComputePassError> {
+    fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::PassStateError> {
         self
             .context
             .0
             .compute_pass_end_pipeline_statistics_query(&mut self.pass)
     }
 
-    fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) -> Result<(), ComputePassError> {
+    fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) -> Result<(), wgc::command::PassStateError> {
         self
             .context
             .0
@@ -2202,7 +2179,7 @@ impl dispatch::ComputePassInterface for CoreComputePass {
         &mut self,
         indirect_buffer: &dispatch::DispatchBuffer,
         indirect_offset: crate::BufferAddress,
-    ) -> Result<(), ComputePassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let indirect_buffer = indirect_buffer.as_core();
 
         self.context.0.compute_pass_dispatch_workgroups_indirect(
@@ -2212,7 +2189,7 @@ impl dispatch::ComputePassInterface for CoreComputePass {
         )
     }
 
-    fn end(&mut self) -> Result<(), ComputePassError> {
+    fn end(&mut self) -> Result<(), wgc::command::EncoderStateError> {
         self.context.0.compute_pass_end(&mut self.pass)
     }
 }
@@ -2224,7 +2201,7 @@ impl Drop for CoreComputePass {
 }
 
 impl dispatch::RenderPassInterface for CoreRenderPass {
-    fn set_pipeline(&mut self, pipeline: &dispatch::DispatchRenderPipeline) -> Result<(), wgc::command::RenderPassError> {
+    fn set_pipeline(&mut self, pipeline: &dispatch::DispatchRenderPipeline) -> Result<(), wgc::command::PassStateError> {
         let pipeline = pipeline.as_core();
 
         self
@@ -2238,7 +2215,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         index: u32,
         bind_group: Option<&dispatch::DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let bg = bind_group.map(|bg| bg.as_core().id);
 
         self.context
@@ -2252,7 +2229,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let buffer = buffer.as_core();
 
         self.context.0.render_pass_set_index_buffer(
@@ -2270,7 +2247,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         buffer: &dispatch::DispatchBuffer,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let buffer = buffer.as_core();
 
         self.context.0.render_pass_set_vertex_buffer(
@@ -2282,20 +2259,20 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         )
     }
 
-    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::RenderPassError> {
+    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::PassStateError> {
         self.context
             .0
             .render_pass_set_push_constants(&mut self.pass, stages, offset, data)
     }
 
-    fn set_blend_constant(&mut self, color: crate::Color) -> Result<(), wgc::command::RenderPassError> {
+    fn set_blend_constant(&mut self, color: crate::Color) -> Result<(), wgc::command::PassStateError> {
         self
             .context
             .0
             .render_pass_set_blend_constant(&mut self.pass, color)
     }
 
-    fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) -> Result<(), wgc::command::RenderPassError> {
+    fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) -> Result<(), wgc::command::PassStateError> {
         self.context
             .0
             .render_pass_set_scissor_rect(&mut self.pass, x, y, width, height)
@@ -2309,7 +2286,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         height: f32,
         min_depth: f32,
         max_depth: f32,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         self.context.0.render_pass_set_viewport(
             &mut self.pass,
             x,
@@ -2321,14 +2298,14 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         )
     }
 
-    fn set_stencil_reference(&mut self, reference: u32) -> Result<(), wgc::command::RenderPassError> {
+    fn set_stencil_reference(&mut self, reference: u32) -> Result<(), wgc::command::PassStateError> {
         self
             .context
             .0
             .render_pass_set_stencil_reference(&mut self.pass, reference)
     }
 
-    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError> {
+    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::PassStateError> {
         self.context.0.render_pass_draw(
             &mut self.pass,
             vertices.end - vertices.start,
@@ -2338,7 +2315,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         )
     }
 
-    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError> {
+    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::PassStateError> {
         self.context.0.render_pass_draw_indexed(
             &mut self.pass,
             indices.end - indices.start,
@@ -2353,7 +2330,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         &mut self,
         indirect_buffer: &dispatch::DispatchBuffer,
         indirect_offset: crate::BufferAddress,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let indirect_buffer = indirect_buffer.as_core();
 
         self.context.0.render_pass_draw_indirect(
@@ -2367,7 +2344,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         &mut self,
         indirect_buffer: &dispatch::DispatchBuffer,
         indirect_offset: crate::BufferAddress,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let indirect_buffer = indirect_buffer.as_core();
 
         self.context.0.render_pass_draw_indexed_indirect(
@@ -2382,7 +2359,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         indirect_buffer: &dispatch::DispatchBuffer,
         indirect_offset: crate::BufferAddress,
         count: u32,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let indirect_buffer = indirect_buffer.as_core();
 
         self.context.0.render_pass_multi_draw_indirect(
@@ -2398,7 +2375,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         indirect_buffer: &dispatch::DispatchBuffer,
         indirect_offset: crate::BufferAddress,
         count: u32,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let indirect_buffer = indirect_buffer.as_core();
 
         self.context.0.render_pass_multi_draw_indexed_indirect(
@@ -2416,7 +2393,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         count_buffer: &dispatch::DispatchBuffer,
         count_buffer_offset: crate::BufferAddress,
         max_count: u32,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let indirect_buffer = indirect_buffer.as_core();
         let count_buffer = count_buffer.as_core();
 
@@ -2437,7 +2414,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         count_buffer: &dispatch::DispatchBuffer,
         count_buffer_offset: crate::BufferAddress,
         max_count: u32,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let indirect_buffer = indirect_buffer.as_core();
         let count_buffer = count_buffer.as_core();
 
@@ -2454,24 +2431,24 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
             )
     }
 
-    fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::RenderPassError> {
+    fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::PassStateError> {
         self
             .context
             .0
             .render_pass_insert_debug_marker(&mut self.pass, label, 0)
     }
 
-    fn push_debug_group(&mut self, group_label: &str) -> Result<(), wgc::command::RenderPassError> {
+    fn push_debug_group(&mut self, group_label: &str) -> Result<(), wgc::command::PassStateError> {
         self.context
             .0
             .render_pass_push_debug_group(&mut self.pass, group_label, 0)
     }
 
-    fn pop_debug_group(&mut self) -> Result<(), wgc::command::RenderPassError> {
+    fn pop_debug_group(&mut self) -> Result<(), wgc::command::PassStateError> {
         self.context.0.render_pass_pop_debug_group(&mut self.pass)
     }
 
-    fn write_timestamp(&mut self, query_set: &dispatch::DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::RenderPassError> {
+    fn write_timestamp(&mut self, query_set: &dispatch::DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::PassStateError> {
         let query_set = query_set.as_core();
 
         self.context
@@ -2479,14 +2456,14 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
             .render_pass_write_timestamp(&mut self.pass, query_set.id, query_index)
     }
 
-    fn begin_occlusion_query(&mut self, query_index: u32) -> Result<(), wgc::command::RenderPassError> {
+    fn begin_occlusion_query(&mut self, query_index: u32) -> Result<(), wgc::command::PassStateError> {
         self
             .context
             .0
             .render_pass_begin_occlusion_query(&mut self.pass, query_index)
     }
 
-    fn end_occlusion_query(&mut self) -> Result<(), wgc::command::RenderPassError> {
+    fn end_occlusion_query(&mut self) -> Result<(), wgc::command::PassStateError> {
         self
             .context
             .0
@@ -2497,7 +2474,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         &mut self,
         query_set: &dispatch::DispatchQuerySet,
         query_index: u32,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let query_set = query_set.as_core();
 
         self.context.0.render_pass_begin_pipeline_statistics_query(
@@ -2507,7 +2484,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         )
     }
 
-    fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::RenderPassError> {
+    fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::PassStateError> {
         self
             .context
             .0
@@ -2517,7 +2494,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     fn execute_bundles(
         &mut self,
         render_bundles: &mut dyn Iterator<Item = &dispatch::DispatchRenderBundle>,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let temp_render_bundles = render_bundles
             .map(|rb| rb.as_core().id)
             .collect::<SmallVec<[_; 4]>>();
@@ -2527,7 +2504,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
             .render_pass_execute_bundles(&mut self.pass, &temp_render_bundles)
     }
 
-    fn end(&mut self) -> Result<(), wgc::command::RenderPassError> {
+    fn end(&mut self) -> Result<(), wgc::command::EncoderStateError> {
         self.ended = true;
         self.context.0.render_pass_end(&mut self.pass)
     }
@@ -2649,7 +2626,7 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         )
     }
 
-    fn finish(self, desc: &crate::RenderBundleDescriptor<'_>) -> Result<dispatch::DispatchRenderBundle, command::RenderBundleError>
+    fn finish(self, desc: &crate::RenderBundleDescriptor<'_>) -> Result<dispatch::DispatchRenderBundle, wgc::command::RenderBundleError>
     where
         Self: Sized,
     {
@@ -2674,7 +2651,7 @@ impl dispatch::SurfaceInterface for CoreSurface {
             .unwrap_or_default()
     }
 
-    fn configure(&self, device: &dispatch::DispatchDevice, config: &crate::SurfaceConfiguration) -> Result<(), present::ConfigureSurfaceError> {
+    fn configure(&self, device: &dispatch::DispatchDevice, config: &crate::SurfaceConfiguration) -> Result<(), wgc::present::ConfigureSurfaceError> {
         let device = device.as_core();
 
         self.context.0.surface_configure(self.id, device.id, config)?;
@@ -2690,7 +2667,7 @@ impl dispatch::SurfaceInterface for CoreSurface {
         Option<dispatch::DispatchTexture>,
         crate::SurfaceStatus,
         dispatch::DispatchSurfaceOutputDetail,
-    ), SurfaceError> {
+    ), wgc::present::SurfaceError> {
         let output_detail = CoreSurfaceOutputDetail {
             context: self.context.clone(),
             surface_id: self.id,

@@ -1,4 +1,3 @@
-use wgc::command::CopyError;
 use wgc::resource::{BufferAccessError, CreateBufferError};
 
 use crate::{
@@ -12,7 +11,7 @@ use std::sync::mpsc;
 #[derive(Debug)]
 pub enum WriteBufferError {
     CBError(CreateBufferError),
-    CError(CopyError),
+    ESError(wgc::command::EncoderStateError),
 }
 
 impl From<CreateBufferError> for WriteBufferError {
@@ -21,9 +20,9 @@ impl From<CreateBufferError> for WriteBufferError {
     }
 }
 
-impl From<CopyError> for WriteBufferError {
-    fn from(value: CopyError) -> Self {
-        WriteBufferError::CError(value)
+impl From<wgc::command::EncoderStateError> for WriteBufferError {
+    fn from(value: wgc::command::EncoderStateError) -> Self {
+        WriteBufferError::ESError(value)
     }
 }
 
@@ -31,7 +30,7 @@ impl Display for WriteBufferError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             WriteBufferError::CBError(e) => write!(f, "WriteBufferError {e}"),
-            WriteBufferError::CError(e) => write!(f, "WriteBufferError {e}"),
+            WriteBufferError::ESError(e) => write!(f, "EncoderStateError {e}"),
         }
     }
 }

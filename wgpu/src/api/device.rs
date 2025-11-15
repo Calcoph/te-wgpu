@@ -1,7 +1,7 @@
 use alloc::{boxed::Box, string::String, sync::Arc, vec};
 #[cfg(wgpu_core)]
 use core::ops::Deref;
-use core::{error, fmt, future::Future};
+use core::{error, fmt};
 
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
@@ -127,7 +127,7 @@ impl Device {
     ///
     /// </div>
     #[must_use]
-    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor<'_>) -> Result<ShaderModule, CreateShaderModuleError> {
+    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor<'_>) -> Result<ShaderModule, wgc::pipeline::CreateShaderModuleError> {
         let module = self
             .inner
             .create_shader_module(desc, wgt::ShaderRuntimeChecks::checked())?;
@@ -149,7 +149,7 @@ impl Device {
     pub unsafe fn create_shader_module_unchecked(
         &self,
         desc: ShaderModuleDescriptor<'_>,
-    ) -> Result<ShaderModule, CreateShaderModuleError> {
+    ) -> Result<ShaderModule, wgc::pipeline::CreateShaderModuleError> {
         unsafe { self.create_shader_module_trusted(desc, crate::ShaderRuntimeChecks::unchecked()) }
     }
 
@@ -174,7 +174,7 @@ impl Device {
         &self,
         desc: ShaderModuleDescriptor<'_>,
         runtime_checks: crate::ShaderRuntimeChecks,
-    ) -> Result<ShaderModule, CreateShaderModuleError> {
+    ) -> Result<ShaderModule, wgc::pipeline::CreateShaderModuleError> {
         let module = self.inner.create_shader_module(desc, runtime_checks)?;
         Ok(ShaderModule { inner: module })
     }
@@ -189,14 +189,14 @@ impl Device {
     pub unsafe fn create_shader_module_passthrough(
         &self,
         desc: ShaderModuleDescriptorPassthrough<'_>,
-    ) -> Result<ShaderModule, CreateShaderModuleError> {
+    ) -> Result<ShaderModule, wgc::pipeline::CreateShaderModuleError> {
         let module = unsafe { self.inner.create_shader_module_passthrough(&desc) }?;
         Ok(ShaderModule { inner: module })
     }
 
     /// Creates an empty [`CommandEncoder`].
     #[must_use]
-    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor<'_>) -> Result<CommandEncoder, DeviceError> {
+    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor<'_>) -> Result<CommandEncoder, wgc::device::DeviceError> {
         let encoder = self.inner.create_command_encoder(desc)?;
         Ok(CommandEncoder { inner: encoder })
     }
@@ -216,7 +216,7 @@ impl Device {
 
     /// Creates a new [`BindGroup`].
     #[must_use]
-    pub fn create_bind_group(&self, desc: &BindGroupDescriptor<'_>) -> Result<BindGroup, CreateBindGroupError> {
+    pub fn create_bind_group(&self, desc: &BindGroupDescriptor<'_>) -> Result<BindGroup, wgc::binding_model::CreateBindGroupError> {
         let group = self.inner.create_bind_group(desc)?;
         Ok(BindGroup { inner: group })
     }
@@ -226,35 +226,35 @@ impl Device {
     pub fn create_bind_group_layout(
         &self,
         desc: &BindGroupLayoutDescriptor<'_>,
-    ) -> Result<BindGroupLayout, CreateBindGroupLayoutError> {
+    ) -> Result<BindGroupLayout, wgc::binding_model::CreateBindGroupLayoutError> {
         let layout = self.inner.create_bind_group_layout(desc)?;
         Ok(BindGroupLayout { inner: layout })
     }
 
     /// Creates a [`PipelineLayout`].
     #[must_use]
-    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor<'_>) -> Result<PipelineLayout, CreatePipelineLayoutError> {
+    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor<'_>) -> Result<PipelineLayout, wgc::binding_model::CreatePipelineLayoutError> {
         let layout = self.inner.create_pipeline_layout(desc)?;
         Ok(PipelineLayout { inner: layout })
     }
 
     /// Creates a [`RenderPipeline`].
     #[must_use]
-    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor<'_>) -> Result<RenderPipeline, CreateRenderPipelineError> {
+    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor<'_>) -> Result<RenderPipeline, wgc::pipeline::CreateRenderPipelineError> {
         let pipeline = self.inner.create_render_pipeline(desc)?;
         Ok(RenderPipeline { inner: pipeline })
     }
 
     /// Creates a [`ComputePipeline`].
     #[must_use]
-    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> Result<ComputePipeline, CreateComputePipelineError> {
+    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> Result<ComputePipeline, wgc::pipeline::CreateComputePipelineError> {
         let pipeline = self.inner.create_compute_pipeline(desc)?;
         Ok(ComputePipeline { inner: pipeline })
     }
 
     /// Creates a [`Buffer`].
     #[must_use]
-    pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Result<Buffer, CreateBufferError> {
+    pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Result<Buffer, wgc::resource::CreateBufferError> {
         let mut map_context = MapContext::new();
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
@@ -274,7 +274,7 @@ impl Device {
     ///
     /// `desc` specifies the general format of the texture.
     #[must_use]
-    pub fn create_texture(&self, desc: &TextureDescriptor<'_>) -> Result<Texture, CreateTextureError> {
+    pub fn create_texture(&self, desc: &TextureDescriptor<'_>) -> Result<Texture, wgc::resource::CreateTextureError> {
         let texture = self.inner.create_texture(desc)?;
 
         Ok(Texture {
@@ -300,7 +300,7 @@ impl Device {
         &self,
         hal_texture: A::Texture,
         desc: &TextureDescriptor<'_>,
-    ) -> Result<Texture, CreateTextureError> {
+    ) -> Result<Texture, wgc::resource::CreateTextureError> {
         let texture = unsafe {
             let core_device = self.inner.as_core();
             core_device
@@ -330,7 +330,7 @@ impl Device {
         &self,
         hal_buffer: A::Buffer,
         desc: &BufferDescriptor<'_>,
-    ) -> Result<Buffer, CreateBufferError> {
+    ) -> Result<Buffer, wgc::resource::CreateBufferError> {
         let mut map_context = MapContext::new();
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
@@ -355,14 +355,14 @@ impl Device {
     ///
     /// `desc` specifies the behavior of the sampler.
     #[must_use]
-    pub fn create_sampler(&self, desc: &SamplerDescriptor<'_>) -> Result<Sampler, CreateSamplerError> {
+    pub fn create_sampler(&self, desc: &SamplerDescriptor<'_>) -> Result<Sampler, wgc::resource::CreateSamplerError> {
         let sampler = self.inner.create_sampler(desc)?;
         Ok(Sampler { inner: sampler })
     }
 
     /// Creates a new [`QuerySet`].
     #[must_use]
-    pub fn create_query_set(&self, desc: &QuerySetDescriptor<'_>) -> Result<QuerySet, CreateQuerySetError> {
+    pub fn create_query_set(&self, desc: &QuerySetDescriptor<'_>) -> Result<QuerySet, wgc::resource::CreateQuerySetError> {
         let query_set = self.inner.create_query_set(desc)?;
         Ok(
             QuerySet { inner: query_set }
@@ -535,7 +535,7 @@ impl Device {
     pub unsafe fn create_pipeline_cache(
         &self,
         desc: &PipelineCacheDescriptor<'_>,
-    ) -> Result<PipelineCache, CreatePipelineCacheError> {
+    ) -> Result<PipelineCache, wgc::pipeline::CreatePipelineCacheError> {
         let cache = unsafe { self.inner.create_pipeline_cache(desc) }?;
         Ok(
             PipelineCache { inner: cache }
@@ -566,7 +566,7 @@ impl Device {
         &self,
         desc: &CreateBlasDescriptor<'_>,
         sizes: BlasGeometrySizeDescriptors,
-    ) -> Result<Blas, CreateBlasError> {
+    ) -> Result<Blas, wgc::ray_tracing::CreateBlasError> {
         let (handle, blas) = self.inner.create_blas(desc, sizes)?;
 
         Ok(Blas {
@@ -585,7 +585,7 @@ impl Device {
     ///
     /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     #[must_use]
-    pub fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Result<Tlas, CreateTlasError> {
+    pub fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Result<Tlas, wgc::ray_tracing::CreateTlasError> {
         let tlas = self.inner.create_tlas(desc)?;
 
         Ok(Tlas {

@@ -1,7 +1,6 @@
 use core::ops::Range;
 
 use crate::*;
-use wgc::command::RenderPassError;
 pub use wgt::{LoadOp, Operations, StoreOp};
 
 /// In-progress recording of a render pass: a list of render commands in a [`CommandEncoder`].
@@ -66,7 +65,7 @@ impl RenderPass<'_> {
     /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
     ///
     /// Subsequent draw calls’ shader executions will be able to access data in these bind groups.
-    pub fn set_bind_group<'a, BG>(&mut self, index: u32, bind_group: BG, offsets: &[DynamicOffset]) -> Result<(), wgc::command::RenderPassError>
+    pub fn set_bind_group<'a, BG>(&mut self, index: u32, bind_group: BG, offsets: &[DynamicOffset]) -> Result<(), wgc::command::PassStateError>
     where
         Option<&'a BindGroup>: From<BG>,
     {
@@ -79,7 +78,7 @@ impl RenderPass<'_> {
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
-    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) -> Result<(), wgc::command::RenderPassError> {
+    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) -> Result<(), wgc::command::PassStateError> {
         self.inner.set_pipeline(&pipeline.inner)
     }
 
@@ -88,7 +87,7 @@ impl RenderPass<'_> {
     /// Subsequent blending tests will test against this value.
     /// If this method has not been called, the blend constant defaults to [`Color::TRANSPARENT`]
     /// (all components zero).
-    pub fn set_blend_constant(&mut self, color: Color) -> Result<(), wgc::command::RenderPassError> {
+    pub fn set_blend_constant(&mut self, color: Color) -> Result<(), wgc::command::PassStateError> {
         self.inner.set_blend_constant(color)
     }
 
@@ -96,7 +95,7 @@ impl RenderPass<'_> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) -> Result<(), wgc::command::RenderPassError> {
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) -> Result<(), wgc::command::PassStateError> {
         self.inner.set_index_buffer(
             &buffer_slice.buffer.inner,
             index_format,
@@ -117,7 +116,7 @@ impl RenderPass<'_> {
     ///
     /// [`draw`]: RenderPass::draw
     /// [`draw_indexed`]: RenderPass::draw_indexed
-    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) -> Result<(), wgc::command::RenderPassError> {
+    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) -> Result<(), wgc::command::PassStateError> {
         self.inner.set_vertex_buffer(
             slot,
             &buffer_slice.buffer.inner,
@@ -135,7 +134,7 @@ impl RenderPass<'_> {
     ///
     /// The function of the scissor rectangle resembles [`set_viewport()`](Self::set_viewport),
     /// but it does not affect the coordinate system, only which fragments are discarded.
-    pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) -> Result<(), wgc::command::RenderPassError> {
+    pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) -> Result<(), wgc::command::PassStateError> {
         self.inner.set_scissor_rect(x, y, width, height)
     }
 
@@ -145,7 +144,7 @@ impl RenderPass<'_> {
     /// Subsequent draw calls will only draw within this region.
     /// If this method has not been called, the viewport defaults to the entire bounds of the render
     /// targets.
-    pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) -> Result<(), wgc::command::RenderPassError> {
+    pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) -> Result<(), wgc::command::PassStateError> {
         self.inner.set_viewport(x, y, w, h, min_depth, max_depth)
     }
 
@@ -153,22 +152,22 @@ impl RenderPass<'_> {
     ///
     /// Subsequent stencil tests will test against this value.
     /// If this method has not been called, the stencil reference value defaults to `0`.
-    pub fn set_stencil_reference(&mut self, reference: u32) -> Result<(), wgc::command::RenderPassError> {
+    pub fn set_stencil_reference(&mut self, reference: u32) -> Result<(), wgc::command::PassStateError> {
         self.inner.set_stencil_reference(reference)
     }
 
     /// Inserts debug marker.
-    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::RenderPassError> {
+    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::PassStateError> {
         self.inner.insert_debug_marker(label)
     }
 
     /// Start record commands and group it into debug marker group.
-    pub fn push_debug_group(&mut self, label: &str) -> Result<(), wgc::command::RenderPassError> {
+    pub fn push_debug_group(&mut self, label: &str) -> Result<(), wgc::command::PassStateError> {
         self.inner.push_debug_group(label)
     }
 
     /// Stops command recording and creates debug group.
-    pub fn pop_debug_group(&mut self) -> Result<(), wgc::command::RenderPassError> {
+    pub fn pop_debug_group(&mut self) -> Result<(), wgc::command::PassStateError> {
         self.inner.pop_debug_group()
     }
 
@@ -194,7 +193,7 @@ impl RenderPass<'_> {
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.
-    pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError> {
+    pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::PassStateError> {
         self.inner.draw(vertices, instances)
     }
 
@@ -223,7 +222,7 @@ impl RenderPass<'_> {
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.
-    pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError> {
+    pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::PassStateError> {
         self.inner.draw_indexed(indices, base_vertex, instances)
     }
 
@@ -231,7 +230,7 @@ impl RenderPass<'_> {
     ///
     /// This is like calling [`RenderPass::draw`] but the contents of the call are specified in the `indirect_buffer`.
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
-    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) -> Result<(), wgc::command::RenderPassError> {
+    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) -> Result<(), wgc::command::PassStateError> {
         self.inner
             .draw_indirect(&indirect_buffer.inner, indirect_offset)
     }
@@ -245,7 +244,7 @@ impl RenderPass<'_> {
         &mut self,
         indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         self.inner
             .draw_indexed_indirect(&indirect_buffer.inner, indirect_offset)
     }
@@ -258,14 +257,14 @@ impl RenderPass<'_> {
     pub fn execute_bundles<'a, I: IntoIterator<Item = &'a RenderBundle>>(
         &mut self,
         render_bundles: I,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         let mut render_bundles = render_bundles.into_iter().map(|rb| &rb.inner);
 
         self.inner.execute_bundles(&mut render_bundles)
     }
 
     /// Drops the RenderPass for a chance to handle its error
-    pub fn end(mut self) -> Result<(), RenderPassError> {
+    pub fn end(mut self) -> Result<(), wgc::command::EncoderStateError> {
         self.inner.end()
     }
 }
@@ -287,7 +286,7 @@ impl RenderPass<'_> {
         indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
         count: u32,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         self.inner
             .multi_draw_indirect(&indirect_buffer.inner, indirect_offset, count)
     }
@@ -308,7 +307,7 @@ impl RenderPass<'_> {
         indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
         count: u32,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         self.inner
             .multi_draw_indexed_indirect(&indirect_buffer.inner, indirect_offset, count)
     }
@@ -351,7 +350,7 @@ impl RenderPass<'_> {
         count_buffer: &Buffer,
         count_offset: BufferAddress,
         max_count: u32,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         self.inner.multi_draw_indirect_count(
             &indirect_buffer.inner,
             indirect_offset,
@@ -392,7 +391,7 @@ impl RenderPass<'_> {
         count_buffer: &Buffer,
         count_offset: BufferAddress,
         max_count: u32,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         self.inner.multi_draw_indexed_indirect_count(
             &indirect_buffer.inner,
             indirect_offset,
@@ -445,7 +444,7 @@ impl RenderPass<'_> {
     /// for each range, each passing the matching `stages` mask.
     ///
     /// [`PushConstant`]: https://docs.rs/naga/latest/naga/enum.StorageClass.html#variant.PushConstant
-    pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::RenderPassError> {
+    pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::PassStateError> {
         self.inner.set_push_constants(stages, offset, data)
     }
 }
@@ -459,7 +458,7 @@ impl RenderPass<'_> {
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::RenderPassError>{
+    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::PassStateError>{
         self.inner.write_timestamp(&query_set.inner, query_index)
     }
 }
@@ -468,14 +467,14 @@ impl RenderPass<'_> {
     /// Start a occlusion query on this render pass. It can be ended with
     /// [`end_occlusion_query`](Self::end_occlusion_query).
     /// Occlusion queries may not be nested.
-    pub fn begin_occlusion_query(&mut self, query_index: u32) -> Result<(), wgc::command::RenderPassError> {
+    pub fn begin_occlusion_query(&mut self, query_index: u32) -> Result<(), wgc::command::PassStateError> {
         self.inner.begin_occlusion_query(query_index)
     }
 
     /// End the occlusion query on this render pass. It can be started with
     /// [`begin_occlusion_query`](Self::begin_occlusion_query).
     /// Occlusion queries may not be nested.
-    pub fn end_occlusion_query(&mut self) -> Result<(), wgc::command::RenderPassError> {
+    pub fn end_occlusion_query(&mut self) -> Result<(), wgc::command::PassStateError> {
         self.inner.end_occlusion_query()
     }
 }
@@ -485,7 +484,7 @@ impl RenderPass<'_> {
     /// Start a pipeline statistics query on this render pass. It can be ended with
     /// [`end_pipeline_statistics_query`](Self::end_pipeline_statistics_query).
     /// Pipeline statistics queries may not be nested.
-    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::RenderPassError> {
+    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::PassStateError> {
         self.inner
             .begin_pipeline_statistics_query(&query_set.inner, query_index)
     }
@@ -493,7 +492,7 @@ impl RenderPass<'_> {
     /// End the pipeline statistics query on this render pass. It can be started with
     /// [`begin_pipeline_statistics_query`](Self::begin_pipeline_statistics_query).
     /// Pipeline statistics queries may not be nested.
-    pub fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::RenderPassError> {
+    pub fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::PassStateError> {
         self.inner.end_pipeline_statistics_query()
     }
 }

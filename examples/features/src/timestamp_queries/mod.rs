@@ -321,7 +321,7 @@ fn compute_pass(
             beginning_of_pass_write_index: Some(*next_unused_query),
             end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
-    }).unwrap();
+    }).unwrap().unwrap();
     *next_unused_query += 2;
     cpass.set_pipeline(&compute_pipeline).unwrap();
     cpass.set_bind_group(0, &bind_group, &[]).unwrap();
@@ -409,7 +409,7 @@ fn render_pass(
             end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
         occlusion_query_set: None,
-    }).unwrap();
+    }).unwrap().unwrap();
     *next_unused_query += 2;
 
     rpass.set_pipeline(&render_pipeline).unwrap();

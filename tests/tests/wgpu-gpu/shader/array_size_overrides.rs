@@ -122,7 +122,7 @@ async fn array_size_overrides(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        }).unwrap();
+        }).unwrap().unwrap();
         cpass.set_pipeline(&compute_pipeline).unwrap();
         let bind_group_layout = compute_pipeline.get_bind_group_layout(0).unwrap();
         let bind_group_entries = [wgpu::BindGroupEntry {

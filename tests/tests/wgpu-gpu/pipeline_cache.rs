@@ -166,7 +166,7 @@ async fn validate_pipeline(
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("compute_pass"),
             timestamp_writes: None,
-        }).unwrap();
+        }).unwrap().unwrap();
         cpass.set_pipeline(&pipeline).unwrap();
         cpass.set_bind_group(0, Some(bind_group), &[]).unwrap();
 

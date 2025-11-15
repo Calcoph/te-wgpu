@@ -439,7 +439,7 @@ impl crate::framework::Example for Example {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        }).unwrap();
+        }).unwrap().unwrap();
 
         rpass.set_pipeline(&self.pipeline).unwrap();
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..)).unwrap();

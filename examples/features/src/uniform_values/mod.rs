@@ -331,7 +331,7 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                                         depth_stencil_attachment: None,
                                         occlusion_query_set: None,
                                         timestamp_writes: None,
-                                    }).unwrap();
+                                    }).unwrap().unwrap();
                                 render_pass.set_pipeline(&wgpu_context_ref.pipeline).unwrap();
                                 // (9)
                                 render_pass.set_bind_group(

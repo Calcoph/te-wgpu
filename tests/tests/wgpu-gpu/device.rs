@@ -203,25 +203,25 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
-        });
+        }).unwrap();
         let buffer_dest = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
         let buffer_for_map = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
-        });
+        }).unwrap();
         let buffer_for_unmap = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: true,
-        });
+        }).unwrap();
 
         // Create a shader module.
         let shader_module = ctx
@@ -306,13 +306,13 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                 array_layer_count: None,
             },
         );
-        ctx.queue.submit([encoder_for_clear.finish()]);
+        ctx.queue.submit([encoder_for_clear.finish().unwrap()]);
 
         let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
             label: None,
             ty: wgpu::QueryType::Occlusion,
             count: u32::MAX, // can be at most 4096
-        });
+        }).unwrap();
 
         let pass = encoder_for_compute_pass.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
@@ -323,7 +323,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             }),
         });
         drop(pass);
-        ctx.queue.submit([encoder_for_compute_pass.finish()]);
+        ctx.queue.submit([encoder_for_compute_pass.finish().unwrap()]);
 
         let pass = encoder_for_render_pass.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -338,7 +338,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             occlusion_query_set: None,
         });
         drop(pass);
-        ctx.queue.submit([encoder_for_render_pass.finish()]);
+        ctx.queue.submit([encoder_for_render_pass.finish().unwrap()]);
 
         encoder_for_buffer_buffer_copy.copy_buffer_to_buffer(
             &buffer_source,
@@ -347,7 +347,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             0,
             u64::MAX, // out of bounds for both buffers
         );
-        ctx.queue.submit([encoder_for_buffer_buffer_copy.finish()]);
+        ctx.queue.submit([encoder_for_buffer_buffer_copy.finish().unwrap()]);
 
         encoder_for_buffer_texture_copy.copy_buffer_to_texture(
             wgpu::TexelCopyBufferInfo {
@@ -361,7 +361,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             texture_for_write.as_image_copy(),
             texture_extent,
         );
-        ctx.queue.submit([encoder_for_buffer_texture_copy.finish()]);
+        ctx.queue.submit([encoder_for_buffer_texture_copy.finish().unwrap()]);
 
         encoder_for_texture_buffer_copy.copy_texture_to_buffer(
             texture_for_read.as_image_copy(),
@@ -375,7 +375,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             },
             texture_extent,
         );
-        ctx.queue.submit([encoder_for_texture_buffer_copy.finish()]);
+        ctx.queue.submit([encoder_for_texture_buffer_copy.finish().unwrap()]);
 
         encoder_for_texture_texture_copy.copy_texture_to_texture(
             texture_for_read.as_image_copy(),
@@ -387,7 +387,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             },
         );
         ctx.queue
-            .submit([encoder_for_texture_texture_copy.finish()]);
+            .submit([encoder_for_texture_texture_copy.finish().unwrap()]);
 
         let invalid_bind_group_layout =
             ctx.device
@@ -405,7 +405,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                         },
                         count: None,
                     }],
-                });
+                }).unwrap();
 
         let _ = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -422,7 +422,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     label: None,
                     bind_group_layouts: &[&invalid_bind_group_layout],
                     push_constant_ranges: &[],
-                });
+                }).unwrap();
 
         let _ = ctx
             .device

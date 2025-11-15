@@ -118,27 +118,27 @@ static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration
                 label: None,
                 contents: &[0u8; 4],
                 usage: wgpu::BufferUsages::COPY_SRC,
-            });
+            }).unwrap();
         let buffer_dest = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 4,
             usage: wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }).unwrap();
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+            .unwrap();
         encoder.copy_buffer_to_buffer(&buffer_source, 0, &buffer_dest, 0, 4);
 
         buffer_source.destroy();
         buffer_dest.destroy();
 
-        let cmd_buffer = encoder.finish();
+        let cmd_buffer = encoder.finish().unwrap();
 
         fail(
-            &ctx.device,
-            || ctx.queue.submit([cmd_buffer]),
+            || ctx.queue.submit([cmd_buffer]).map_err(|(_, e)| e),
             Some("Buffer with '' label has been destroyed"),
         );
     });
@@ -169,12 +169,13 @@ static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguratio
             view_formats: &[],
         };
 
-        let texture_1 = ctx.device.create_texture(&descriptor);
-        let texture_2 = ctx.device.create_texture(&descriptor);
+        let texture_1 = ctx.device.create_texture(&descriptor).unwrap();
+        let texture_2 = ctx.device.create_texture(&descriptor).unwrap();
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+            .unwrap();
         encoder.copy_texture_to_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &texture_1,
@@ -198,11 +199,10 @@ static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguratio
         texture_1.destroy();
         texture_2.destroy();
 
-        let cmd_buffer = encoder.finish();
+        let cmd_buffer = encoder.finish().unwrap();
 
         fail(
-            &ctx.device,
-            || ctx.queue.submit([cmd_buffer]),
+            || ctx.queue.submit([cmd_buffer]).map_err(|(_, e)| e),
             Some("Texture with '' label has been destroyed"),
         );
     });

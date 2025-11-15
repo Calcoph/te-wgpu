@@ -159,7 +159,7 @@ async fn reinterpret(
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
-    }).unwrap();
+    }).unwrap().unwrap();
     rpass.set_pipeline(&pipeline).unwrap();
     rpass.set_bind_group(0, &bind_group, &[]).unwrap();
     rpass.draw(0..3, 0..1).unwrap();

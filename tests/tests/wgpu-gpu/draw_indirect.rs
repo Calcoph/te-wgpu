@@ -248,7 +248,7 @@ async fn run_test(ctx: TestingContext, test_data: TestData, expect_noop: bool) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        }).unwrap();
+        }).unwrap().unwrap();
 
         rpass.set_pipeline(&pipeline).unwrap();
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..)).unwrap();
@@ -717,7 +717,7 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        }).unwrap();
+        }).unwrap().unwrap();
 
         rpass.set_pipeline(&pipeline).unwrap();
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..)).unwrap();

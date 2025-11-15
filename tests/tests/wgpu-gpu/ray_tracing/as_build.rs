@@ -91,12 +91,11 @@ fn blas_compaction_without_flags(ctx: TestingContext) {
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&CommandEncoderDescriptor::default());
+        .create_command_encoder(&CommandEncoderDescriptor::default()).unwrap();
 
-    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], []).unwrap();;
+    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], []).unwrap();
 
     fail(
-        &ctx.device,
         || {
             ctx.queue.submit([encoder.finish().unwrap()]).map_err(|(_,e)|e)
         },
@@ -294,7 +293,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         let mut pass = encoder_compute.begin_compute_pass(&ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        }).unwrap();
+        }).unwrap().unwrap();
         pass.set_pipeline(&compute_pipeline).unwrap();
         pass.set_bind_group(0, Some(&bind_group), &[]).unwrap();
         pass.dispatch_workgroups(1, 1, 1).unwrap()
@@ -371,7 +370,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         let mut pass = encoder_compute.begin_compute_pass(&ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        }).unwrap();
+        }).unwrap().unwrap();
         pass.set_pipeline(&compute_pipeline).unwrap();
         pass.set_bind_group(0, Some(&bind_group), &[]).unwrap();
         pass.dispatch_workgroups(1, 1, 1).unwrap()
@@ -618,7 +617,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
             let mut pass = encoder_compute.begin_compute_pass(&ComputePassDescriptor {
                 label: None,
                 timestamp_writes: None,
-            }).unwrap();
+            }).unwrap().unwrap();
             pass.set_pipeline(&compute_pipeline).unwrap();
             pass.set_bind_group(0, Some(&bind_group), &[]).unwrap();
             pass.dispatch_workgroups(1, 1, 1).unwrap()
@@ -667,8 +666,8 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
-    fail(&ctx.device, || encoder_tlas.finish(), None);
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]).unwrap();
+    fail(|| encoder_tlas.finish(), None);
 }
 
 #[gpu_test]
@@ -722,7 +721,7 @@ fn test_as_build_format_stride(
         label: None,
         contents: &vec![0; (format.min_acceleration_structure_vertex_stride() * 3) as usize],
         usage: BufferUsages::BLAS_INPUT,
-    });
+    }).unwrap();
 
     let blas_size = BlasTriangleGeometrySizeDescriptor {
         // The fourth component is ignored, and it allows us to have a smaller stride.
@@ -742,13 +741,13 @@ fn test_as_build_format_stride(
         BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_size.clone()],
         },
-    );
+    ).unwrap();
 
     let mut command_encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("BLAS_1"),
-        });
+        }).unwrap();
     command_encoder.build_acceleration_structures(
         &[BlasBuildEntry {
             blas: &blas,
@@ -764,14 +763,13 @@ fn test_as_build_format_stride(
             }]),
         }],
         &[],
-    );
+    ).unwrap();
     let command_buffer = fail_if(
-        &ctx.device,
         invalid_combination,
         || command_encoder.finish(),
         None,
-    );
+    ).unwrap();
     if !invalid_combination {
-        ctx.queue.submit([command_buffer]);
+        ctx.queue.submit([command_buffer]).unwrap();
     }
 }

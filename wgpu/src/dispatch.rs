@@ -15,7 +15,7 @@
 use crate::{Blas, Tlas, WasmNotSend, WasmNotSendSync};
 
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
-use wgc::{binding_model::{self, CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError}, command::{self, CommandEncoderError, ComputePassError}, device::{queue::{QueueSubmitError, QueueWriteError}, DeviceError}, pipeline::{self, CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError}, present, ray_tracing::{CreateBlasError, CreateTlasError}, resource::{self, CreateBufferError, CreateTextureError, CreateTextureViewError}};
+use wgc::{binding_model::{self, CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError}, command::{self, CommandEncoderError}, device::{queue::{QueueSubmitError, QueueWriteError}, DeviceError}, pipeline::{self, CreateComputePipelineError, CreateRenderPipelineError, CreateShaderModuleError}, present, ray_tracing::{CreateBlasError, CreateTlasError}, resource::{self, CreateBufferError, CreateTextureError, CreateTextureViewError}};
 use core::{any::Any, fmt::Debug, future::Future, hash::Hash, ops::Range, pin::Pin};
 
 #[cfg(custom)]
@@ -224,7 +224,7 @@ pub trait QueueInterface: CommonTraits {
     fn get_timestamp_period(&self) -> f32;
     fn on_submitted_work_done(&self, callback: BoxSubmittedWorkDoneCallback);
 
-    fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
+    fn compact_blas(&self, blas: &DispatchBlas) -> Result<(u64, DispatchBlas), wgc::ray_tracing::CompactBlasError>;
 }
 
 pub trait ShaderModuleInterface: CommonTraits {
@@ -254,8 +254,8 @@ pub trait TextureInterface: CommonTraits {
     fn destroy(&self);
 }
 pub trait BlasInterface: CommonTraits {
-    fn prepare_compact_async(&self, callback: BlasCompactCallback);
-    fn ready_for_compaction(&self) -> bool;
+    fn prepare_compact_async(&self, callback: BlasCompactCallback) -> Result<wgc::SubmissionIndex, wgc::ray_tracing::BlasPrepareCompactError>;
+    fn ready_for_compaction(&self) -> Result<bool, wgc::resource::InvalidResourceError> ;
 }
 pub trait TlasInterface: CommonTraits {}
 pub trait QuerySetInterface: CommonTraits {}
@@ -277,47 +277,47 @@ pub trait CommandEncoderInterface: CommonTraits {
         destination: &DispatchBuffer,
         destination_offset: crate::BufferAddress,
         copy_size: Option<crate::BufferAddress>,
-    ) -> Result<(), wgc::command::CopyError>;
+    ) -> Result<(), wgc::command::EncoderStateError>;
     fn copy_buffer_to_texture(
         &self,
         source: crate::TexelCopyBufferInfo<'_>,
         destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: crate::Extent3d,
-    ) -> Result<(), wgc::command::CopyError>;
+    ) -> Result<(), wgc::command::EncoderStateError>;
     fn copy_texture_to_buffer(
         &self,
         source: crate::TexelCopyTextureInfo<'_>,
         destination: crate::TexelCopyBufferInfo<'_>,
         copy_size: crate::Extent3d,
-    ) -> Result<(), wgc::command::CopyError>;
+    ) -> Result<(), wgc::command::EncoderStateError>;
     fn copy_texture_to_texture(
         &self,
         source: crate::TexelCopyTextureInfo<'_>,
         destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: crate::Extent3d,
-    ) -> Result<(), wgc::command::CopyError>;
+    ) -> Result<(), wgc::command::EncoderStateError>;
 
-    fn begin_compute_pass(&self, desc: &crate::ComputePassDescriptor<'_>) -> Result<DispatchComputePass, CommandEncoderError>;
-    fn begin_render_pass(&self, desc: &crate::RenderPassDescriptor<'_>) -> Result<DispatchRenderPass, CommandEncoderError>;
+    fn begin_compute_pass(&self, desc: &crate::ComputePassDescriptor<'_>) -> Result<Option<DispatchComputePass>, CommandEncoderError>;
+    fn begin_render_pass(&self, desc: &crate::RenderPassDescriptor<'_>) -> Result<Option<DispatchRenderPass>, CommandEncoderError>;
     fn finish(&mut self) -> Result<DispatchCommandBuffer, CommandEncoderError>;
 
     fn clear_texture(
         &self,
         texture: &DispatchTexture,
         subresource_range: &crate::ImageSubresourceRange,
-    ) -> Result<(), wgc::command::ClearError>;
+    ) -> Result<(), wgc::command::EncoderStateError>;
     fn clear_buffer(
         &self,
         buffer: &DispatchBuffer,
         offset: crate::BufferAddress,
         size: Option<crate::BufferAddress>,
-    ) -> Result<(), wgc::command::ClearError>;
+    ) -> Result<(), wgc::command::EncoderStateError>;
 
-    fn insert_debug_marker(&self, label: &str) -> Result<(), CommandEncoderError> ;
-    fn push_debug_group(&self, label: &str) -> Result<(), CommandEncoderError> ;
-    fn pop_debug_group(&self) -> Result<(), CommandEncoderError> ;
+    fn insert_debug_marker(&self, label: &str) -> Result<(), command::EncoderStateError> ;
+    fn push_debug_group(&self, label: &str) -> Result<(), command::EncoderStateError> ;
+    fn pop_debug_group(&self) -> Result<(), command::EncoderStateError> ;
 
-    fn write_timestamp(&self, query_set: &DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::QueryError>;
+    fn write_timestamp(&self, query_set: &DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::EncoderStateError>;
     fn resolve_query_set(
         &self,
         query_set: &DispatchQuerySet,
@@ -325,76 +325,76 @@ pub trait CommandEncoderInterface: CommonTraits {
         query_count: u32,
         destination: &DispatchBuffer,
         destination_offset: crate::BufferAddress,
-    ) -> Result<(), wgc::command::QueryError>;
+    ) -> Result<(), wgc::command::EncoderStateError>;
     fn mark_acceleration_structures_built<'a>(
         &self,
         blas: &mut dyn Iterator<Item = &'a Blas>,
         tlas: &mut dyn Iterator<Item = &'a Tlas>,
-    ) -> Result<(), wgc::ray_tracing::BuildAccelerationStructureError>;
+    ) -> Result<(), command::EncoderStateError>;
 
     fn build_acceleration_structures<'a>(
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
         tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
-    ) -> Result<(), wgc::ray_tracing::BuildAccelerationStructureError>;
+    ) -> Result<(), command::EncoderStateError>;
 
     fn transition_resources<'a>(
         &mut self,
         buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,
         texture_transitions: &mut dyn Iterator<Item = wgt::TextureTransition<&'a DispatchTexture>>,
-    ) -> Result<(), command::transition_resources::TransitionResourcesError>;
+    ) -> Result<(), command::EncoderStateError>;
 }
 pub trait ComputePassInterface: CommonTraits {
-    fn set_pipeline(&mut self, pipeline: &DispatchComputePipeline) -> Result<(), ComputePassError>;
+    fn set_pipeline(&mut self, pipeline: &DispatchComputePipeline) -> Result<(), wgc::command::PassStateError>;
     fn set_bind_group(
         &mut self,
         index: u32,
         bind_group: Option<&DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
-    ) -> Result<(), ComputePassError>;
-    fn set_push_constants(&mut self, offset: u32, data: &[u8]) -> Result<(), ComputePassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
+    fn set_push_constants(&mut self, offset: u32, data: &[u8]) -> Result<(), wgc::command::PassStateError>;
 
-    fn insert_debug_marker(&mut self, label: &str) -> Result<(), ComputePassError>;
-    fn push_debug_group(&mut self, group_label: &str) -> Result<(), ComputePassError>;
-    fn pop_debug_group(&mut self) -> Result<(), ComputePassError>;
+    fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::PassStateError>;
+    fn push_debug_group(&mut self, group_label: &str) -> Result<(), wgc::command::PassStateError>;
+    fn pop_debug_group(&mut self) -> Result<(), wgc::command::PassStateError>;
 
-    fn write_timestamp(&mut self, query_set: &DispatchQuerySet, query_index: u32) -> Result<(), ComputePassError>;
-    fn begin_pipeline_statistics_query(&mut self, query_set: &DispatchQuerySet, query_index: u32) -> Result<(), ComputePassError>;
-    fn end_pipeline_statistics_query(&mut self) -> Result<(), ComputePassError>;
+    fn write_timestamp(&mut self, query_set: &DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::PassStateError>;
+    fn begin_pipeline_statistics_query(&mut self, query_set: &DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::PassStateError>;
+    fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::PassStateError>;
 
-    fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) -> Result<(), ComputePassError>;
+    fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) -> Result<(), wgc::command::PassStateError>;
     fn dispatch_workgroups_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
-    ) -> Result<(), ComputePassError>;
-    fn end(&mut self) -> Result<(), ComputePassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
+    fn end(&mut self) -> Result<(), wgc::command::EncoderStateError>;
 }
 pub trait RenderPassInterface: CommonTraits {
-    fn set_pipeline(&mut self, pipeline: &DispatchRenderPipeline) -> Result<(), wgc::command::RenderPassError>;
+    fn set_pipeline(&mut self, pipeline: &DispatchRenderPipeline) -> Result<(), wgc::command::PassStateError>;
     fn set_bind_group(
         &mut self,
         index: u32,
         bind_group: Option<&DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
-    ) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
     fn set_index_buffer(
         &mut self,
         buffer: &DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
-    ) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
         buffer: &DispatchBuffer,
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
-    ) -> Result<(), wgc::command::RenderPassError>;
-    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::RenderPassError>;
-    fn set_blend_constant(&mut self, color: crate::Color) -> Result<(), wgc::command::RenderPassError>;
-    fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
+    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::PassStateError>;
+    fn set_blend_constant(&mut self, color: crate::Color) -> Result<(), wgc::command::PassStateError>;
+    fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) -> Result<(), wgc::command::PassStateError>;
     fn set_viewport(
         &mut self,
         x: f32,
@@ -403,34 +403,34 @@ pub trait RenderPassInterface: CommonTraits {
         height: f32,
         min_depth: f32,
         max_depth: f32,
-    ) -> Result<(), wgc::command::RenderPassError>;
-    fn set_stencil_reference(&mut self, reference: u32) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
+    fn set_stencil_reference(&mut self, reference: u32) -> Result<(), wgc::command::PassStateError>;
 
-    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError>;
-    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError>;
+    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::PassStateError>;
+    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::PassStateError>;
     fn draw_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
-    ) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
     fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
-    ) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
 
     fn multi_draw_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
         count: u32,
-    ) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
     fn multi_draw_indexed_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
         count: u32,
-    ) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
     fn multi_draw_indirect_count(
         &mut self,
         indirect_buffer: &DispatchBuffer,
@@ -438,7 +438,7 @@ pub trait RenderPassInterface: CommonTraits {
         count_buffer: &DispatchBuffer,
         count_buffer_offset: crate::BufferAddress,
         max_count: u32,
-    ) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
     fn multi_draw_indexed_indirect_count(
         &mut self,
         indirect_buffer: &DispatchBuffer,
@@ -446,21 +446,21 @@ pub trait RenderPassInterface: CommonTraits {
         count_buffer: &DispatchBuffer,
         count_buffer_offset: crate::BufferAddress,
         max_count: u32,
-    ) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
 
-    fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::RenderPassError>;
-    fn push_debug_group(&mut self, group_label: &str) -> Result<(), wgc::command::RenderPassError>;
-    fn pop_debug_group(&mut self) -> Result<(), wgc::command::RenderPassError>;
+    fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::PassStateError>;
+    fn push_debug_group(&mut self, group_label: &str) -> Result<(), wgc::command::PassStateError>;
+    fn pop_debug_group(&mut self) -> Result<(), wgc::command::PassStateError>;
 
-    fn write_timestamp(&mut self, query_set: &DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::RenderPassError>;
-    fn begin_occlusion_query(&mut self, query_index: u32) -> Result<(), wgc::command::RenderPassError>;
-    fn end_occlusion_query(&mut self) -> Result<(), wgc::command::RenderPassError>;
-    fn begin_pipeline_statistics_query(&mut self, query_set: &DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::RenderPassError>;
-    fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::RenderPassError>;
+    fn write_timestamp(&mut self, query_set: &DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::PassStateError>;
+    fn begin_occlusion_query(&mut self, query_index: u32) -> Result<(), wgc::command::PassStateError>;
+    fn end_occlusion_query(&mut self) -> Result<(), wgc::command::PassStateError>;
+    fn begin_pipeline_statistics_query(&mut self, query_set: &DispatchQuerySet, query_index: u32) -> Result<(), wgc::command::PassStateError>;
+    fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::PassStateError>;
 
-    fn execute_bundles(&mut self, render_bundles: &mut dyn Iterator<Item = &DispatchRenderBundle>) -> Result<(), wgc::command::RenderPassError>;
+    fn execute_bundles(&mut self, render_bundles: &mut dyn Iterator<Item = &DispatchRenderBundle>) -> Result<(), wgc::command::PassStateError>;
 
-    fn end(&mut self) -> Result<(), wgc::command::RenderPassError>;
+    fn end(&mut self) -> Result<(), wgc::command::EncoderStateError>;
 }
 
 pub trait RenderBundleEncoderInterface: CommonTraits {

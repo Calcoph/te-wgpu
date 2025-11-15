@@ -265,14 +265,14 @@ impl Blas {
     pub fn prepare_compaction_async(
         &self,
         callback: impl FnOnce(Result<(), BlasAsyncError>) + WasmNotSend + 'static,
-    ) {
-        self.inner.prepare_compact_async(Box::new(callback));
+    ) -> Result<wgc::SubmissionIndex, wgc::ray_tracing::BlasPrepareCompactError> {
+        self.inner.prepare_compact_async(Box::new(callback))
     }
 
     /// Checks whether this BLAS is ready for compaction. The returned value is `true` if
     /// [`Blas::prepare_compaction_async`]'s callback was called with a non-error value, otherwise
     /// this is `false`.
-    pub fn ready_for_compaction(&self) -> bool {
+    pub fn ready_for_compaction(&self) -> Result<bool, wgc::resource::InvalidResourceError> {
         self.inner.ready_for_compaction()
     }
 }

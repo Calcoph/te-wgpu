@@ -316,6 +316,7 @@ impl crate::framework::Example for Example {
                     occlusion_query_set: None,
                 })
                 .unwrap()
+                .unwrap()
                 .execute_bundles(iter::once(&self.bundle))
                 .unwrap();
         }

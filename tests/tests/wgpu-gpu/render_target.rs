@@ -43,7 +43,7 @@ async fn run_test(
         label: None,
         contents: bytemuck::cast_slice(vertex_buffer_content),
         usage: wgpu::BufferUsages::VERTEX,
-    });
+    }).unwrap();
 
     let shader_src = "
             @vertex
@@ -62,7 +62,7 @@ async fn run_test(
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(shader_src.into()),
-        });
+        }).unwrap();
 
     let pipeline_desc = wgpu::RenderPipelineDescriptor {
         label: None,
@@ -97,7 +97,7 @@ async fn run_test(
         multiview: None,
         cache: None,
     };
-    let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
+    let pipeline = ctx.device.create_render_pipeline(&pipeline_desc).unwrap();
 
     const SIZE: u32 = 512;
     const LAYERS: u32 = 2;
@@ -127,18 +127,18 @@ async fn run_test(
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
-    });
+    }).unwrap();
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: size_for_mips(MIPS),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
     for mip in 0..MIPS {
         let ms_texture_view = if multisample {
@@ -155,8 +155,8 @@ async fn run_test(
                 format: wgpu::TextureFormat::R8Unorm,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
-            });
-            let ms_texture_view = ms_texture.create_view(&wgpu::TextureViewDescriptor::default());
+            }).unwrap();
+            let ms_texture_view = ms_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap();
             Some(ms_texture_view)
         } else {
             None
@@ -172,7 +172,7 @@ async fn run_test(
                 mip_level_count: Some(1),
                 base_array_layer: layer,
                 array_layer_count: Some(1),
-            });
+            }).unwrap();
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -191,10 +191,10 @@ async fn run_test(
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
-            rpass.set_pipeline(&pipeline);
-            rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-            rpass.draw(0..6, 0..1);
+            }).unwrap().unwrap();
+            rpass.set_pipeline(&pipeline).unwrap();
+            rpass.set_vertex_buffer(0, vertex_buffer.slice(..)).unwrap();
+            rpass.draw(0..6, 0..1).unwrap();
         }
     }
 
@@ -219,13 +219,13 @@ async fn run_test(
                 height: SIZE >> mip,
                 depth_or_array_layers: LAYERS,
             },
-        );
+        ).unwrap();
     }
 
-    ctx.queue.submit([encoder.finish()]);
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
 
     let slice = readback_buffer.slice(..);
-    slice.map_async(wgpu::MapMode::Read, |_| ());
+    slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
 
     ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
 
@@ -257,7 +257,7 @@ async fn run_test_3d(ctx: TestingContext) {
         label: None,
         contents: bytemuck::cast_slice(vertex_buffer_content),
         usage: wgpu::BufferUsages::VERTEX,
-    });
+    }).unwrap();
 
     let shader_src = "
             @vertex
@@ -276,7 +276,7 @@ async fn run_test_3d(ctx: TestingContext) {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(shader_src.into()),
-        });
+        }).unwrap();
 
     let pipeline_desc = wgpu::RenderPipelineDescriptor {
         label: None,
@@ -307,7 +307,7 @@ async fn run_test_3d(ctx: TestingContext) {
         multiview: None,
         cache: None,
     };
-    let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
+    let pipeline = ctx.device.create_render_pipeline(&pipeline_desc).unwrap();
 
     const SIZE: u32 = 512;
     const DEPTH: u32 = 2;
@@ -338,25 +338,25 @@ async fn run_test_3d(ctx: TestingContext) {
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
-    });
+    }).unwrap();
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: size_for_mips(MIPS),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
 
     for mip in 0..MIPS {
         let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor {
             base_mip_level: mip,
             mip_level_count: Some(1),
             ..Default::default()
-        });
+        }).unwrap();
         for layer in 0..DEPTH >> mip {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
@@ -372,10 +372,10 @@ async fn run_test_3d(ctx: TestingContext) {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            });
-            rpass.set_pipeline(&pipeline);
-            rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-            rpass.draw(0..6, 0..1);
+            }).unwrap().unwrap();
+            rpass.set_pipeline(&pipeline).unwrap();
+            rpass.set_vertex_buffer(0, vertex_buffer.slice(..)).unwrap();
+            rpass.draw(0..6, 0..1).unwrap();
         }
     }
 
@@ -400,13 +400,13 @@ async fn run_test_3d(ctx: TestingContext) {
                 height: SIZE >> mip,
                 depth_or_array_layers: DEPTH >> mip,
             },
-        );
+        ).unwrap();
     }
 
-    ctx.queue.submit([encoder.finish()]);
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
 
     let slice = readback_buffer.slice(..);
-    slice.map_async(wgpu::MapMode::Read, |_| ());
+    slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
 
     ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
 

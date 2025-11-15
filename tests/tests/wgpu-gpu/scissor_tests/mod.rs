@@ -97,7 +97,7 @@ async fn scissor_test_impl(
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
             render_pass.set_pipeline(&pipeline).unwrap();
             render_pass.set_scissor_rect(
                 scissor_rect.x,

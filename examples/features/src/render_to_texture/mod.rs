@@ -94,7 +94,7 @@ async fn run(_path: Option<String>) {
             depth_stencil_attachment: None,
             occlusion_query_set: None,
             timestamp_writes: None,
-        }).unwrap();
+        }).unwrap().unwrap();
         render_pass.set_pipeline(&pipeline).unwrap();
         render_pass.draw(0..3, 0..1).unwrap();
     }

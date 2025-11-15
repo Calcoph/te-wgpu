@@ -1,4 +1,4 @@
-use wgc::command::ComputePassError;
+use wgc::command::EncoderStateError;
 
 use crate::*;
 
@@ -49,7 +49,7 @@ impl ComputePass<'_> {
     /// If the bind group have dynamic offsets, provide them in the binding order.
     /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
     /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
-    pub fn set_bind_group<'a, BG>(&mut self, index: u32, bind_group: BG, offsets: &[DynamicOffset]) -> Result<(), wgc::command::ComputePassError>
+    pub fn set_bind_group<'a, BG>(&mut self, index: u32, bind_group: BG, offsets: &[DynamicOffset]) -> Result<(), wgc::command::PassStateError>
     where
         Option<&'a BindGroup>: From<BG>,
     {
@@ -59,29 +59,29 @@ impl ComputePass<'_> {
     }
 
     /// Sets the active compute pipeline.
-    pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) -> Result<(), wgc::command::ComputePassError> {
+    pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) -> Result<(), wgc::command::PassStateError> {
         self.inner.set_pipeline(&pipeline.inner)
     }
 
     /// Inserts debug marker.
-    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::ComputePassError> {
+    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::PassStateError> {
         self.inner.insert_debug_marker(label)
     }
 
     /// Start record commands and group it into debug marker group.
-    pub fn push_debug_group(&mut self, label: &str) -> Result<(), wgc::command::ComputePassError> {
+    pub fn push_debug_group(&mut self, label: &str) -> Result<(), wgc::command::PassStateError> {
         self.inner.push_debug_group(label)
     }
 
     /// Stops command recording and creates debug group.
-    pub fn pop_debug_group(&mut self) -> Result<(), wgc::command::ComputePassError> {
+    pub fn pop_debug_group(&mut self) -> Result<(), wgc::command::PassStateError> {
         self.inner.pop_debug_group()
     }
 
     /// Dispatches compute work operations.
     ///
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
-    pub fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) -> Result<(), wgc::command::ComputePassError> {
+    pub fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) -> Result<(), wgc::command::PassStateError> {
         self.inner.dispatch_workgroups(x, y, z)
     }
 
@@ -92,13 +92,13 @@ impl ComputePass<'_> {
         &mut self,
         indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
-    ) -> Result<(), wgc::command::ComputePassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         self.inner
             .dispatch_workgroups_indirect(&indirect_buffer.inner, indirect_offset)
     }
 
     /// Drops the ComputePass for a chance to handle its error
-    pub fn end(mut self) -> Result<(), ComputePassError> {
+    pub fn end(mut self) -> Result<(), EncoderStateError> {
         self.inner.end()
     }
 
@@ -119,7 +119,7 @@ impl ComputePass<'_> {
     ///
     /// For example, if `offset` is `4` and `data` is eight bytes long, this
     /// call will write `data` to bytes `4..12` of push constant storage.
-    pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) -> Result<(), wgc::command::ComputePassError> {
+    pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) -> Result<(), wgc::command::PassStateError> {
         self.inner.set_push_constants(offset, data)
     }
 }
@@ -132,7 +132,7 @@ impl ComputePass<'_> {
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::ComputePassError> {
+    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::PassStateError> {
         self.inner.write_timestamp(&query_set.inner, query_index)
     }
 }
@@ -141,14 +141,14 @@ impl ComputePass<'_> {
 impl ComputePass<'_> {
     /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
-    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::ComputePassError> {
+    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::PassStateError> {
         self.inner
             .begin_pipeline_statistics_query(&query_set.inner, query_index)
     }
 
     /// End the pipeline statistics query on this compute pass. It can be started with
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
-    pub fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::ComputePassError> {
+    pub fn end_pipeline_statistics_query(&mut self) -> Result<(), wgc::command::PassStateError> {
         self.inner.end_pipeline_statistics_query()
     }
 }

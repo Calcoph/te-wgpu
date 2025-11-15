@@ -30,9 +30,8 @@ static LIMITS_HIT: GpuTestConfiguration = GpuTestConfiguration::new()
 
 fn hit_limits(ctx: TestingContext) {
     fail(
-        &ctx.device,
         || {
-            let _ = ctx.device.create_blas(
+            ctx.device.create_blas(
                 &CreateBlasDescriptor {
                     label: None,
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
@@ -50,14 +49,13 @@ fn hit_limits(ctx: TestingContext) {
                         2
                     ],
                 },
-            );
+            )
         },
         None,
     );
     fail(
-        &ctx.device,
         || {
-            let _ = ctx.device.create_blas(
+            ctx.device.create_blas(
                 &CreateBlasDescriptor {
                     label: None,
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
@@ -72,26 +70,24 @@ fn hit_limits(ctx: TestingContext) {
                         flags: AccelerationStructureGeometryFlags::empty(),
                     }],
                 },
-            );
+            )
         },
         None,
     );
     fail(
-        &ctx.device,
         || {
-            let _ = ctx.device.create_tlas(&CreateTlasDescriptor {
+            ctx.device.create_tlas(&CreateTlasDescriptor {
                 label: None,
                 max_instances: 2,
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                 update_mode: AccelerationStructureUpdateMode::Build,
-            });
+            })
         },
         None,
     );
     fail(
-        &ctx.device,
         || {
-            let _ = ctx
+            ctx
                 .device
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
                     label: None,
@@ -113,7 +109,7 @@ fn hit_limits(ctx: TestingContext) {
                             count: None,
                         },
                     ],
-                });
+                })
         },
         None,
     );

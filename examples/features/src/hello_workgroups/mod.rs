@@ -123,7 +123,7 @@ async fn run() {
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        }).unwrap();
+        }).unwrap().unwrap();
         compute_pass.set_pipeline(&pipeline).unwrap();
         compute_pass.set_bind_group(0, &bind_group, &[]).unwrap();
         /* Note that since each workgroup will cover both arrays, we only need to

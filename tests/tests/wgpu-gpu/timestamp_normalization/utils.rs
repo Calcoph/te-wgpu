@@ -268,7 +268,7 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
     let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: Some("Compute Pass"),
         timestamp_writes: None,
-    }).unwrap();
+    }).unwrap().unwrap();
 
     cpass.set_pipeline(&pipeline).unwrap();
     cpass.set_bind_group(0, &bg, &[]).unwrap();

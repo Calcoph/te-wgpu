@@ -176,7 +176,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        }).unwrap();
+        }).unwrap().unwrap();
 
         rpass.set_pipeline(&pipeline).unwrap();
         rpass.set_bind_group(0, &bg, &[]).unwrap();

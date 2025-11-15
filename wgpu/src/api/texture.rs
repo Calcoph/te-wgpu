@@ -67,7 +67,7 @@ impl Texture {
     ///
     /// Texture views are needed to use a texture as a binding in a [`BindGroup`]
     /// or as an attachment in a [`RenderPass`].
-    pub fn create_view(&self, desc: &TextureViewDescriptor<'_>) -> Result<TextureView, CreateTextureViewError> {
+    pub fn create_view(&self, desc: &TextureViewDescriptor<'_>) -> Result<TextureView, wgc::resource::CreateTextureViewError> {
         let view = self.inner.create_view(desc)?;
 
         Ok(TextureView {

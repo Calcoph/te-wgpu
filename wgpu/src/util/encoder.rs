@@ -15,18 +15,18 @@ pub trait RenderEncoder<'a> {
         index: u32,
         bind_group: Option<&'a BindGroup>,
         offsets: &[DynamicOffset],
-    ) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
 
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
-    fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) -> Result<(), wgc::command::RenderPassError>;
+    fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) -> Result<(), wgc::command::PassStateError>;
 
     /// Sets the active index buffer.
     ///
     /// Subsequent calls to [`draw_indexed`](RenderEncoder::draw_indexed) on this [`RenderEncoder`] will
     /// use `buffer` as the source index buffer.
-    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) -> Result<(), wgc::command::RenderPassError>;
+    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) -> Result<(), wgc::command::PassStateError>;
 
     /// Assign a vertex buffer to a slot.
     ///
@@ -38,25 +38,25 @@ pub trait RenderEncoder<'a> {
     ///
     /// [`draw`]: RenderEncoder::draw
     /// [`draw_indexed`]: RenderEncoder::draw_indexed
-    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) -> Result<(), wgc::command::RenderPassError>;
+    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) -> Result<(), wgc::command::PassStateError>;
 
     /// Draws primitives from the active vertex buffer(s).
     ///
     /// The active vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
-    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError>;
+    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::PassStateError>;
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
     ///
     /// The active index buffer can be set with [`RenderEncoder::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
-    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError>;
+    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::PassStateError>;
 
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
     /// The active vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
-    fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) -> Result<(), wgc::command::RenderPassError>;
+    fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) -> Result<(), wgc::command::PassStateError>;
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
     /// based on the contents of the `indirect_buffer`.
@@ -69,7 +69,7 @@ pub trait RenderEncoder<'a> {
         &mut self,
         indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
-    ) -> Result<(), wgc::command::RenderPassError>;
+    ) -> Result<(), wgc::command::PassStateError>;
 
     /// [`wgt::Features::PUSH_CONSTANTS`] must be enabled on the device in order to call this function.
     ///
@@ -101,7 +101,7 @@ pub trait RenderEncoder<'a> {
     ///
     /// You would need to upload this in three `set_push_constants` calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::RenderPassError>;
+    fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::PassStateError>;
 }
 
 impl<'a> RenderEncoder<'a> for RenderPass<'a> {
@@ -111,37 +111,37 @@ impl<'a> RenderEncoder<'a> for RenderPass<'a> {
         index: u32,
         bind_group: Option<&'a BindGroup>,
         offsets: &[DynamicOffset],
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         Self::set_bind_group(self, index, bind_group, offsets)
     }
 
     #[inline(always)]
-    fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) -> Result<(), wgc::command::RenderPassError> {
+    fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) -> Result<(), wgc::command::PassStateError> {
         Self::set_pipeline(self, pipeline)
     }
 
     #[inline(always)]
-    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) -> Result<(), wgc::command::RenderPassError> {
+    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) -> Result<(), wgc::command::PassStateError> {
         Self::set_index_buffer(self, buffer_slice, index_format)
     }
 
     #[inline(always)]
-    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) -> Result<(), wgc::command::RenderPassError> {
+    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) -> Result<(), wgc::command::PassStateError> {
         Self::set_vertex_buffer(self, slot, buffer_slice)
     }
 
     #[inline(always)]
-    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError> {
+    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::PassStateError> {
         Self::draw(self, vertices, instances)
     }
 
     #[inline(always)]
-    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError> {
+    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::PassStateError> {
         Self::draw_indexed(self, indices, base_vertex, instances)
     }
 
     #[inline(always)]
-    fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) -> Result<(), wgc::command::RenderPassError> {
+    fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) -> Result<(), wgc::command::PassStateError> {
         Self::draw_indirect(self, indirect_buffer, indirect_offset)
     }
 
@@ -150,12 +150,12 @@ impl<'a> RenderEncoder<'a> for RenderPass<'a> {
         &mut self,
         indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         Self::draw_indexed_indirect(self, indirect_buffer, indirect_offset)
     }
 
     #[inline(always)]
-    fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::RenderPassError> {
+    fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::PassStateError> {
         Self::set_push_constants(self, stages, offset, data)
     }
 }
@@ -167,43 +167,43 @@ impl<'a> RenderEncoder<'a> for RenderBundleEncoder<'a> {
         index: u32,
         bind_group: Option<&'a BindGroup>,
         offsets: &[DynamicOffset],
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         Self::set_bind_group(self, index, bind_group, offsets);
         Ok(())
     }
 
     #[inline(always)]
-    fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) -> Result<(), wgc::command::RenderPassError> {
+    fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) -> Result<(), wgc::command::PassStateError> {
         Self::set_pipeline(self, pipeline);
         Ok(())
     }
 
     #[inline(always)]
-    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) -> Result<(), wgc::command::RenderPassError> {
+    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) -> Result<(), wgc::command::PassStateError> {
         Self::set_index_buffer(self, buffer_slice, index_format);
         Ok(())
     }
 
     #[inline(always)]
-    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) -> Result<(), wgc::command::RenderPassError> {
+    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) -> Result<(), wgc::command::PassStateError> {
         Self::set_vertex_buffer(self, slot, buffer_slice);
         Ok(())
     }
 
     #[inline(always)]
-    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError> {
+    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) -> Result<(), wgc::command::PassStateError> {
         Self::draw(self, vertices, instances);
         Ok(())
     }
 
     #[inline(always)]
-    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::RenderPassError> {
+    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) -> Result<(), wgc::command::PassStateError> {
         Self::draw_indexed(self, indices, base_vertex, instances);
         Ok(())
     }
 
     #[inline(always)]
-    fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) -> Result<(), wgc::command::RenderPassError> {
+    fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) -> Result<(), wgc::command::PassStateError> {
         Self::draw_indirect(self, indirect_buffer, indirect_offset);
         Ok(())
     }
@@ -213,13 +213,13 @@ impl<'a> RenderEncoder<'a> for RenderBundleEncoder<'a> {
         &mut self,
         indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
-    ) -> Result<(), wgc::command::RenderPassError> {
+    ) -> Result<(), wgc::command::PassStateError> {
         Self::draw_indexed_indirect(self, indirect_buffer, indirect_offset);
         Ok(())
     }
 
     #[inline(always)]
-    fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::RenderPassError> {
+    fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) -> Result<(), wgc::command::PassStateError> {
         Self::set_push_constants(self, stages, offset, data);
         Ok(())
     }

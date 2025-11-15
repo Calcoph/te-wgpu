@@ -44,7 +44,7 @@ async fn compute_pass_resource_ownership(ctx: TestingContext) {
         .unwrap();
 
     {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()).unwrap();
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()).unwrap().unwrap();
         cpass.set_pipeline(&pipeline).unwrap();
         cpass.set_bind_group(0, &bind_group, &[]).unwrap();
         cpass.dispatch_workgroups_indirect(&indirect_buffer, 0).unwrap();
@@ -93,7 +93,7 @@ async fn compute_pass_query_set_ownership_pipeline_statistics(ctx: TestingContex
         .unwrap();
 
     {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()).unwrap();
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()).unwrap().unwrap();
         cpass.set_pipeline(&pipeline).unwrap();
         cpass.set_bind_group(0, &bind_group, &[]).unwrap();
         cpass.begin_pipeline_statistics_query(&query_set, 0).unwrap();
@@ -150,7 +150,7 @@ async fn compute_pass_query_set_ownership_timestamps(ctx: TestingContext) {
                 beginning_of_pass_write_index: Some(0),
                 end_of_pass_write_index: Some(1),
             }),
-        }).unwrap();
+        }).unwrap().unwrap();
         cpass.set_pipeline(&pipeline).unwrap();
         cpass.set_bind_group(0, &bind_group, &[]).unwrap();
         cpass.write_timestamp(&query_set_write_timestamp, 0).unwrap();
@@ -188,7 +188,7 @@ async fn compute_pass_keep_encoder_alive(ctx: TestingContext) {
     let cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: Some("compute_pass"),
         timestamp_writes: None,
-    }).unwrap();
+    }).unwrap().unwrap();
 
     // Now drop the encoder - it is kept alive by the compute pass.
     // To do so, we have to make the compute pass forget the lifetime constraint first.

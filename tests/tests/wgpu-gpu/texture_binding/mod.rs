@@ -58,7 +58,7 @@ fn texture_binding(ctx: TestingContext) {
 
     let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
     {
-        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default()).unwrap();
+        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default()).unwrap().unwrap();
         pass.set_pipeline(&pipeline).unwrap();
         pass.set_bind_group(0, &bind, &[]).unwrap();
         pass.dispatch_workgroups(1, 1, 1).unwrap();
@@ -145,7 +145,7 @@ fn single_scalar_load(ctx: TestingContext) {
 
     let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
     {
-        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default()).unwrap();
+        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default()).unwrap().unwrap();
         pass.set_pipeline(&pipeline).unwrap();
         pass.set_bind_group(0, &bind, &[]).unwrap();
         pass.dispatch_workgroups(1, 1, 1).unwrap();

@@ -377,7 +377,7 @@ async fn vertex_index_common(ctx: TestingContext) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        }).unwrap();
+        }).unwrap().unwrap();
 
         {
             // Need to scope render_bundle_encoder since it's not Send and would otherwise

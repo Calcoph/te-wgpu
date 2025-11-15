@@ -60,7 +60,7 @@ fn run_bench(ctx: &mut Criterion) {
 
                         drop(buffers);
 
-                        state.queue.submit([]);
+                        state.queue.submit([]).unwrap();
                         state.device.poll(wgpu::PollType::Wait).unwrap();
                     }
 

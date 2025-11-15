@@ -182,7 +182,7 @@ impl TextureBlitter {
         encoder: &mut CommandEncoder,
         source: &TextureView,
         target: &TextureView,
-    ) -> Result<(), TextureBlitterError> {
+    ) -> Result<Option<()>, TextureBlitterError> {
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("wgpu::util::TextureBlitter::bind_group"),
             layout: &self.bind_group_layout,
@@ -198,7 +198,7 @@ impl TextureBlitter {
             ],
         }).map_err(|_| TextureBlitterError)?;
 
-        let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+        let pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("wgpu::util::TextureBlitter::pass"),
             color_attachments: &[Some(crate::RenderPassColorAttachment {
                 view: target,
@@ -213,10 +213,13 @@ impl TextureBlitter {
             timestamp_writes: None,
             occlusion_query_set: None,
         }).map_err(|_| TextureBlitterError)?;
+        let Some(mut pass) = pass else {
+            return Ok(None);
+        };
         pass.set_pipeline(&self.pipeline).map_err(|_| TextureBlitterError)?;
         pass.set_bind_group(0, &bind_group, &[]).map_err(|_| TextureBlitterError)?;
         pass.draw(0..3, 0..1).map_err(|_| TextureBlitterError)?;
 
-        Ok(())
+        Ok(Some(()))
     }
 }

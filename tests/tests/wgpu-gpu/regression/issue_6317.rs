@@ -38,7 +38,7 @@ static NON_FATAL_ERRORS_IN_QUEUE_SUBMIT: GpuTestConfiguration = GpuTestConfigura
             || -> Result<(), String> {
                 let mut command_encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
                 {
-                    let mut render_pass = command_encoder.begin_compute_pass(&Default::default()).unwrap();
+                    let mut render_pass = command_encoder.begin_compute_pass(&Default::default()).unwrap().unwrap();
                     render_pass.set_pipeline(&compute_pipeline).map_err(|err| err.to_string())?;
 
                     // NOTE: We deliberately don't set a bind group here, to provoke a validation

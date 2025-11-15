@@ -350,7 +350,7 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
 
             rpass.set_pipeline(&self.pipeline).unwrap();
             rpass.set_bind_group(0, Some(&self.bind_group), &[]).unwrap();

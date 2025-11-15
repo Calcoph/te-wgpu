@@ -164,9 +164,9 @@ impl DeviceInterface for CustomDevice {
     fn create_compute_pipeline(
         &self,
         desc: &wgpu::ComputePipelineDescriptor<'_>,
-    ) -> Result<wgpu::custom::DispatchComputePipeline, wgpu::wgc::pipeline::CreateComputePipelineError>{
+    ) -> Result<wgpu::custom::DispatchComputePipeline, wgpu::wgc::pipeline::CreateComputePipelineError> {
         let module = desc.module.as_custom::<CustomShaderModule>().unwrap();
-        wgpu::custom::DispatchComputePipeline::custom(CustomComputePipeline(module.0.clone()))
+        Ok(wgpu::custom::DispatchComputePipeline::custom(CustomComputePipeline(module.0.clone())))
     }
 
     unsafe fn create_pipeline_cache(
@@ -203,7 +203,7 @@ impl DeviceInterface for CustomDevice {
     fn create_query_set(
         &self,
         _desc: &wgpu::QuerySetDescriptor<'_>,
-    ) -> Result<DispatchQuerySet, wgpu::wgc::resource::CreateQuerySetError> {
+    ) -> Result<wgpu::custom::DispatchQuerySet, wgpu::wgc::resource::CreateQuerySetError> {
         unimplemented!()
     }
 
@@ -335,7 +335,7 @@ impl QueueInterface for CustomQueue {
         unimplemented!()
     }
 
-    fn compact_blas(&self, _blas: &DispatchBlas) -> (Option<u64>, DispatchBlas) {
+    fn compact_blas(&self, _blas: &DispatchBlas) -> Result<(u64, DispatchBlas), wgpu::wgc::ray_tracing::CompactBlasError> {
         unimplemented!()
     }
 }
@@ -344,7 +344,7 @@ impl QueueInterface for CustomQueue {
 pub struct CustomComputePipeline(pub Counter);
 
 impl ComputePipelineInterface for CustomComputePipeline {
-    fn get_bind_group_layout(&self, _index: u32) -> wgpu::custom::DispatchBindGroupLayout {
+    fn get_bind_group_layout(&self, _index: u32) -> Result<wgpu::custom::DispatchBindGroupLayout, wgpu::wgc::binding_model::GetBindGroupLayoutError>{
         unimplemented!()
     }
 }

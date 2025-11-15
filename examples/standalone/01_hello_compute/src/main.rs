@@ -190,7 +190,7 @@ fn main() {
     let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    }).unwrap();
+    }).unwrap().unwrap();
 
     // Set the pipeline that we want to use
     compute_pass.set_pipeline(&pipeline).unwrap();

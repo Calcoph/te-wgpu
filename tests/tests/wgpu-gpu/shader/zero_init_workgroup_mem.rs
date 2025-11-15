@@ -127,7 +127,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
             .create_command_encoder(&CommandEncoderDescriptor::default())
             .unwrap();
 
-        let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default()).unwrap();
+        let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default()).unwrap().unwrap();
 
         cpass.set_pipeline(&pipeline_write).unwrap();
         for _ in 0..NR_OF_DISPATCHES {

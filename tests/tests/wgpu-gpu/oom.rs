@@ -2,7 +2,7 @@ use wgpu::{
     AccelerationStructureFlags, AccelerationStructureGeometryFlags,
     AccelerationStructureUpdateMode, Backends, BlasGeometrySizeDescriptors,
     BlasTriangleGeometrySizeDescriptor, BufferDescriptor, BufferUsages, CreateBlasDescriptor,
-    CreateTlasDescriptor, Error, ErrorFilter, Extent3d, Features, QuerySetDescriptor, QueryType,
+    CreateTlasDescriptor, Extent3d, Features, QuerySetDescriptor, QueryType,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, VertexFormat,
 };
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
@@ -34,7 +34,6 @@ static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let mut textures = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let texture = ctx.device.create_texture(&TextureDescriptor {
                 label: None,
                 size: Extent3d {
@@ -48,15 +47,7 @@ static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
                 format: TextureFormat::Rgba16Float,
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
-            });
-            if let Some(err) = ctx.device.pop_error_scope().await {
-                match err {
-                    Error::OutOfMemory { .. } => {
-                        return;
-                    }
-                    _ => unreachable!(),
-                }
-            }
+            }).unwrap();
             textures.push(texture);
         }
         panic!("Failed to OOM after {LOOP_BOUND} iterations.");
@@ -73,21 +64,12 @@ static BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let mut buffers = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let buffer = ctx.device.create_buffer(&BufferDescriptor {
                 label: None,
                 size: 256 * 1024 * 1024,
                 usage: BufferUsages::STORAGE,
                 mapped_at_creation: false,
             });
-            if let Some(err) = ctx.device.pop_error_scope().await {
-                match err {
-                    Error::OutOfMemory { .. } => {
-                        return;
-                    }
-                    _ => unreachable!(),
-                }
-            }
             buffers.push(buffer);
         }
         panic!("Failed to OOM after {LOOP_BOUND} iterations.");
@@ -104,21 +86,12 @@ static MAPPING_BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new
     .run_async(|ctx| async move {
         let mut buffers = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let buffer = ctx.device.create_buffer(&BufferDescriptor {
                 label: None,
                 size: 256 * 1024 * 1024,
                 usage: BufferUsages::COPY_SRC | BufferUsages::MAP_WRITE,
                 mapped_at_creation: false,
             });
-            if let Some(err) = ctx.device.pop_error_scope().await {
-                match err {
-                    Error::OutOfMemory { .. } => {
-                        return;
-                    }
-                    _ => unreachable!(),
-                }
-            }
             buffers.push(buffer);
         }
         panic!("Failed to OOM after {LOOP_BOUND} iterations.");
@@ -136,20 +109,11 @@ static QUERY_SET_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let mut query_sets = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let query_set = ctx.device.create_query_set(&QuerySetDescriptor {
                 label: None,
                 ty: QueryType::Occlusion,
                 count: 4096,
-            });
-            if let Some(err) = ctx.device.pop_error_scope().await {
-                match err {
-                    Error::OutOfMemory { .. } => {
-                        return;
-                    }
-                    _ => unreachable!(),
-                }
-            }
+            }).unwrap();
             query_sets.push(query_set);
         }
         panic!("Failed to OOM after {LOOP_BOUND} iterations.");
@@ -169,7 +133,6 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let mut blases = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let blas = ctx.device.create_blas(
                 &CreateBlasDescriptor {
                     label: None,
@@ -186,14 +149,6 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
                     }],
                 },
             );
-            if let Some(err) = ctx.device.pop_error_scope().await {
-                match err {
-                    Error::OutOfMemory { .. } => {
-                        return;
-                    }
-                    _ => unreachable!(),
-                }
-            }
             blases.push(blas);
         }
         panic!("Failed to OOM after {LOOP_BOUND} iterations.");
@@ -213,21 +168,12 @@ static TLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let mut tlases = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
                 label: None,
                 max_instances: 1024 * 1024,
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                 update_mode: AccelerationStructureUpdateMode::Build,
             });
-            if let Some(err) = ctx.device.pop_error_scope().await {
-                match err {
-                    Error::OutOfMemory { .. } => {
-                        return;
-                    }
-                    _ => unreachable!(),
-                }
-            }
             tlases.push(tlas);
         }
         panic!("Failed to OOM after {LOOP_BOUND} iterations.");

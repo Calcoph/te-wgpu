@@ -199,7 +199,7 @@ async fn pulling_common(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        }).unwrap();
+        }).unwrap().unwrap();
 
         rpass.set_pipeline(&pipeline).unwrap();
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32).unwrap();

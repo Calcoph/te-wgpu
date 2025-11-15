@@ -133,7 +133,7 @@ async fn partial_update_test(ctx: TestingContext) {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("compute_pass"),
             timestamp_writes: None,
-        }).unwrap();
+        }).unwrap().unwrap();
         cpass.set_pipeline(&pipeline).unwrap();
         cpass.set_bind_group(0, &bind_group, &[]).unwrap();
 
@@ -353,7 +353,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         .create_command_encoder(&CommandEncoderDescriptor::default())
         .unwrap();
     {
-        let mut render_pass = command_encoder.begin_render_pass(&render_pass_desc).unwrap();
+        let mut render_pass = command_encoder.begin_render_pass(&render_pass_desc).unwrap().unwrap();
         if use_render_bundle {
             // Execute the commands in a render_bundle_encoder.
             let mut render_bundle_encoder =

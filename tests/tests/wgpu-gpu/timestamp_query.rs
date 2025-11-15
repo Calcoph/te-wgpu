@@ -72,7 +72,7 @@ fn timestamp_query(ctx: TestingContext) {
                 beginning_of_pass_write_index: Some(base_index),
                 end_of_pass_write_index: Some(base_index + 1),
             }),
-        }).unwrap();
+        }).unwrap().unwrap();
         compute_pass.set_pipeline(&pipeline).unwrap();
 
         compute_pass.dispatch_workgroups(1, 1, 1).unwrap();

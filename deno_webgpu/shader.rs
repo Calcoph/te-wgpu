@@ -14,7 +14,6 @@ pub struct GPUShaderModule {
     pub instance: Instance,
     pub id: wgpu_core::id::ShaderModuleId,
     pub label: String,
-    pub compilation_info: v8::Global<v8::Object>,
 }
 
 impl Drop for GPUShaderModule {
@@ -40,16 +39,6 @@ impl GPUShaderModule {
     #[string]
     fn label(&self, #[webidl] _label: String) {
         // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
-    }
-
-    fn get_compilation_info<'a>(
-        &self,
-        scope: &mut v8::HandleScope<'a>,
-    ) -> v8::Local<'a, v8::Promise> {
-        let resolver = v8::PromiseResolver::new(scope).unwrap();
-        let info = v8::Local::new(scope, self.compilation_info.clone());
-        resolver.resolve(scope, info.into()).unwrap();
-        resolver.get_promise(scope)
     }
 }
 
@@ -151,45 +140,6 @@ impl GPUCompilationMessage {
                 offset: 0,
                 length: 0,
             },
-        }
-    }
-}
-
-pub struct GPUCompilationInfo {
-    messages: v8::Global<v8::Object>,
-}
-
-impl GarbageCollected for GPUCompilationInfo {}
-
-#[op2]
-impl GPUCompilationInfo {
-    #[getter]
-    #[global]
-    fn messages(&self) -> v8::Global<v8::Object> {
-        self.messages.clone()
-    }
-}
-
-impl GPUCompilationInfo {
-    pub fn new<'args, 'scope>(
-        scope: &mut v8::HandleScope<'scope>,
-        messages: impl ExactSizeIterator<Item = &'args pipeline::CreateShaderModuleError>,
-        source: &'args str,
-    ) -> Self {
-        let array = v8::Array::new(scope, messages.len().try_into().unwrap());
-        for (i, message) in messages.enumerate() {
-            let message_object =
-                make_cppgc_object(scope, GPUCompilationMessage::new(message, source));
-            array.set_index(scope, i.try_into().unwrap(), message_object.into());
-        }
-
-        let object: v8::Local<v8::Object> = array.into();
-        object
-            .set_integrity_level(scope, v8::IntegrityLevel::Frozen)
-            .unwrap();
-
-        Self {
-            messages: v8::Global::new(scope, object),
         }
     }
 }

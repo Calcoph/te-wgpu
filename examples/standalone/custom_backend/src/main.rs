@@ -34,7 +34,7 @@ async fn main() {
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: wgpu::ShaderSource::Dummy(PhantomData),
-        });
+        }).unwrap();
 
         let custom_module = module.as_custom::<CustomShaderModule>().unwrap();
         assert_eq!(custom_module.0.count(), 6);

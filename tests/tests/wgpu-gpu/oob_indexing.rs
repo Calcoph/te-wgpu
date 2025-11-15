@@ -21,7 +21,7 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
 
         let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
         {
-            let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap();
+            let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap().unwrap();
             compute_pass.set_pipeline(&test_resources.pipeline).unwrap();
             compute_pass.set_bind_group(0, &test_resources.bind_group, &[]).unwrap();
             compute_pass.dispatch_workgroups(1, 1, 1).unwrap();
@@ -434,7 +434,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
 
     let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
     {
-        let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap();
+        let mut compute_pass = encoder.begin_compute_pass(&Default::default()).unwrap().unwrap();
         compute_pass.set_pipeline(&pipeline).unwrap();
         compute_pass.set_bind_group(0, &bind_group, &[256, 256]).unwrap();
         compute_pass.dispatch_workgroups(1, 1, 1).unwrap();

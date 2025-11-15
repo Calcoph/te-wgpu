@@ -874,17 +874,6 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
             push_constant_data: Vec::new(),
         }
     }
-
-    fn new_invalid(label: &Label, err: E) -> Self {
-        Self {
-            label: label.as_deref().map(str::to_owned),
-            error: Some(err),
-            commands: Vec::new(),
-            dynamic_offsets: Vec::new(),
-            string_data: Vec::new(),
-            push_constant_data: Vec::new(),
-        }
-    }
 }
 
 /// Checks the state of a [`compute::ComputePass`] or [`render::RenderPass`] and
@@ -1106,8 +1095,8 @@ impl Global {
         // Errors related to destroyed resources are not reported until the
         // command buffer is submitted.
         match cmd_buf.data.lock().finish() {
-            Err(e) if !e.is_destroyed_error() => Some(e),
-            _ => None,
+            Err(e) if !e.is_destroyed_error() => Err(e),
+            _ => Ok(()),
         }?;
 
         Ok(encoder_id.into_command_buffer_id())

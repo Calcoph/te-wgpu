@@ -300,19 +300,6 @@ impl RenderPass {
         }
     }
 
-    fn new_invalid(parent: Arc<CommandBuffer>, label: &Label, err: RenderPassError) -> Self {
-        Self {
-            base: BasePass::new_invalid(label, err),
-            parent: Some(parent),
-            color_attachments: ArrayVec::new(),
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            current_bind_groups: BindGroupStateChange::new(),
-            current_pipeline: StateChange::new(),
-        }
-    }
-
     #[inline]
     pub fn label(&self) -> Option<&str> {
         self.base.label.as_deref()
@@ -1540,7 +1527,7 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &RenderPassDescriptor<'_>,
-    ) -> Result<RenderPass, CommandEncoderError> {
+    ) -> Result<Option<RenderPass>, CommandEncoderError> {
         use EncoderStateError as SErr;
 
         fn fill_arc_desc(
@@ -1678,13 +1665,8 @@ impl Global {
                     depth_stencil_attachment: None,
                     occlusion_query_set: None,
                 };
-                match fill_arc_desc(hub, desc, &mut arc_desc, &cmd_buf.device) {
-                    Ok(()) => (RenderPass::new(cmd_buf, arc_desc), None),
-                    Err(err) => (
-                        RenderPass::new_invalid(cmd_buf, &desc.label, err.map_pass_err(scope)),
-                        None,
-                    ),
-                }
+                fill_arc_desc(hub, desc, &mut arc_desc, &cmd_buf.device).map_err(|inner| CommandEncoderError::RenderPass(RenderPassError { scope, inner }))?;
+                Ok(None)
             }
             Err(err @ SErr::Locked) => {
                 // Attempting to open a new pass while the encoder is locked
@@ -1692,19 +1674,13 @@ impl Global {
                 // error.
                 cmd_buf_data.invalidate(err.clone());
                 drop(cmd_buf_data);
-                (
-                    RenderPass::new_invalid(cmd_buf, &desc.label, err.map_pass_err(scope)),
-                    None,
-                )
+                Ok(None)
             }
             Err(err @ (SErr::Ended | SErr::Submitted)) => {
                 // Attempting to open a new pass after the encode has ended
                 // generates an immediate validation error.
                 drop(cmd_buf_data);
-                (
-                    RenderPass::new_invalid(cmd_buf, &desc.label, err.clone().map_pass_err(scope)),
-                    Some(err.into()),
-                )
+                Err(CommandEncoderError::State(err))?
             }
             Err(err @ SErr::Invalid) => {
                 // Passes can be opened even on an invalid encoder. Such passes
@@ -1713,10 +1689,7 @@ impl Global {
                 // commands that will ultimately be discarded, we open an
                 // invalid pass to save that work.
                 drop(cmd_buf_data);
-                (
-                    RenderPass::new_invalid(cmd_buf, &desc.label, err.map_pass_err(scope)),
-                    None,
-                )
+                Ok(None)
             }
             Err(SErr::Unlocked) => {
                 unreachable!("lock_encoder cannot fail due to the encoder being unlocked")
@@ -1773,7 +1746,7 @@ impl Global {
             push_constant_data,
         } = base;
 
-        let mut render_pass = self.command_encoder_begin_render_pass(
+        let render_pass = self.command_encoder_begin_render_pass(
             encoder_id,
             &RenderPassDescriptor {
                 label: label.as_deref().map(Cow::Borrowed),
@@ -1783,6 +1756,10 @@ impl Global {
                 occlusion_query_set,
             },
         ).unwrap();
+
+        let Some(mut render_pass) = render_pass else {
+            return;
+        };
 
         render_pass.base = BasePass {
             label,

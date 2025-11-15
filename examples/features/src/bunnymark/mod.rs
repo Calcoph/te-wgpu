@@ -124,7 +124,7 @@ impl Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-            }).unwrap();
+            }).unwrap().unwrap();
             rpass.set_pipeline(&self.pipeline).unwrap();
             rpass.set_bind_group(0, &self.global_group, &[]).unwrap();
             for i in 0..self.bunnies.len() {

@@ -71,13 +71,16 @@ impl CommandEncoder {
     pub fn begin_render_pass<'encoder>(
         &'encoder mut self,
         desc: &RenderPassDescriptor<'_>,
-    ) -> Result<RenderPass<'encoder>, wgc::command::CommandEncoderError> {
+    ) -> Result<Option<RenderPass<'encoder>>, wgc::command::CommandEncoderError> {
         let rpass = self.inner.begin_render_pass(desc)?;
+        let Some(rpass) = rpass else {
+            return Ok(None);
+        };
         Ok(
-        RenderPass {
+        Some(RenderPass {
             inner: rpass,
             _encoder_guard: api::PhantomDrop::default(),
-        }
+        })
         )
     }
 
@@ -94,13 +97,16 @@ impl CommandEncoder {
     pub fn begin_compute_pass<'encoder>(
         &'encoder mut self,
         desc: &ComputePassDescriptor<'_>,
-    ) -> Result<ComputePass<'encoder>, wgc::command::CommandEncoderError> {
+    ) -> Result<Option<ComputePass<'encoder>>, wgc::command::CommandEncoderError> {
         let cpass = self.inner.begin_compute_pass(desc)?;
+        let Some(cpass) = cpass else {
+            return Ok(None);
+        };
         Ok(
-        ComputePass {
+        Some(ComputePass {
             inner: cpass,
             _encoder_guard: api::PhantomDrop::default(),
-        }
+        })
         )
     }
 
@@ -118,7 +124,7 @@ impl CommandEncoder {
         destination: &Buffer,
         destination_offset: BufferAddress,
         copy_size: impl Into<Option<BufferAddress>>,
-    ) -> Result<(), wgc::command::CopyError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.inner.copy_buffer_to_buffer(
             &source.inner,
             source_offset,
@@ -134,7 +140,7 @@ impl CommandEncoder {
         source: TexelCopyBufferInfo<'_>,
         destination: TexelCopyTextureInfo<'_>,
         copy_size: Extent3d,
-    ) -> Result<(), wgc::command::CopyError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.inner
             .copy_buffer_to_texture(source, destination, copy_size)
     }
@@ -145,7 +151,7 @@ impl CommandEncoder {
         source: TexelCopyTextureInfo<'_>,
         destination: TexelCopyBufferInfo<'_>,
         copy_size: Extent3d,
-    ) -> Result<(), wgc::command::CopyError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.inner
             .copy_texture_to_buffer(source, destination, copy_size)
     }
@@ -162,7 +168,7 @@ impl CommandEncoder {
         source: TexelCopyTextureInfo<'_>,
         destination: TexelCopyTextureInfo<'_>,
         copy_size: Extent3d,
-    ) -> Result<(), wgc::command::CopyError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.inner
             .copy_texture_to_texture(source, destination, copy_size)
     }
@@ -180,7 +186,7 @@ impl CommandEncoder {
     ///
     /// - `CLEAR_TEXTURE` extension not enabled
     /// - Range is out of bounds
-    pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) -> Result<(), wgc::command::ClearError> {
+    pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) -> Result<(), wgc::command::EncoderStateError> {
         self.inner.clear_texture(&texture.inner, subresource_range)
     }
 
@@ -195,22 +201,22 @@ impl CommandEncoder {
         buffer: &Buffer,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-    ) -> Result<(), wgc::command::ClearError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.inner.clear_buffer(&buffer.inner, offset, size)
     }
 
     /// Inserts debug marker.
-    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::CommandEncoderError> {
+    pub fn insert_debug_marker(&mut self, label: &str) -> Result<(), wgc::command::EncoderStateError> {
         self.inner.insert_debug_marker(label)
     }
 
     /// Start record commands and group it into debug marker group.
-    pub fn push_debug_group(&mut self, label: &str) -> Result<(), wgc::command::CommandEncoderError> {
+    pub fn push_debug_group(&mut self, label: &str) -> Result<(), wgc::command::EncoderStateError> {
         self.inner.push_debug_group(label)
     }
 
     /// Stops command recording and creates debug group.
-    pub fn pop_debug_group(&mut self) -> Result<(), wgc::command::CommandEncoderError> {
+    pub fn pop_debug_group(&mut self) -> Result<(), wgc::command::EncoderStateError> {
         self.inner.pop_debug_group()
     }
 
@@ -226,7 +232,7 @@ impl CommandEncoder {
         query_range: Range<u32>,
         destination: &Buffer,
         destination_offset: BufferAddress,
-    ) -> Result<(), wgc::command::QueryError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.inner.resolve_query_set(
             &query_set.inner,
             query_range.start,
@@ -285,7 +291,7 @@ impl CommandEncoder {
     /// there is no strict guarantee that timestamps are taken after all commands
     /// recorded so far and all before all commands recorded after.
     /// This may depend both on the backend and the driver.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::QueryError> {
+    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) -> Result<(), wgc::command::EncoderStateError> {
         self.inner.write_timestamp(&query_set.inner, query_index)
     }
 }
@@ -304,7 +310,7 @@ impl CommandEncoder {
         &self,
         blas: impl IntoIterator<Item = &'a Blas>,
         tlas: impl IntoIterator<Item = &'a Tlas>,
-    ) -> Result<(), wgc::ray_tracing::BuildAccelerationStructureError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.inner
             .mark_acceleration_structures_built(&mut blas.into_iter(), &mut tlas.into_iter())
     }
@@ -343,7 +349,7 @@ impl CommandEncoder {
         &mut self,
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
         tlas: impl IntoIterator<Item = &'a Tlas>,
-    ) -> Result<(), wgc::ray_tracing::BuildAccelerationStructureError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.inner
             .build_acceleration_structures(&mut blas.into_iter(), &mut tlas.into_iter())
     }
@@ -399,7 +405,7 @@ impl CommandEncoder {
         &mut self,
         buffer_transitions: impl Iterator<Item = wgt::BufferTransition<&'a Buffer>>,
         texture_transitions: impl Iterator<Item = wgt::TextureTransition<&'a Texture>>,
-    ) -> Result<(), wgc::command::transition_resources::TransitionResourcesError> {
+    ) -> Result<(), wgc::command::EncoderStateError> {
         self.inner.transition_resources(
             &mut buffer_transitions.map(|t| wgt::BufferTransition {
                 buffer: &t.buffer.inner,

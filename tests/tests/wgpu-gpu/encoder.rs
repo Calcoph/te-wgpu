@@ -1,5 +1,5 @@
-use wgpu::{util::DeviceExt, ComputePass};
-use wgpu::{CommandEncoder, RenderPass};
+use wgpu::{util::DeviceExt};
+use wgpu::{CommandEncoder};
 use wgpu_test::{
     fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
 };
@@ -67,13 +67,13 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        }).unwrap();
+        }).unwrap().unwrap();
 
         // This viewport is invalid because it has negative size.
         renderpass.set_viewport(0.0, 0.0, -1.0, -1.0, 0.0, 1.0).unwrap();
         drop(renderpass);
 
-        fail(&ctx.device, || encoder.finish(), Some("less than zero"));
+        fail(|| encoder.finish(), Some("less than zero"));
     });
 
 #[gpu_test]
@@ -278,6 +278,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
                 encoder
                     .begin_compute_pass(&wgpu::ComputePassDescriptor::default())
                     .unwrap()
+                    .unwrap()
                     .forget_lifetime(),
             ),
             PassType::Render => Box::new(
@@ -291,6 +292,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
                         })],
                         ..Default::default()
                     })
+                    .unwrap()
                     .unwrap()
                     .forget_lifetime(),
             ),
@@ -308,9 +310,9 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
             let pass = create_pass(&mut encoder, pass_type);
 
             log::info!("Testing operation {op_name:?} on a locked command encoder while a {pass_type:?} pass is active");
-            op(&mut encoder);
+            op(&mut encoder).unwrap();
 
-            fail(&ctx.device, || encoder.finish(), Some("encoder is locked"));
+            fail(|| encoder.finish(), Some("encoder is locked"));
 
             drop(pass);
 
@@ -322,11 +324,11 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
             let pass = create_pass(&mut encoder, pass_type);
 
             log::info!("Testing operation {op_name:?} on a locked command encoder while a {pass_type:?} pass is active");
-            op(&mut encoder);
+            op(&mut encoder).unwrap();
 
             drop(pass);
 
-            fail(&ctx.device, || encoder.finish(), Some("encoder is locked"));
+            fail(|| encoder.finish(), Some("encoder is locked"));
         }
     }
 }

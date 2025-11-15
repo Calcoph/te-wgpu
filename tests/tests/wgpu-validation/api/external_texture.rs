@@ -18,7 +18,7 @@ fn external_texture_binding_texture_view() {
             ty: BindingType::ExternalTexture,
             count: None,
         }],
-    });
+    }).unwrap();
 
     let texture_descriptor = TextureDescriptor {
         label: None,
@@ -35,9 +35,9 @@ fn external_texture_binding_texture_view() {
         view_formats: &[],
     };
 
-    let texture = device.create_texture(&texture_descriptor);
-    let view = texture.create_view(&TextureViewDescriptor::default());
-    valid(&device, || {
+    let texture = device.create_texture(&texture_descriptor).unwrap();
+    let view = texture.create_view(&TextureViewDescriptor::default()).unwrap();
+    valid(|| {
         device.create_bind_group(&BindGroupDescriptor {
             label: None,
             layout: &bgl,
@@ -52,10 +52,9 @@ fn external_texture_binding_texture_view() {
     let texture = device.create_texture(&TextureDescriptor {
         usage: TextureUsages::STORAGE_BINDING,
         ..texture_descriptor
-    });
-    let view = texture.create_view(&TextureViewDescriptor::default());
+    }).unwrap();
+    let view = texture.create_view(&TextureViewDescriptor::default()).unwrap();
     fail(
-        &device,
         || {
             device.create_bind_group(&BindGroupDescriptor {
                 label: None,
@@ -73,10 +72,9 @@ fn external_texture_binding_texture_view() {
     let texture = device.create_texture(&TextureDescriptor {
         dimension: TextureDimension::D3,
         ..texture_descriptor
-    });
-    let view = texture.create_view(&TextureViewDescriptor::default());
+    }).unwrap();
+    let view = texture.create_view(&TextureViewDescriptor::default()).unwrap();
     fail(
-        &device,
         || {
             device.create_bind_group(&BindGroupDescriptor {
                 label: None,
@@ -94,10 +92,9 @@ fn external_texture_binding_texture_view() {
     let texture = device.create_texture(&TextureDescriptor {
         mip_level_count: 2,
         ..texture_descriptor
-    });
-    let view = texture.create_view(&TextureViewDescriptor::default());
+    }).unwrap();
+    let view = texture.create_view(&TextureViewDescriptor::default()).unwrap();
     fail(
-        &device,
         || {
 
             device.create_bind_group(&BindGroupDescriptor {
@@ -118,10 +115,10 @@ fn external_texture_binding_texture_view() {
     let texture = device.create_texture(&TextureDescriptor {
         format: TextureFormat::Rgba8Uint,
         ..texture_descriptor
-    });
-    let view = texture.create_view(&TextureViewDescriptor::default());
+    }).unwrap();
+    let view = texture.create_view(&TextureViewDescriptor::default()).unwrap();
     fail(
-        &device,
+
         || {
 
             device.create_bind_group(&BindGroupDescriptor {
@@ -143,10 +140,9 @@ fn external_texture_binding_texture_view() {
         sample_count: 4,
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
         ..texture_descriptor
-    });
-    let view = texture.create_view(&TextureViewDescriptor::default());
+    }).unwrap();
+    let view = texture.create_view(&TextureViewDescriptor::default()).unwrap();
     fail(
-        &device,
         || {
             device.create_bind_group(&BindGroupDescriptor {
                 label: None,

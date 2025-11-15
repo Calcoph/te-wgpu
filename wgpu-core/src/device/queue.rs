@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, string::ToString, sync::Arc, vec, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
 use core::{
     iter,
     mem::{self, ManuallyDrop},
@@ -1679,7 +1679,7 @@ impl Global {
         queue_id: QueueId,
         blas_id: BlasId,
         id_in: Option<BlasId>,
-    ) -> (BlasId, Option<u64>, Option<CompactBlasError>) {
+    ) -> Result<(BlasId, u64), CompactBlasError> {
         api_log!("Queue::compact_blas {queue_id:?}, {blas_id:?}");
 
         let fid = self.hub.blas_s.prepare(id_in);
@@ -1717,12 +1717,10 @@ impl Global {
 
             api_log!("CommandEncoder::compact_blas {blas_id:?} (size: {old_blas_size}) -> {id:?} (size: {new_blas_size})");
 
-            return (id, Some(handle), None);
+            return Ok((id, handle));
         };
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(error.to_string())));
-
-        (id, None, Some(error))
+        Err(error)
     }
 }
 

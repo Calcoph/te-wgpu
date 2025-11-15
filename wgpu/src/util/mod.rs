@@ -23,7 +23,7 @@ pub use encoder::RenderEncoder;
 pub use init::*;
 #[cfg(feature = "wgsl")]
 pub use texture_blitter::{TextureBlitter, TextureBlitterBuilder};
-use wgc::command::{CommandEncoderError, CopyError};
+use wgc::command::CommandEncoderError;
 use wgc::device::queue::QueueSubmitError;
 use wgc::device::DeviceError;
 use wgc::resource::{BufferAccessError, CreateBufferError};
@@ -125,9 +125,9 @@ impl From<BufferAccessError> for ReadBufferError {
     }
 }
 
-impl From<CopyError> for ReadBufferError {
-    fn from(value: CopyError) -> Self {
-        ReadBufferError::CError(value)
+impl From<wgc::command::EncoderStateError> for ReadBufferError {
+    fn from(value: wgc::command::EncoderStateError) -> Self {
+        ReadBufferError::ESError(value)
     }
 }
 
@@ -142,10 +142,10 @@ pub enum ReadBufferError {
     CEError(CommandEncoderError),
     /// BufferAccessError
     BAError(BufferAccessError),
-    /// CopyError
-    CError(CopyError),
     /// QueueSubmitError
-    QSError(QueueSubmitError)
+    QSError(QueueSubmitError),
+    /// EncoderStateError
+    ESError(wgc::command::EncoderStateError),
 }
 
 impl DownloadBuffer {

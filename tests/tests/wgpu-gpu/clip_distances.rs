@@ -12,7 +12,7 @@ async fn clip_distances(ctx: TestingContext) {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
-        });
+        }).unwrap();
     let pipeline = ctx
         .device
         .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -39,7 +39,7 @@ async fn clip_distances(ctx: TestingContext) {
             }),
             multiview: None,
             cache: None,
-        });
+        }).unwrap();
 
     // Create render target
     let render_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -55,12 +55,12 @@ async fn clip_distances(ctx: TestingContext) {
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
-    });
+    }).unwrap();
 
     // Perform render
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default()).unwrap();
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -75,15 +75,15 @@ async fn clip_distances(ctx: TestingContext) {
                     store: wgpu::StoreOp::Store,
                 },
                 resolve_target: None,
-                view: &render_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                view: &render_texture.create_view(&wgpu::TextureViewDescriptor::default()).unwrap(),
                 depth_slice: None,
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-        });
-        rpass.set_pipeline(&pipeline);
-        rpass.draw(0..3, 0..1);
+        }).unwrap().unwrap();
+        rpass.set_pipeline(&pipeline).unwrap();
+        rpass.draw(0..3, 0..1).unwrap();
     }
 
     // Read texture data
@@ -92,7 +92,7 @@ async fn clip_distances(ctx: TestingContext) {
         size: 256 * 256,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
-    });
+    }).unwrap();
     encoder.copy_texture_to_buffer(
         wgpu::TexelCopyTextureInfo {
             texture: &render_texture,
@@ -113,10 +113,10 @@ async fn clip_distances(ctx: TestingContext) {
             height: 256,
             depth_or_array_layers: 1,
         },
-    );
-    ctx.queue.submit([encoder.finish()]);
+    ).unwrap();
+    ctx.queue.submit([encoder.finish().unwrap()]).unwrap();
     let slice = readback_buffer.slice(..);
-    slice.map_async(wgpu::MapMode::Read, |_| ());
+    slice.map_async(wgpu::MapMode::Read, |_| ()).unwrap();
     ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
     let data: &[u8] = &slice.get_mapped_range();
 

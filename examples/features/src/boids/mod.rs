@@ -291,7 +291,7 @@ impl crate::framework::Example for Example {
             let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
                 timestamp_writes: None,
-            }).unwrap();
+            }).unwrap().unwrap();
             cpass.set_pipeline(&self.compute_pipeline).unwrap();
             cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]).unwrap();
             cpass.dispatch_workgroups(self.work_group_count, 1, 1).unwrap();
@@ -301,7 +301,7 @@ impl crate::framework::Example for Example {
         command_encoder.push_debug_group("render boids").unwrap();
         {
             // render pass
-            let mut rpass = command_encoder.begin_render_pass(&render_pass_descriptor).unwrap();
+            let mut rpass = command_encoder.begin_render_pass(&render_pass_descriptor).unwrap().unwrap();
             rpass.set_pipeline(&self.render_pipeline).unwrap();
             // render dst particles
             rpass.set_vertex_buffer(0, self.particle_buffers[(self.frame_num + 1) % 2].slice(..)).unwrap();

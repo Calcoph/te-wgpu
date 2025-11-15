@@ -354,7 +354,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                     label: None,
                     timestamp_writes: None,
-                }).unwrap();
+                }).unwrap().unwrap();
 
                 pass.set_bind_group(0, &bind_group, &[]).unwrap();
                 pass.set_pipeline(&pipeline).unwrap();
@@ -385,11 +385,10 @@ static CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS: GpuTestConfiguration = GpuTestConfi
 
         let out_of_bounds = size.checked_add(wgpu::COPY_BUFFER_ALIGNMENT).unwrap();
 
-        let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
         encoder.clear_buffer(&buffer, out_of_bounds, None);
 
         wgpu_test::fail(
-            &ctx.device,
             || encoder.finish(),
             Some("Clear of 20..20 would end up overrunning the bounds of the buffer of size 16"),
         );
@@ -413,7 +412,7 @@ static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
             let max_valid_offset = u64::MAX - (u64::MAX % wgpu::COPY_BUFFER_ALIGNMENT);
             let smallest_aligned_invalid_size = wgpu::COPY_BUFFER_ALIGNMENT;
 
-            let mut encoder = ctx.device.create_command_encoder(&Default::default());
+            let mut encoder = ctx.device.create_command_encoder(&Default::default()).unwrap();
             encoder.clear_buffer(
                 &buffer,
                 max_valid_offset,
@@ -421,7 +420,6 @@ static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
             );
 
             wgpu_test::fail(
-                &ctx.device,
                 || encoder.finish(),
                 Some(concat!(
                     "Clear starts at offset 18446744073709551612 with size of 4, ",

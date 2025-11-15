@@ -138,7 +138,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
         let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: None,
             timestamp_writes: None,
-        }).unwrap();
+        }).unwrap().unwrap();
         pass.set_pipeline(&compute_pipeline).unwrap();
         pass.set_bind_group(0, Some(&bind_group), &[]).unwrap();
         pass.dispatch_workgroups(1, 1, 1).unwrap()

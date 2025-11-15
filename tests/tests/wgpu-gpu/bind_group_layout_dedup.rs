@@ -90,7 +90,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    }).unwrap();
+    }).unwrap().unwrap();
 
     pass.set_bind_group(0, &bg_1b, &[]).unwrap();
     pass.set_pipeline(&pipeline).unwrap();
@@ -191,7 +191,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    }).unwrap();
+    }).unwrap().unwrap();
 
     pass.set_bind_group(0, &bg, &[]).unwrap();
     pass.set_pipeline(&pipeline).unwrap();
@@ -271,7 +271,7 @@ fn get_derived_bgl(ctx: TestingContext) {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    }).unwrap();
+    }).unwrap().unwrap();
 
     pass.set_pipeline(&pipeline).unwrap();
 
@@ -340,7 +340,7 @@ fn separate_pipelines_have_incompatible_derived_bgls(ctx: TestingContext) {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    }).unwrap();
+    }).unwrap().unwrap();
 
     pass.set_pipeline(&pipeline1).unwrap();
 
@@ -351,7 +351,6 @@ fn separate_pipelines_have_incompatible_derived_bgls(ctx: TestingContext) {
     drop(pass);
 
     fail(
-        &ctx.device,
         || encoder.finish(),
         Some("label at index 0 is not compatible with the corresponding bindgrouplayout"),
     );
@@ -425,7 +424,7 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    }).unwrap();
+    }).unwrap().unwrap();
 
     pass.set_pipeline(&pipeline).unwrap();
 
@@ -435,7 +434,6 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
     drop(pass);
 
     fail(
-        &ctx.device,
         || encoder.finish(),
         Some("label at index 0 is not compatible with the corresponding bindgrouplayout"),
     );
@@ -519,7 +517,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: None,
         timestamp_writes: None,
-    }).unwrap();
+    }).unwrap().unwrap();
     pass.set_pipeline(&pipeline).unwrap();
     pass.set_bind_group(0, &bind_group_0, &[]).unwrap();
     pass.set_bind_group(1, &bind_group_1, &[]).unwrap();
