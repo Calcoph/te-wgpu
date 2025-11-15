@@ -95,6 +95,7 @@ impl crate::Instance for Context {
                 },
             name: _,
             flags: _,
+            memory_budget_thresholds: _,
         } = *desc;
         if enable {
             Ok(Context)
@@ -176,6 +177,10 @@ const CAPABILITIES: crate::Capabilities = {
             max_subgroup_size: ALLOC_MAX_U32,
             max_push_constant_size: ALLOC_MAX_U32,
             max_non_sampler_bindings: ALLOC_MAX_U32,
+            max_blas_primitive_count: ALLOC_MAX_U32,
+            max_blas_geometry_count: ALLOC_MAX_U32,
+            max_tlas_instance_count: ALLOC_MAX_U32,
+            max_acceleration_structures_per_shader_stage: ALLOC_MAX_U32,
         },
         alignments: crate::Alignments {
             // All maximally permissive
@@ -456,5 +461,9 @@ impl crate::Device for Context {
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
         Default::default()
+    }
+
+    fn check_if_oom(&self) -> DeviceResult<()> {
+        Ok(())
     }
 }

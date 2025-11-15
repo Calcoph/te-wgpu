@@ -3,7 +3,7 @@ Tests for the WGSL front end.
 */
 #![cfg(feature = "wgsl-in")]
 
-use naga::valid::Capabilities;
+use naga::{compact::KeepUnused, valid::Capabilities};
 
 #[track_caller]
 fn check(input: &str, snapshot: &str) {
@@ -291,15 +291,15 @@ fn constructor_parameter_type_mismatch() {
                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
             }
         "#,
-        r#"error: automatic conversions cannot convert `array<{AbstractInt}, 2>` to `vec2<f32>`
+        "error: automatic conversions cannot convert `array<{AbstractInt}, 2>` to `vec2<f32>`
   ┌─ wgsl:3:21
   │
 3 │                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
   │                     ^^^^^^^^^^^ ^^^^^^^^^^^ this expression has type array<{AbstractInt}, 2>
-  │                     │            
+  │                     │\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20
   │                     a value of type vec2<f32> is required here
 
-"#,
+",
     );
 }
 
@@ -1290,6 +1290,127 @@ fn invalid_structs() {
 }
 
 #[test]
+fn struct_type_mismatch_in_assignment() {
+    check_validation!(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+        fn main() {
+            var x: Bar = Bar(1);
+            x = Foo(1);
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            handle: _,
+            name: function_name,
+            source: naga::valid::FunctionError::InvalidStoreTypes { .. },
+        })
+        // The validation error is reported at the call, i.e., in `main`
+        if function_name == "main"
+    );
+}
+
+#[test]
+fn struct_type_mismatch_in_let_decl() {
+    check(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+        fn main() {
+            let x: Bar = Foo(1);
+        }
+        ",
+        "error: the type of `x` is expected to be `Bar`, but got `Foo`
+  ┌─ wgsl:5:17
+  │
+5 │             let x: Bar = Foo(1);
+  │                 ^ definition of `x`
+
+",
+    );
+}
+
+#[test]
+fn struct_type_mismatch_in_return_value() {
+    check_validation!(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+        fn bar() -> Bar {
+            return Foo(1);
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            handle: _,
+            name: function_name,
+            source: naga::valid::FunctionError::InvalidReturnType { .. }
+        }) if function_name == "bar"
+    );
+}
+
+#[test]
+fn struct_type_mismatch_in_argument() {
+    check_validation!(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+        fn bar(a: Bar) {}
+        fn main() {
+            bar(Foo(1));
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            name: function_name,
+            source: naga::valid::FunctionError::InvalidCall {
+                function: _,
+                error: naga::valid::CallError::ArgumentType { index, .. },
+            },
+            ..
+        })
+        // The validation error is reported at the call, i.e., in `main`
+        if function_name == "main" && *index == 0
+    );
+}
+
+#[test]
+fn struct_type_mismatch_in_global_var() {
+    check(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+
+        var<uniform> foo: Foo = Bar(1);
+        ",
+        "error: the type of `foo` is expected to be `Foo`, but got `Bar`
+  ┌─ wgsl:5:22
+  │
+5 │         var<uniform> foo: Foo = Bar(1);
+  │                      ^^^ definition of `foo`
+
+",
+    );
+}
+
+#[test]
+fn struct_type_mismatch_in_global_const() {
+    check(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+
+        const foo: Foo = Bar(1);
+        ",
+        "error: the type of `foo` is expected to be `Foo`, but got `Bar`
+  ┌─ wgsl:5:15
+  │
+5 │         const foo: Foo = Bar(1);
+  │               ^^^ definition of `foo`
+
+",
+    );
+}
+
+#[test]
 fn invalid_functions() {
     check_validation! {
         "fn unacceptable_unsized(arg: array<f32>) { }",
@@ -1408,7 +1529,7 @@ fn invalid_return_type() {
     check_validation! {
         "fn invalid_return_type() -> i32 { return 0u; }":
         Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::InvalidReturnType(Some(_)),
+            source: naga::valid::FunctionError::InvalidReturnType { .. },
             ..
         })
     };
@@ -1859,37 +1980,6 @@ fn invalid_local_vars() {
 }
 
 #[test]
-fn dead_code() {
-    check_validation! {
-        "
-        fn dead_code_after_if(condition: bool) -> i32 {
-            if (condition) {
-                return 1;
-            } else {
-                return 2;
-            }
-            return 3;
-        }
-        ":
-        Ok(_)
-    }
-    check_validation! {
-        "
-        fn dead_code_after_block() -> i32 {
-            {
-                return 1;
-            }
-            return 2;
-        }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::InstructionsAfterReturn,
-            ..
-        })
-    }
-}
-
-#[test]
 fn invalid_runtime_sized_arrays() {
     // You can't have structs whose last member is an unsized struct. An unsized
     // array may only appear as the last member of a struct used directly as a
@@ -1922,8 +2012,9 @@ fn invalid_runtime_sized_arrays() {
 
 #[test]
 fn select() {
-    check_validation! {
-        "
+    let snapshots = [
+        (
+            "
         fn select_pointers(which: bool) -> i32 {
             var x: i32 = 1;
             var y: i32 = 2;
@@ -1931,7 +2022,19 @@ fn select() {
             return *p;
         }
         ",
-        "
+            "\
+error: unexpected argument type for `select` call
+  ┌─ wgsl:5:28
+  │
+5 │             let p = select(&x, &y, which);
+  │                            ^^ this value of type `ptr<function, i32>`
+  │
+  = note: expected a scalar or a `vecN` of scalars
+
+",
+        ),
+        (
+            "
         fn select_arrays(which: bool) -> i32 {
             var x: array<i32, 4>;
             var y: array<i32, 4>;
@@ -1939,7 +2042,19 @@ fn select() {
             return s[0];
         }
         ",
-        "
+            "\
+error: unexpected argument type for `select` call
+  ┌─ wgsl:5:28
+  │
+5 │             let s = select(x, y, which);
+  │                            ^ this value of type `array<i32, 4>`
+  │
+  = note: expected a scalar or a `vecN` of scalars
+
+",
+        ),
+        (
+            "
         struct S { member: i32 }
         fn select_structs(which: bool) -> S {
             var x: S = S(1);
@@ -1947,18 +2062,58 @@ fn select() {
             let s = select(x, y, which);
             return s;
         }
-        ":
-        Err(
-            naga::valid::ValidationError::Function {
-                name,
-                source: naga::valid::FunctionError::Expression {
-                    source: naga::valid::ExpressionError::SelectConditionNotABool { .. },
-                    ..
-                },
-                ..
-            },
-        )
-        if name.starts_with("select_")
+        ",
+            "\
+error: unexpected argument type for `select` call
+  ┌─ wgsl:6:28
+  │
+6 │             let s = select(x, y, which);
+  │                            ^ this value of type `S`
+  │
+  = note: expected a scalar or a `vecN` of scalars
+
+",
+        ),
+        (
+            "
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `9001` isn't a `bool`.
+            _ = select(1, 2, 9001);
+        }
+        ",
+            "\
+error: Expected boolean expression for condition argument of `select`, got something else
+  ┌─ wgsl:5:17
+  │
+5 │             _ = select(1, 2, 9001);
+  │                 ^^^^^^ see msg
+
+",
+        ),
+        (
+            "
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `bool` and abstract int args. don't match.
+            _ = select(true, 1, false);
+        }
+        ",
+            "\
+error: type mismatch for reject and accept values in `select` call
+  ┌─ wgsl:5:24
+  │
+5 │             _ = select(true, 1, false);
+  │                        ^^^^  ^ accept value of type `{AbstractInt}`
+  │                        │      
+  │                        reject value of type `bool`
+
+",
+        ),
+    ];
+
+    for (input, snapshot) in snapshots {
+        check(input, snapshot);
     }
 }
 
@@ -2576,15 +2731,15 @@ fn function_param_redefinition_as_param() {
         "
         fn x(a: f32, a: vec2<f32>) {}
     ",
-        r###"error: redefinition of `a`
+        "error: redefinition of `a`
   ┌─ wgsl:2:14
   │
 2 │         fn x(a: f32, a: vec2<f32>) {}
   │              ^       ^ redefinition of `a`
-  │              │        
+  │              │\x20\x20\x20\x20\x20\x20\x20\x20
   │              previous definition of `a`
 
-"###,
+",
     )
 }
 
@@ -2606,6 +2761,25 @@ fn function_param_redefinition_as_local() {
 
 "###,
     )
+}
+
+#[test]
+fn struct_redefinition() {
+    check(
+        "
+        struct Foo { a: u32 };
+        struct Foo { a: u32 };
+    ",
+        "error: redefinition of `Foo`
+  ┌─ wgsl:2:16
+  │
+2 │         struct Foo { a: u32 };
+  │                ^^^ previous definition of `Foo`
+3 │         struct Foo { a: u32 };
+  │                ^^^ redefinition of `Foo`
+
+",
+    );
 }
 
 #[test]
@@ -2635,7 +2809,7 @@ fn function_must_return_value() {
         "fn func() -> i32 {
         }":
         Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::InvalidReturnType(_),
+            source: naga::valid::FunctionError::InvalidReturnType { .. },
             ..
         })
     );
@@ -2644,7 +2818,7 @@ fn function_must_return_value() {
             let y = x + 10;
         }":
         Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::InvalidReturnType(_),
+            source: naga::valid::FunctionError::InvalidReturnType { .. },
             ..
         })
     );
@@ -2658,15 +2832,15 @@ fn constructor_type_error_span() {
             var a: array<i32, 1> = array<i32, 1>(1.0);
         }
     ",
-        r###"error: automatic conversions cannot convert `{AbstractFloat}` to `i32`
+        "error: automatic conversions cannot convert `{AbstractFloat}` to `i32`
   ┌─ wgsl:3:36
   │
 3 │             var a: array<i32, 1> = array<i32, 1>(1.0);
   │                                    ^^^^^^^^^^^^^ ^^^ this expression has type {AbstractFloat}
-  │                                    │              
+  │                                    │\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20
   │                                    a value of type i32 is required here
 
-"###,
+",
     )
 }
 
@@ -2721,9 +2895,14 @@ fn compaction_preserves_spans() {
            var x: array<i32,1>;
            var y = x[1.0];
         }
-    "#; //         ^^^   correct error span: 108..114
+        @compute @workgroup_size(1)
+        fn main() {
+            f();
+        }
+    "#;
+    // The error span should be on `x[1.0]`, which is at characters 108..114.
     let mut module = naga::front::wgsl::parse_str(source).expect("source ought to parse");
-    naga::compact::compact(&mut module);
+    naga::compact::compact(&mut module, KeepUnused::No);
     let err = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::default(),
@@ -2738,7 +2917,7 @@ fn compaction_preserves_spans() {
     // The first span is the whole function.
     let _ = spans.next().expect("error should have at least one span");
 
-    // The second span is the assignment destination.
+    // The second span is the invalid indexing expression.
     let dest_span = spans
         .next()
         .expect("error should have at least two spans")
@@ -3279,6 +3458,9 @@ fn too_many_arguments_2() {
   │                    ^^^^^^^^              ^^ argument #2 has type `i32`
   │
   = note: `distance` accepts the following types for argument #2:
+  = note: allowed type: f32
+  = note: allowed type: f16
+  = note: allowed type: f64
   = note: allowed type: vec2<f32>
   = note: allowed type: vec2<f16>
   = note: allowed type: vec2<f64>
@@ -3431,4 +3613,132 @@ fn struct_names_in_init_errors() {
     assert!(variant("1i").is_ok());
     assert!(variant("1.0").is_err());
     assert!(variant("A()").is_err());
+}
+
+/// Constant evaluation with interesting values.
+#[test]
+fn const_eval_value_errors() {
+    #[track_caller]
+    fn variant(expr: &str) -> Result<naga::Module, naga::front::wgsl::ParseError> {
+        let input = format!(
+            r#"
+                fn f() {{ _ = {expr}; }}
+            "#
+        );
+        naga::front::wgsl::parse_str(&input)
+    }
+
+    assert!(variant("1/1").is_ok());
+    assert!(variant("1/0").is_err());
+
+    assert!(variant("f32(abs(1))").is_ok());
+    assert!(variant("f32(abs(-9223372036854775807))").is_ok());
+    assert!(variant("f32(abs(-9223372036854775807 - 1))").is_ok());
+}
+
+#[test]
+fn subgroup_invalid_broadcast() {
+    check_validation! {
+        r#"
+            fn main(id: u32) {
+                subgroupBroadcast(123, id);
+            }
+        "#:
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidSubgroup(
+                naga::valid::SubgroupError::InvalidInvocationIdExprType(_),
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SUBGROUP
+    }
+    check_validation! {
+        r#"
+            fn main(id: u32) {
+                quadBroadcast(123, id);
+            }
+        "#:
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidSubgroup(
+                naga::valid::SubgroupError::InvalidInvocationIdExprType(_),
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SUBGROUP
+    }
+}
+
+#[test]
+fn invalid_clip_distances() {
+    // Missing capability.
+    check_validation! {
+        r#"
+            enable clip_distances;
+            struct VertexOutput {
+                @builtin(position) pos: vec4f,
+                @builtin(clip_distances) clip_distances: array<f32, 8>,
+            }
+
+            @vertex
+            fn vs_main() -> VertexOutput {
+                var out: VertexOutput;
+                return out;
+            }
+        "#:
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Vertex,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::UnsupportedCapability(Capabilities::CLIP_DISTANCE),
+                ),
+                ..
+            },
+        )
+    }
+
+    // Missing enable directive.
+    // Note that this is a parsing error, not a validation error.
+    check(
+        r#"
+            @vertex
+            fn vs_main() -> @builtin(clip_distances) array<f32, 8> {
+                var out: array<f32, 8>;
+                return out;
+            }
+        "#,
+        r###"error: the `clip_distances` enable extension is not enabled
+  ┌─ wgsl:3:38
+  │
+3 │             fn vs_main() -> @builtin(clip_distances) array<f32, 8> {
+  │                                      ^^^^^^^^^^^^^^ the `clip_distances` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable clip_distances;` at the top of the shader, before any other items.
+
+"###,
+    );
+
+    // Maximum clip distances exceeded
+    check_validation! {
+        r#"
+            enable clip_distances;
+            struct VertexOutput {
+                @builtin(position) pos: vec4f,
+                @builtin(clip_distances) clip_distances: array<f32, 9>,
+            }
+
+            @vertex
+            fn vs_main() -> VertexOutput {
+                var out: VertexOutput;
+                return out;
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            source: naga::valid::EntryPointError::Result(
+                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance)
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::CLIP_DISTANCE
+    }
 }

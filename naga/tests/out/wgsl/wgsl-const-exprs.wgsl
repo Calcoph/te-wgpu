@@ -3,15 +3,15 @@ const THREE: i32 = 3i;
 const TRUE: bool = true;
 const FALSE: bool = false;
 const FOUR: i32 = 4i;
+const TEXTURE_KIND_REGULAR: i32 = 0i;
+const TEXTURE_KIND_WARP: i32 = 1i;
+const TEXTURE_KIND_SKY: i32 = 2i;
 const FOUR_ALIAS: i32 = 4i;
 const TEST_CONSTANT_ADDITION: i32 = 8i;
 const TEST_CONSTANT_ALIAS_ADDITION: i32 = 8i;
 const PI: f32 = 3.141f;
 const phi_sun: f32 = 6.282f;
 const DIV: vec4<f32> = vec4<f32>(0.44444445f, 0f, 0f, 0f);
-const TEXTURE_KIND_REGULAR: i32 = 0i;
-const TEXTURE_KIND_WARP: i32 = 1i;
-const TEXTURE_KIND_SKY: i32 = 2i;
 const add_vec: vec2<f32> = vec2<f32>(4f, 5f);
 const compare_vec: vec2<bool> = vec2<bool>(true, false);
 
@@ -64,18 +64,6 @@ fn compose_of_constant() {
     return;
 }
 
-fn compose_of_splat() {
-    var x_1: vec4<f32> = vec4<f32>(2f, 1f, 1f, 1f);
-
-    return;
-}
-
-fn test_local_const() {
-    var arr: array<f32, 2>;
-
-    return;
-}
-
 fn map_texture_kind(texture_kind: i32) -> u32 {
     switch texture_kind {
         case 0: {
@@ -91,6 +79,18 @@ fn map_texture_kind(texture_kind: i32) -> u32 {
             return 0u;
         }
     }
+}
+
+fn compose_of_splat() {
+    var x_1: vec4<f32> = vec4<f32>(2f, 1f, 1f, 1f);
+
+    return;
+}
+
+fn test_local_const() {
+    var arr: array<f32, 2>;
+
+    return;
 }
 
 fn compose_vector_zero_val_binop() {
@@ -114,6 +114,18 @@ fn relational() {
     return;
 }
 
+fn packed_dot_product() {
+    var signed_four: i32 = 4i;
+    var unsigned_four: u32 = 4u;
+    var signed_twelve: i32 = 12i;
+    var unsigned_twelve: u32 = 12u;
+    var signed_seventy: i32 = 70i;
+    var unsigned_seventy: u32 = 70u;
+    var minus_four: i32 = -4i;
+
+    return;
+}
+
 fn abstract_access(i: u32) {
     var a_1: f32 = 1f;
     var b_1: u32 = 1u;
@@ -133,7 +145,13 @@ fn main() {
     non_constant_initializers();
     splat_of_constant();
     compose_of_constant();
+    let _e1 = map_texture_kind(1i);
     compose_of_splat();
     test_local_const();
+    compose_vector_zero_val_binop();
+    relational();
+    packed_dot_product();
+    test_local_const();
+    abstract_access(1u);
     return;
 }

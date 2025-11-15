@@ -212,8 +212,12 @@ impl VaryingContext<'_> {
                     Bi::ClipDistance | Bi::CullDistance => (
                         self.stage == St::Vertex && self.output,
                         match *ty_inner {
-                            Ti::Array { base, .. } => {
+                            Ti::Array { base, size, .. } => {
                                 self.types[base].inner == Ti::Scalar(crate::Scalar::F32)
+                                    && match size {
+                                        crate::ArraySize::Constant(non_zero) => non_zero.get() <= 8,
+                                        _ => false,
+                                    }
                             }
                             _ => false,
                         },
@@ -636,9 +640,10 @@ impl super::Validator {
                 return Err(GlobalVariableError::InitializerExprType);
             }
 
-            let decl_ty = &gctx.types[var.ty].inner;
-            let init_ty = mod_info[init].inner_with(gctx.types);
-            if !decl_ty.equivalent(init_ty, gctx.types) {
+            if !gctx.compare_types(
+                &crate::proc::TypeResolution::Handle(var.ty),
+                &mod_info[init],
+            ) {
                 return Err(GlobalVariableError::InitializerType);
             }
         }

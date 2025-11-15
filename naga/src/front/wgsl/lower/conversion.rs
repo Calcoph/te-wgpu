@@ -46,7 +46,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         }
 
         // If `expr` already has the requested type, we're done.
-        if expr_inner.equivalent(goal_inner, types) {
+        if self.module.compare_types(expr_resolution, goal_ty) {
             return Ok(expr);
         }
 
@@ -449,7 +449,7 @@ impl crate::Scalar {
         self.automatic_conversion_combine(goal) == Some(goal)
     }
 
-    const fn concretize(self) -> Self {
+    pub(in crate::front::wgsl) const fn concretize(self) -> Self {
         use crate::ScalarKind as Sk;
         match self.kind {
             Sk::Sint | Sk::Uint | Sk::Float | Sk::Bool => self,

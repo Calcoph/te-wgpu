@@ -67,6 +67,7 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
             label: Some("render_pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &color_attachment_view,
+                depth_slice: None,
                 resolve_target: Some(&color_attachment_resolve_view),
                 ops: wgpu::Operations::default(),
             })],
@@ -149,6 +150,7 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &color_attachment_view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations::default(),
             })],
@@ -220,6 +222,7 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &color_attachment_view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations::default(),
             })],
@@ -278,6 +281,7 @@ async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
     let rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             view: &color_attachment_view,
+            depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations::default(),
         })],

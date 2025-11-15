@@ -2,7 +2,7 @@
 //!
 //! Do some tests to ensure things are working correctly and nothing gets mad.
 
-use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{did_oom, gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
 
 // A number large enough to likely cause sampler caches to run out of space
 // on some devices.
@@ -93,10 +93,14 @@ fn sampler_creation_failure(ctx: TestingContext) {
     let mut sampler_storage = Vec::with_capacity(PROBABLY_PROBLEMATIC_SAMPLER_COUNT as usize);
 
     for i in 0..PROBABLY_PROBLEMATIC_SAMPLER_COUNT {
-        let Ok(sampler) = ctx.device.create_sampler(&wgpu::SamplerDescriptor {
-            lod_min_clamp: i as f32 * 0.01,
-            ..desc
-        }) else {
+        let (failed, sampler) = did_oom(&ctx.device, || {
+            ctx.device.create_sampler(&wgpu::SamplerDescriptor {
+                lod_min_clamp: i as f32 * 0.01,
+                ..desc
+            })
+        });
+
+        if failed {
             break;
         };
 

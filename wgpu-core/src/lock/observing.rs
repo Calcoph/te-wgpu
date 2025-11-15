@@ -28,19 +28,17 @@
 //!
 //! [`lock/rank.rs`]: ../../../src/wgpu_core/lock/rank.rs.html
 
-#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
-
+use alloc::{format, string::String};
+use core::{cell::RefCell, panic::Location};
 use std::{
-    cell::RefCell,
-    format,
     fs::File,
-    panic::Location,
     path::{Path, PathBuf},
-    string::String,
 };
 
 use super::rank::{LockRank, LockRankSet};
 use crate::FastHashSet;
+
+pub type RankData = Option<HeldLock>;
 
 /// A `Mutex` instrumented for lock acquisition order observation.
 ///
@@ -86,7 +84,7 @@ impl<T> Mutex<T> {
     }
 }
 
-impl<'a, T> std::ops::Deref for MutexGuard<'a, T> {
+impl<'a, T> core::ops::Deref for MutexGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -94,14 +92,14 @@ impl<'a, T> std::ops::Deref for MutexGuard<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::DerefMut for MutexGuard<'a, T> {
+impl<'a, T> core::ops::DerefMut for MutexGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.deref_mut()
     }
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for Mutex<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: core::fmt::Debug> core::fmt::Debug for Mutex<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.inner.fmt(f)
     }
 }
@@ -164,6 +162,27 @@ impl<T> RwLock<T> {
             _state: LockStateGuard { saved },
         }
     }
+
+    /// Force an read-unlock operation on this lock.
+    ///
+    /// Safety:
+    /// - A read lock must be held which is not held by a guard.
+    pub unsafe fn force_unlock_read(&self, data: RankData) {
+        release(data);
+        unsafe { self.inner.force_unlock_read() };
+    }
+}
+
+impl<'a, T> RwLockReadGuard<'a, T> {
+    // Forget the read guard, leaving the lock in a locked state with no guard.
+    //
+    // Equivalent to std::mem::forget, but preserves the information about the lock
+    // rank.
+    pub fn forget(this: Self) -> RankData {
+        core::mem::forget(this.inner);
+
+        this._state.saved
+    }
 }
 
 impl<'a, T> RwLockWriteGuard<'a, T> {
@@ -175,13 +194,13 @@ impl<'a, T> RwLockWriteGuard<'a, T> {
     }
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for RwLock<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: core::fmt::Debug> core::fmt::Debug for RwLock<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.inner.fmt(f)
     }
 }
 
-impl<'a, T> std::ops::Deref for RwLockReadGuard<'a, T> {
+impl<'a, T> core::ops::Deref for RwLockReadGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -189,7 +208,7 @@ impl<'a, T> std::ops::Deref for RwLockReadGuard<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::Deref for RwLockWriteGuard<'a, T> {
+impl<'a, T> core::ops::Deref for RwLockWriteGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -197,7 +216,7 @@ impl<'a, T> std::ops::Deref for RwLockWriteGuard<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::DerefMut for RwLockWriteGuard<'a, T> {
+impl<'a, T> core::ops::DerefMut for RwLockWriteGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.deref_mut()
     }
@@ -275,7 +294,7 @@ fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> Option<H
                 log.write_acquisition(held_lock, new_rank, location);
             }
 
-            std::mem::replace(
+            core::mem::replace(
                 held_lock,
                 Some(HeldLock {
                     rank: new_rank,
@@ -320,7 +339,7 @@ enum ThreadState {
 
 /// Information about a currently held lock.
 #[derive(Debug, Copy, Clone)]
-struct HeldLock {
+pub struct HeldLock {
     /// The lock's rank.
     rank: LockRank,
 
@@ -482,7 +501,7 @@ impl LockRankSet {
     }
 }
 
-/// Convenience for `std::ptr::from_ref(t) as usize`.
+/// Convenience for `core::ptr::from_ref(t) as usize`.
 fn addr<T>(t: &T) -> usize {
-    std::ptr::from_ref(t) as usize
+    core::ptr::from_ref(t) as usize
 }

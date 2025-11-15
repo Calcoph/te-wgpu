@@ -3,7 +3,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use wgpu::custom::{
-    AdapterInterface, DeviceInterface, DispatchAdapter, DispatchDevice, DispatchQuerySet, DispatchQueue, DispatchShaderModule, DispatchSurface, InstanceInterface, QueueInterface, RequestAdapterFuture, ShaderModuleInterface
+    AdapterInterface, ComputePipelineInterface, DeviceInterface, DispatchAdapter, DispatchBlas,
+    DispatchDevice, DispatchQueue, DispatchShaderModule, DispatchSurface, InstanceInterface,
+    QueueInterface, RequestAdapterFuture, ShaderModuleInterface,
 };
 
 #[derive(Debug, Clone)]
@@ -161,9 +163,10 @@ impl DeviceInterface for CustomDevice {
 
     fn create_compute_pipeline(
         &self,
-        _desc: &wgpu::ComputePipelineDescriptor<'_>,
+        desc: &wgpu::ComputePipelineDescriptor<'_>,
     ) -> Result<wgpu::custom::DispatchComputePipeline, wgpu::wgc::pipeline::CreateComputePipelineError>{
-        unimplemented!()
+        let module = desc.module.as_custom::<CustomShaderModule>().unwrap();
+        wgpu::custom::DispatchComputePipeline::custom(CustomComputePipeline(module.0.clone()))
     }
 
     unsafe fn create_pipeline_cache(
@@ -230,7 +233,10 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
-    fn poll(&self, _maintain: wgpu::PollType) -> Result<wgpu::PollStatus, wgpu::PollError> {
+    fn poll(
+        &self,
+        _maintain: wgpu::wgt::PollType<u64>,
+    ) -> Result<wgpu::PollStatus, wgpu::PollError> {
         unimplemented!()
     }
 
@@ -248,7 +254,7 @@ impl DeviceInterface for CustomDevice {
 }
 
 #[derive(Debug)]
-struct CustomShaderModule(Counter);
+pub struct CustomShaderModule(pub Counter);
 
 impl ShaderModuleInterface for CustomShaderModule {
     fn get_compilation_info(&self) -> Pin<Box<dyn wgpu::custom::ShaderCompilationInfoFuture>> {
@@ -319,13 +325,26 @@ impl QueueInterface for CustomQueue {
         unimplemented!()
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", feature = "web"))]
     fn copy_external_image_to_texture(
         &self,
         _source: &wgpu::CopyExternalImageSourceInfo,
         _dest: wgpu::CopyExternalImageDestInfo<&wgpu::Texture>,
         _size: wgpu::Extent3d,
     ) {
+        unimplemented!()
+    }
+
+    fn compact_blas(&self, _blas: &DispatchBlas) -> (Option<u64>, DispatchBlas) {
+        unimplemented!()
+    }
+}
+
+#[derive(Debug)]
+pub struct CustomComputePipeline(pub Counter);
+
+impl ComputePipelineInterface for CustomComputePipeline {
+    fn get_bind_group_layout(&self, _index: u32) -> wgpu::custom::DispatchBindGroupLayout {
         unimplemented!()
     }
 }

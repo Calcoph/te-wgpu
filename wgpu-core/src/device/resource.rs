@@ -40,7 +40,7 @@ use crate::{
     pipeline,
     pool::ResourcePool,
     resource::{
-        self, AccelerationStructure, Buffer, Fallible, Labeled, ParentDevice, QuerySet, Sampler,
+        self, Buffer, Fallible, Labeled, ParentDevice, QuerySet, RawResourceAccess, Sampler,
         StagingBuffer, Texture, TextureView, TextureViewNotRenderableReason, Tlas, TrackingData,
     },
     resource_log,
@@ -268,6 +268,7 @@ impl Device {
                 raw_device.as_ref(),
                 &desc.required_limits,
                 &desc.required_features,
+                adapter.backend(),
             )?)
         } else {
             None
@@ -356,20 +357,39 @@ impl Device {
         if self.is_valid() {
             Ok(())
         } else {
-            Err(DeviceError::Invalid(self.error_ident()))
+            Err(DeviceError::Lost)
         }
+    }
+
+    /// Checks that we are operating within the memory budget reported by the native APIs.
+    ///
+    /// If we are not, the device gets invalidated.
+    ///
+    /// The budget might fluctuate over the lifetime of the application, so it should be checked
+    /// somewhat frequently.
+    pub fn lose_if_oom(&self) {
+        let _ = self
+            .raw()
+            .check_if_oom()
+            .map_err(|e| self.handle_hal_error(e));
     }
 
     pub fn handle_hal_error(&self, error: hal::DeviceError) -> DeviceError {
         match error {
-            hal::DeviceError::OutOfMemory => {}
-            hal::DeviceError::Lost
-            | hal::DeviceError::ResourceCreationFailed
+            hal::DeviceError::OutOfMemory
+            | hal::DeviceError::Lost
             | hal::DeviceError::Unexpected => {
                 self.lose(&error.to_string());
             }
         }
         DeviceError::from_hal(error)
+    }
+
+    pub fn handle_hal_error_with_nonfatal_oom(&self, error: hal::DeviceError) -> DeviceError {
+        match error {
+            hal::DeviceError::OutOfMemory => DeviceError::from_hal(error),
+            error => self.handle_hal_error(error),
+        }
     }
 
     /// Run some destroy operations that were deferred.
@@ -520,6 +540,7 @@ impl Device {
             (
                 user_closures.submissions,
                 user_closures.mappings,
+                user_closures.blas_compact_ready,
                 queue_empty,
             ) = queue_result
         };
@@ -678,8 +699,8 @@ impl Device {
             usage,
             memory_flags: hal::MemoryFlags::empty(),
         };
-        let buffer =
-            unsafe { self.raw().create_buffer(&hal_desc) }.map_err(|e| self.handle_hal_error(e))?;
+        let buffer = unsafe { self.raw().create_buffer(&hal_desc) }
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let timestamp_normalization_bind_group = Snatchable::new(
             self.timestamp_normalizer
@@ -905,13 +926,6 @@ impl Device {
                     desc.format,
                 ));
             }
-            // Renderable textures can only be 2D
-            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
-                return Err(CreateTextureError::InvalidDimensionUsages(
-                    wgt::TextureUsages::RENDER_ATTACHMENT,
-                    desc.dimension,
-                ));
-            }
         }
 
         if desc.dimension != wgt::TextureDimension::D2
@@ -922,6 +936,14 @@ impl Device {
                 return Err(CreateTextureError::InvalidCompressedDimension(
                     desc.dimension,
                     desc.format,
+                ));
+            }
+
+            // Renderable textures can only be 2D or 3D
+            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::InvalidDimensionUsages(
+                    wgt::TextureUsages::RENDER_ATTACHMENT,
+                    desc.dimension,
                 ));
             }
         }
@@ -953,6 +975,9 @@ impl Device {
                 // Only BCn formats with Sliced 3D feature can be used for 3D textures
                 if desc.format.is_bcn() {
                     self.require_features(wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D)
+                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+                } else if desc.format.is_astc() {
+                    self.require_features(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
                         .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
                 } else {
                     return Err(CreateTextureError::InvalidCompressedDimension(
@@ -1096,20 +1121,16 @@ impl Device {
         };
 
         let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
-            .map_err(|e| self.handle_hal_error(e))?;
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let clear_mode = if hal_usage
             .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
+            && desc.dimension == wgt::TextureDimension::D2
         {
             let (is_color, usage) = if desc.format.is_depth_stencil_format() {
                 (false, wgt::TextureUses::DEPTH_STENCIL_WRITE)
             } else {
                 (true, wgt::TextureUses::COLOR_TARGET)
-            };
-            let dimension = match desc.dimension {
-                wgt::TextureDimension::D1 => TextureViewDimension::D1,
-                wgt::TextureDimension::D2 => TextureViewDimension::D2,
-                wgt::TextureDimension::D3 => unreachable!(),
             };
 
             let clear_label = hal_label(
@@ -1125,7 +1146,7 @@ impl Device {
                             let desc = hal::TextureViewDescriptor {
                                 label: clear_label,
                                 format: $format,
-                                dimension,
+                                dimension: TextureViewDimension::D2,
                                 usage,
                                 range: wgt::ImageSubresourceRange {
                                     aspect: $aspect,
@@ -1396,10 +1417,12 @@ impl Device {
                 break 'error Err(TextureViewNotRenderableReason::Usage(resolved_usage));
             }
 
-            if !(resolved_dimension == TextureViewDimension::D2
-                || (self.features.contains(wgt::Features::MULTIVIEW)
-                    && resolved_dimension == TextureViewDimension::D2Array))
-            {
+            let allowed_view_dimensions = [
+                TextureViewDimension::D2,
+                TextureViewDimension::D2Array,
+                TextureViewDimension::D3,
+            ];
+            if !allowed_view_dimensions.contains(&resolved_dimension) {
                 break 'error Err(TextureViewNotRenderableReason::Dimension(
                     resolved_dimension,
                 ));
@@ -1609,7 +1632,7 @@ impl Device {
         };
 
         let raw = unsafe { self.raw().create_sampler(&hal_desc) }
-            .map_err(|e| self.handle_hal_error(e))?;
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let sampler = Sampler {
             raw: ManuallyDrop::new(raw),
@@ -1771,6 +1794,22 @@ impl Device {
                 hal::ShaderInput::Msl {
                     shader: inner.source.to_string(),
                     entry_point: inner.entry_point.to_string(),
+                    num_workgroups: inner.num_workgroups,
+                }
+            }
+            pipeline::ShaderModuleDescriptorPassthrough::Dxil(inner) => {
+                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::Dxil {
+                    shader: inner.source,
+                    entry_point: inner.entry_point.clone(),
+                    num_workgroups: inner.num_workgroups,
+                }
+            }
+            pipeline::ShaderModuleDescriptorPassthrough::Hlsl(inner) => {
+                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::Hlsl {
+                    shader: inner.source,
+                    entry_point: inner.entry_point.clone(),
                     num_workgroups: inner.num_workgroups,
                 }
             }
@@ -1965,17 +2004,6 @@ impl Device {
                                 error: BindGroupLayoutEntryError::StorageTextureAtomic,
                             });
                         }
-                        wgt::StorageTextureAccess::ReadOnly
-                        | wgt::StorageTextureAccess::ReadWrite
-                            if !self.features.contains(
-                                wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                            ) =>
-                        {
-                            return Err(binding_model::CreateBindGroupLayoutError::Entry {
-                                binding: entry.binding,
-                                error: BindGroupLayoutEntryError::StorageTextureReadWrite,
-                            });
-                        }
                         _ => (),
                     }
                     (
@@ -1985,16 +2013,8 @@ impl Device {
                         ),
                         match access {
                             wgt::StorageTextureAccess::WriteOnly => WritableStorage::Yes,
-                            wgt::StorageTextureAccess::ReadOnly => {
-                                required_features |=
-                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-                                WritableStorage::No
-                            }
-                            wgt::StorageTextureAccess::ReadWrite => {
-                                required_features |=
-                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-                                WritableStorage::Yes
-                            }
+                            wgt::StorageTextureAccess::ReadOnly => WritableStorage::No,
+                            wgt::StorageTextureAccess::ReadWrite => WritableStorage::Yes,
                             wgt::StorageTextureAccess::Atomic => {
                                 required_features |= wgt::Features::TEXTURE_ATOMIC;
                                 WritableStorage::Yes
@@ -2003,6 +2023,14 @@ impl Device {
                     )
                 }
                 Bt::AccelerationStructure { .. } => (None, WritableStorage::No),
+                Bt::ExternalTexture => {
+                    self.require_features(wgt::Features::EXTERNAL_TEXTURE)
+                        .map_err(|e| binding_model::CreateBindGroupLayoutError::Entry {
+                            binding: entry.binding,
+                            error: e.into(),
+                        })?;
+                    (None, WritableStorage::No)
+                }
             };
 
             // Validate the count parameter
@@ -2752,6 +2780,41 @@ impl Device {
                 };
                 view.check_usage(wgt::TextureUsages::STORAGE_BINDING)?;
                 Ok(internal_use)
+            }
+            wgt::BindingType::ExternalTexture => {
+                if view.desc.dimension != TextureViewDimension::D2 {
+                    return Err(Error::InvalidTextureDimension {
+                        binding,
+                        layout_dimension: TextureViewDimension::D2,
+                        view_dimension: view.desc.dimension,
+                    });
+                }
+                let mip_level_count = view.selector.mips.end - view.selector.mips.start;
+                if mip_level_count != 1 {
+                    return Err(Error::InvalidExternalTextureMipLevelCount {
+                        binding,
+                        mip_level_count,
+                    });
+                }
+                if view.desc.format != TextureFormat::Rgba8Unorm
+                    && view.desc.format != TextureFormat::Bgra8Unorm
+                    && view.desc.format != TextureFormat::Rgba16Float
+                {
+                    return Err(Error::InvalidExternalTextureFormat {
+                        binding,
+                        format: view.desc.format,
+                    });
+                }
+                if view.samples != 1 {
+                    return Err(Error::InvalidTextureMultisample {
+                        binding,
+                        layout_multisampled: false,
+                        view_samples: view.samples,
+                    });
+                }
+
+                view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
+                Ok(wgt::TextureUses::RESOURCE)
             }
             _ => Err(Error::WrongBindingType {
                 binding,
@@ -3858,7 +3921,7 @@ impl Device {
         let hal_desc = desc.map_label(|label| label.to_hal(self.instance_flags));
 
         let raw = unsafe { self.raw().create_query_set(&hal_desc) }
-            .map_err(|e| self.handle_hal_error(e))?;
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let query_set = QuerySet {
             raw: ManuallyDrop::new(raw),
@@ -3892,12 +3955,9 @@ impl Device {
         // since that will prevent any new work from being added to the queues.
         // Future calls to poll_devices will continue to check the work queues
         // until they are cleared, and then drop the device.
-
-        // Eagerly release GPU resources.
-        self.release_gpu_resources();
     }
 
-    pub(crate) fn release_gpu_resources(&self) {
+    fn release_gpu_resources(&self) {
         // This is called when the device is lost, which makes every associated
         // resource invalid and unusable. This is an opportunity to release all of
         // the underlying gpu resources, even though the objects remain visible to
@@ -3910,12 +3970,12 @@ impl Device {
         let trackers = self.trackers.lock();
         for buffer in trackers.buffers.used_resources() {
             if let Some(buffer) = Weak::upgrade(buffer) {
-                let _ = buffer.destroy();
+                buffer.destroy();
             }
         }
         for texture in trackers.textures.used_resources() {
             if let Some(texture) = Weak::upgrade(texture) {
-                let _ = texture.destroy();
+                texture.destroy();
             }
         }
     }

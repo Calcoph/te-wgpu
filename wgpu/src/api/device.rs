@@ -1,16 +1,11 @@
-use std::boxed::Box;
-use std::string::String;
-use std::{error, fmt, sync::Arc};
-
-use parking_lot::Mutex;
-use wgc::binding_model::{CreateBindGroupError, CreateBindGroupLayoutError, CreatePipelineLayoutError};
-use wgc::device::DeviceError;
-use wgc::pipeline::{CreateComputePipelineError, CreatePipelineCacheError, CreateRenderPipelineError, CreateShaderModuleError};
-use wgc::ray_tracing::{CreateBlasError, CreateTlasError};
-use wgc::resource::{CreateBufferError, CreateQuerySetError, CreateSamplerError, CreateTextureError};
+use alloc::{boxed::Box, string::String, sync::Arc, vec};
+#[cfg(wgpu_core)]
+use core::ops::Deref;
+use core::{error, fmt, future::Future};
 
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
+use crate::util::Mutex;
 use crate::*;
 
 /// Open connection to a graphics and/or compute device.
@@ -40,6 +35,12 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 
 impl Device {
+    #[cfg(custom)]
+    /// Returns custom implementation of Device (if custom backend and is internally T)
+    pub fn as_custom<T: custom::DeviceInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+
     #[cfg(custom)]
     /// Creates Device from custom implementation
     pub fn from_custom<T: custom::DeviceInterface>(device: T) -> Self {
@@ -92,7 +93,7 @@ impl Device {
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
     pub fn poll(&self, poll_type: PollType) -> Result<crate::PollStatus, crate::PollError> {
-        self.inner.poll(poll_type)
+        self.inner.poll(poll_type.map_index(|s| s.index))
     }
 
     /// The features which can be used on this device.
@@ -254,7 +255,7 @@ impl Device {
     /// Creates a [`Buffer`].
     #[must_use]
     pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Result<Buffer, CreateBufferError> {
-        let mut map_context = MapContext::new(desc.size);
+        let mut map_context = MapContext::new();
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
         }
@@ -330,7 +331,7 @@ impl Device {
         hal_buffer: A::Buffer,
         desc: &BufferDescriptor<'_>,
     ) -> Result<Buffer, CreateBufferError> {
-        let mut map_context = MapContext::new(desc.size);
+        let mut map_context = MapContext::new();
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
         }
@@ -450,39 +451,34 @@ impl Device {
         self.inner.generate_allocator_report()
     }
 
-    /// Apply a callback to this `Device`'s underlying backend device.
+    /// Get the [`wgpu_hal`] device from this `Device`.
     ///
-    /// If this `Device` is implemented by the backend API given by `A` (Vulkan,
-    /// Dx12, etc.), then apply `hal_device_callback` to `Some(&device)`, where
-    /// `device` is the underlying backend device type, [`A::Device`].
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
     ///
-    /// If this `Device` uses a different backend, apply `hal_device_callback`
-    /// to `None`.
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::Device`].
     ///
-    /// The device is locked for reading while `hal_device_callback` runs. If
-    /// the callback attempts to perform any `wgpu` operations that require
-    /// write access to the device (destroying a buffer, say), deadlock will
-    /// occur. The locks are automatically released when the callback returns.
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The device is not from the backend specified by `A`.
+    /// - The device is from the `webgpu` or `custom` backend.
     ///
     /// # Safety
     ///
-    /// - The raw handle passed to the callback must not be manually destroyed.
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
     ///
     /// [`A::Device`]: hal::Api::Device
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
         &self,
-        hal_device_callback: F,
-    ) -> R {
-        if let Some(core_device) = self.inner.as_core_opt() {
-            unsafe {
-                core_device
-                    .context
-                    .device_as_hal::<A, F, R>(core_device, hal_device_callback)
-            }
-        } else {
-            hal_device_callback(None)
-        }
+    ) -> Option<impl Deref<Target = A::Device> + WasmNotSendSync> {
+        let device = self.inner.as_core_opt()?;
+        unsafe { device.context.device_as_hal::<A>(device) }
     }
 
     /// Destroy this device.
@@ -593,10 +589,9 @@ impl Device {
         let tlas = self.inner.create_tlas(desc)?;
 
         Ok(Tlas {
-            shared: Arc::new(TlasShared {
-                inner: tlas,
-                max_instances: desc.max_instances,
-            }),
+            inner: tlas,
+            instances: vec![None; desc.max_instances as usize],
+            lowest_unmodified: 0,
         })
     }
 }

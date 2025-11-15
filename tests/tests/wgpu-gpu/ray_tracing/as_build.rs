@@ -1,10 +1,10 @@
 use std::iter;
 
-use crate::ray_tracing::AsBuildContext;
+use crate::ray_tracing::{acceleration_structure_limits, AsBuildContext};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use wgpu_test::{
-    fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
+    fail, fail_if, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
 };
 
 #[gpu_test]
@@ -12,6 +12,7 @@ static UNBUILT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             // https://github.com/gfx-rs/wgpu/issues/6727
             .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
@@ -31,9 +32,71 @@ fn unbuilt_blas(ctx: TestingContext) {
         .create_command_encoder(&CommandEncoderDescriptor::default())
         .unwrap();
 
-    encoder.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
+    encoder.build_acceleration_structures([], [&as_ctx.tlas]).unwrap();
 
     fail(
+        || {
+            ctx.queue.submit([encoder.finish().unwrap()]).map_err(|(_,e)|e)
+        },
+        None,
+    );
+}
+
+#[gpu_test]
+static UNBUILT_BLAS_COMPACTION: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+    )
+    .run_sync(unbuilt_blas_compaction);
+
+fn unbuilt_blas_compaction(ctx: TestingContext) {
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::ALLOW_COMPACTION,
+        AccelerationStructureFlags::empty(),
+    );
+
+    fail(
+        || {
+            // Prepare checks the BLAS has been built
+            as_ctx.blas.prepare_compaction_async(|_| {})
+        },
+        None,
+    );
+}
+
+#[gpu_test]
+static BLAS_COMPACTION_WITHOUT_FLAGS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+    )
+    .run_sync(blas_compaction_without_flags);
+
+fn blas_compaction_without_flags(ctx: TestingContext) {
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+
+    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], []).unwrap();;
+
+    fail(
+        &ctx.device,
         || {
             ctx.queue.submit([encoder.finish().unwrap()]).map_err(|(_,e)|e)
         },
@@ -46,6 +109,7 @@ static OUT_OF_ORDER_AS_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             // https://github.com/gfx-rs/wgpu/issues/6727
             .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
@@ -70,7 +134,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]).unwrap();
 
     let mut encoder_blas = ctx
         .device
@@ -116,7 +180,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]).unwrap();
 
     fail(
         || {
@@ -132,6 +196,7 @@ static OUT_OF_ORDER_AS_BUILD_USE: GpuTestConfiguration = GpuTestConfiguration::n
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(
                 wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
                     | wgpu::Features::EXPERIMENTAL_RAY_QUERY,
@@ -172,7 +237,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]).unwrap();
 
     let mut encoder_blas2 = ctx
         .device
@@ -213,7 +278,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         layout: &compute_pipeline.get_bind_group_layout(0).unwrap(),
         entries: &[BindGroupEntry {
             binding: 0,
-            resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
+            resource: BindingResource::AccelerationStructure(&as_ctx.tlas),
         }],
     }).unwrap();
 
@@ -277,7 +342,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]).unwrap();
 
     ctx.queue.submit([
         encoder_blas.finish().unwrap(),
@@ -290,7 +355,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         layout: &compute_pipeline.get_bind_group_layout(0).unwrap(),
         entries: &[BindGroupEntry {
             binding: 0,
-            resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
+            resource: BindingResource::AccelerationStructure(&as_ctx.tlas),
         }],
     }).unwrap();
 
@@ -325,6 +390,7 @@ static EMPTY_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
     )
     .run_sync(empty_build);
@@ -338,21 +404,7 @@ fn empty_build(ctx: TestingContext) {
 
     encoder_safe.build_acceleration_structures(iter::empty(), iter::empty()).unwrap();
 
-    let mut encoder_unsafe = ctx
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("BLAS 1"),
-        })
-        .unwrap();
-
-    // # SAFETY:
-    // we don't actually do anything so all the requirements are satisfied
-    unsafe {
-        encoder_unsafe.build_acceleration_structures_unsafe_tlas(iter::empty(), iter::empty()).unwrap();
-    }
-
-    ctx.queue
-        .submit([encoder_safe.finish().unwrap(), encoder_unsafe.finish().unwrap()]).unwrap();
+    ctx.queue.submit([encoder_safe.finish().unwrap()]).unwrap();
 }
 
 #[gpu_test]
@@ -360,6 +412,7 @@ static BUILD_WITH_TRANSFORM: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             // https://github.com/gfx-rs/wgpu/issues/6727
             .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
@@ -404,15 +457,13 @@ fn build_with_transform(ctx: TestingContext) {
         },
     ).unwrap();
 
-    let tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
+    let mut tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
         label: Some("TLAS"),
         max_instances: 1,
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: AccelerationStructureUpdateMode::Build,
     }).unwrap();
-
-    let mut tlas_package = TlasPackage::new(tlas);
-    tlas_package[0] = Some(TlasInstance::new(
+    tlas[0] = Some(TlasInstance::new(
         &blas,
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         0,
@@ -440,7 +491,7 @@ fn build_with_transform(ctx: TestingContext) {
                 transform_buffer_offset: Some(0),
             }]),
         }],
-        [&tlas_package],
+        [&tlas],
     ).unwrap();
     ctx.queue.submit([encoder_build.finish().unwrap()]).unwrap();
 }
@@ -450,6 +501,7 @@ static ONLY_BLAS_VERTEX_RETURN: GpuTestConfiguration = GpuTestConfiguration::new
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(
                 wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
                     | wgpu::Features::EXPERIMENTAL_RAY_QUERY
@@ -484,7 +536,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
         })
         .unwrap();
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]).unwrap();
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]).unwrap();
 
     ctx.queue
         .submit([encoder_blas.finish().unwrap(), encoder_tlas.finish().unwrap()])
@@ -514,9 +566,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
                     layout: &bind_group_layout,
                     entries: &[BindGroupEntry {
                         binding: 0,
-                        resource: BindingResource::AccelerationStructure(
-                            as_ctx.tlas_package.tlas(),
-                        ),
+                        resource: BindingResource::AccelerationStructure(&as_ctx.tlas),
                     }],
                 })
             },
@@ -552,7 +602,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
             layout: &compute_pipeline.get_bind_group_layout(0).unwrap(),
             entries: &[BindGroupEntry {
                 binding: 0,
-                resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
+                resource: BindingResource::AccelerationStructure(&as_ctx.tlas),
             }],
         }).unwrap();
 
@@ -583,6 +633,7 @@ static ONLY_TLAS_VERTEX_RETURN: GpuTestConfiguration = GpuTestConfiguration::new
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(
                 wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
                     | wgpu::Features::EXPERIMENTAL_RAY_QUERY
@@ -616,10 +667,111 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
         })
         .unwrap();
 
-    fail(
-        || {
-            encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package])
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
+    fail(&ctx.device, || encoder_tlas.finish(), None);
+}
+
+#[gpu_test]
+static EXTRA_FORMAT_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(
+                wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                    | wgpu::Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
+            )
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+    )
+    .run_sync(|ctx| test_as_build_format_stride(ctx, VertexFormat::Snorm16x4, 6, false));
+
+#[gpu_test]
+static MISALIGNED_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+    )
+    // Larger than the minimum size, but not aligned as required
+    .run_sync(|ctx| test_as_build_format_stride(ctx, VertexFormat::Float32x3, 13, true));
+
+#[gpu_test]
+static TOO_SMALL_STRIDE_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+    )
+    // Aligned as required, but smaller than minimum size
+    .run_sync(|ctx| test_as_build_format_stride(ctx, VertexFormat::Float32x3, 8, true));
+
+fn test_as_build_format_stride(
+    ctx: TestingContext,
+    format: VertexFormat,
+    stride: BufferAddress,
+    invalid_combination: bool,
+) {
+    let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: &vec![0; (format.min_acceleration_structure_vertex_stride() * 3) as usize],
+        usage: BufferUsages::BLAS_INPUT,
+    });
+
+    let blas_size = BlasTriangleGeometrySizeDescriptor {
+        // The fourth component is ignored, and it allows us to have a smaller stride.
+        vertex_format: format,
+        vertex_count: 3,
+        index_format: None,
+        index_count: None,
+        flags: wgpu::AccelerationStructureGeometryFlags::empty(),
+    };
+
+    let blas = ctx.device.create_blas(
+        &CreateBlasDescriptor {
+            label: Some("BLAS"),
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: AccelerationStructureUpdateMode::Build,
         },
+        BlasGeometrySizeDescriptors::Triangles {
+            descriptors: vec![blas_size.clone()],
+        },
+    );
+
+    let mut command_encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS_1"),
+        });
+    command_encoder.build_acceleration_structures(
+        &[BlasBuildEntry {
+            blas: &blas,
+            geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
+                size: &blas_size,
+                vertex_buffer: &vertices,
+                first_vertex: 0,
+                vertex_stride: stride,
+                index_buffer: None,
+                first_index: None,
+                transform_buffer: None,
+                transform_buffer_offset: None,
+            }]),
+        }],
+        &[],
+    );
+    let command_buffer = fail_if(
+        &ctx.device,
+        invalid_combination,
+        || command_encoder.finish(),
         None,
     );
+    if !invalid_combination {
+        ctx.queue.submit([command_buffer]);
+    }
 }

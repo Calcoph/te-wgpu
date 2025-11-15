@@ -14,7 +14,7 @@ use alloc::string::{String, ToString};
 ///
 /// - If a type's WGSL form requires dynamic formatting, so that
 ///   returning a `&'static str` isn't feasible, consider implementing
-///   [`std::fmt::Display`] on some wrapper type instead.
+///   [`core::fmt::Display`] on some wrapper type instead.
 pub trait ToWgsl: Sized {
     /// Return WGSL source code representation of `self`.
     fn to_wgsl(self) -> &'static str;
@@ -32,7 +32,7 @@ pub trait ToWgsl: Sized {
 ///
 /// - If a type's WGSL form requires dynamic formatting, so that
 ///   returning a `&'static str` isn't feasible, consider implementing
-///   [`std::fmt::Display`] on some wrapper type instead.
+///   [`core::fmt::Display`] on some wrapper type instead.
 pub trait TryToWgsl: Sized {
     /// Return the WGSL form of `self` as a `'static` string.
     ///
@@ -105,6 +105,8 @@ impl TryToWgsl for crate::MathFunction {
             Mf::Log2 => "log2",
             Mf::Pow => "pow",
             Mf::Dot => "dot",
+            Mf::Dot4I8Packed => "dot4I8Packed",
+            Mf::Dot4U8Packed => "dot4U8Packed",
             Mf::Cross => "cross",
             Mf::Distance => "distance",
             Mf::Length => "length",
@@ -137,6 +139,8 @@ impl TryToWgsl for crate::MathFunction {
             Mf::Pack2x16float => "pack2x16float",
             Mf::Pack4xI8 => "pack4xI8",
             Mf::Pack4xU8 => "pack4xU8",
+            Mf::Pack4xI8Clamp => "pack4xI8Clamp",
+            Mf::Pack4xU8Clamp => "pack4xU8Clamp",
             Mf::Unpack4x8snorm => "unpack4x8snorm",
             Mf::Unpack4x8unorm => "unpack4x8unorm",
             Mf::Unpack2x16snorm => "unpack2x16snorm",
@@ -161,6 +165,7 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::ViewIndex => "view_index",
             Bi::InstanceIndex => "instance_index",
             Bi::VertexIndex => "vertex_index",
+            Bi::ClipDistance => "clip_distances",
             Bi::FragDepth => "frag_depth",
             Bi::FrontFacing => "front_facing",
             Bi::PrimitiveIndex => "primitive_index",
@@ -179,7 +184,6 @@ impl TryToWgsl for crate::BuiltIn {
             // Non-standard built-ins.
             Bi::BaseInstance
             | Bi::BaseVertex
-            | Bi::ClipDistance
             | Bi::CullDistance
             | Bi::PointSize
             | Bi::DrawID
