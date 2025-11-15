@@ -40,6 +40,24 @@ Bottom level categories:
 
 ## Unreleased
 
+## v27.0.3 (2025-10-22)
+
+This release includes `naga`, `wgpu-core` and `wgpu-hal` version `27.0.3`. All other crates remain at their previous versions.
+
+### Bug Fixes
+
+#### naga
+
+- Fix a bug that resulted in the Metal error `program scope variable must reside in constant address space` in some cases. Backport of [#8311](https://github.com/gfx-rs/wgpu/pull/8311) by @teoxoy.
+
+#### General
+
+- Remove an assertion that causes problems if `CommandEncoder::as_hal_mut` is used. By @andyleiserson in [#8387](https://github.com/gfx-rs/wgpu/pull/8387).
+
+#### DX12
+
+- Align copies b/w textures and buffers via a single intermediate buffer per copy when `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported` is `false`. By @ErichDonGubler in [#7721](https://github.com/gfx-rs/wgpu/pull/7721), backported in [#8374](https://github.com/gfx-rs/wgpu/pull/8374).
+
 ## v27.0.2 (2025-10-03)
 
 ### Bug Fixes
@@ -60,7 +78,7 @@ Bottom level categories:
 
 #### Deferred command buffer actions: `map_buffer_on_submit` and `on_submitted_work_done`
 
-You may schedule buffer mapping and a submission-complete callback to run automatically after you submit, directly from encoders, command buffers, and passes. 
+You may schedule buffer mapping and a submission-complete callback to run automatically after you submit, directly from encoders, command buffers, and passes.
 
 ```rust
 // Record some GPU work so the submission isn't empty and touches `buffer`.
@@ -117,6 +135,7 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 We have added `Features::EXPERIMENTAL_PRECOMPILED_SHADERS`, replacing existing passthrough types with a unified `CreateShaderModuleDescriptorPassthrough` which allows passing multiple shader codes for different backends. By @SupaMaggie70Incorporated in [#7834](https://github.com/gfx-rs/wgpu/pull/7834)
 
 Difference for SPIR-V passthrough:
+
 ```diff
 - device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::SpirV(
 -     wgpu::ShaderModuleDescriptorSpirV {
@@ -131,6 +150,7 @@ Difference for SPIR-V passthrough:
 +     ..Default::default()
 })
 ```
+
 This allows using precompiled shaders without manually checking which backend's code to pass, for example if you have shaders precompiled for both DXIL and SPIR-V.
 
 #### Buffer mapping apis no longer have lifetimes
@@ -167,13 +187,12 @@ By @cwfitzgerald in [#8163](https://github.com/gfx-rs/wgpu/pull/8163).
 
 #### Multi-draw indirect is now unconditionally supported when indirect draws are supported
 
-We have removed `Features::MULTI_DRAW_INDIRECT` as it was unconditionally available on all platforms. 
+We have removed `Features::MULTI_DRAW_INDIRECT` as it was unconditionally available on all platforms.
 `RenderPass::multi_draw_indirect` is now available if the device supports downlevel flag `DownlevelFlags::INDIRECT_EXECUTION`.
 
 The `Feature::MULTI_DRAW_INDIRECT_COUNT` feature can be used to determine if multi-draw is supported natively on the device. This is helpful to know if you are using spirv-passthrough and `gl_DrawID` in your shaders.
 
 By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
-
 
 #### `wgpu::PollType::Wait` has now an optional timeout
 
@@ -204,8 +223,8 @@ Before/after for `wgpu::PollType::WaitForSubmissionIndex`:
 
 ⚠️ Previously, both `wgpu::PollType::WaitForSubmissionIndex` and `wgpu::PollType::Wait` had a hard-coded timeout of 60 seconds.
 
-
 To wait indefinitely on the latest submission, you can also use the `wait_indefinitely` convenience function:
+
 ```rust
 device.poll(wgpu::PollType::wait_indefinitely());
 ```
